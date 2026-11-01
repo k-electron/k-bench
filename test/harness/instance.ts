@@ -9,6 +9,7 @@ import {
   type ServerOptions,
   startServer,
 } from "../../src/server/server.ts";
+import { EventsClient } from "./events.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
 
 export interface WorkspaceInfo {
@@ -125,6 +126,11 @@ export class TestServer {
     size?: { cols: number; rows: number },
   ): Promise<TerminalClient> {
     return TerminalClient.open(this.baseUrl, sessionId, size, this.loginHeaders);
+  }
+
+  /** Opens the events WebSocket, which pushes a full state snapshot whenever state changes. */
+  openEvents(): Promise<EventsClient<State>> {
+    return EventsClient.open<State>(this.baseUrl, this.loginHeaders);
   }
 
   /**

@@ -47,6 +47,8 @@ export class Service {
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
+  /** Sessions being deleted: gone as far as terminals are concerned, before the row is. */
+  private readonly ending = new Set<string>();
 
   constructor(store: Store, tmux: TmuxDriver) {
     this.store = store;
@@ -147,8 +149,14 @@ export class Service {
     if (!this.store.getSession(sessionId)) {
       throw new ServiceError("not_found", "Unknown Session");
     }
-    await this.tmux.killSession(sessionId);
-    this.store.deleteSession(sessionId);
+    // Killing the shell closes its terminals; they must see "deleted", not "Stopped".
+    this.ending.add(sessionId);
+    try {
+      await this.tmux.killSession(sessionId);
+      this.store.deleteSession(sessionId);
+    } finally {
+      this.ending.delete(sessionId);
+    }
   }
 
   async getState(): Promise<State> {
@@ -194,7 +202,7 @@ export class Service {
 
   /** What the terminal WebSocket needs to know before attaching. */
   async terminalTarget(sessionId: string): Promise<"unknown" | "stopped" | "running"> {
-    if (!this.store.getSession(sessionId)) return "unknown";
+    if (this.ending.has(sessionId) || !this.store.getSession(sessionId)) return "unknown";
     const live = await this.tmux.listSessions();
     return live.includes(sessionId) ? "running" : "stopped";
   }

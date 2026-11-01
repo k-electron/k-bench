@@ -105,8 +105,12 @@ export class TerminalSockets {
     attachment.onData((data) => {
       if (ws.readyState === ws.OPEN) ws.send(data);
     });
-    attachment.onExit(() => {
-      if (ws.readyState === ws.OPEN) ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
+    // The shell ended, or the Session was deleted (which kills its shell): say which.
+    attachment.onExit(async () => {
+      const now = await this.service.terminalTarget(sessionId);
+      if (ws.readyState !== ws.OPEN) return;
+      if (now === "unknown") ws.close(CLOSE_SESSION_DELETED, "Session deleted");
+      else ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
     });
     return attachment;
   }
