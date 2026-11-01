@@ -40,7 +40,11 @@ function post<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-function send<T>(method: "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+function send<T>(
+  method: "PATCH" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   return call<T>(path, {
     method,
     headers: body === undefined ? undefined : { "content-type": "application/json" },
@@ -59,6 +63,12 @@ export const api = {
     ),
   createWorkspace: (input: { folder: string; name?: string }) =>
     post<{ id: string; name: string; folder: string }>("/api/workspaces", input),
+  updateWorkspace: (id: string, changes: { name?: string; folder?: string }) =>
+    send<void>("PATCH", `/api/workspaces/${id}`, changes),
+  /** `ids` is every Workspace, in the order wanted. */
+  reorderWorkspaces: (ids: string[]) =>
+    send<void>("PUT", "/api/workspaces/order", { ids }),
+  deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   createSession: (workspaceId: string, name?: string) =>
     post<{ id: string; name: string }>(`/api/workspaces/${workspaceId}/sessions`, {
       name,

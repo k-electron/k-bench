@@ -141,6 +141,37 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
+  /** The Workspaces' names in sidebar order. */
+  async workspaceNames(): Promise<string[]> {
+    return this.sidebar.getByRole("heading").allTextContents();
+  }
+
+  /** Opens a Workspace's row menu and picks `item` (Rename, Change folder, Delete). */
+  async workspaceAction(workspaceName: string, item: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Actions for ${workspaceName}`, exact: true })
+      .click();
+    await this.page.getByRole("menuitem", { name: item, exact: true }).click();
+  }
+
+  /** Drags a Workspace by its handle onto the row of the Workspace named `target`. */
+  async dragWorkspaceOnto(workspaceName: string, target: string): Promise<void> {
+    const handle = this.sidebar.getByRole("button", {
+      name: `Reorder ${workspaceName}`,
+      exact: true,
+    });
+    const from = await handle.boundingBox();
+    const dest = await this.workspace(target).boundingBox();
+    if (!from || !dest) throw new Error("Workspace rows are not visible");
+    const { mouse } = this.page;
+    await mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await mouse.down();
+    // Pointer-driven drags need intermediate moves to register.
+    await mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 5, { steps: 3 });
+    await mouse.move(dest.x + dest.width / 2, dest.y + dest.height / 2, { steps: 10 });
+    await mouse.up();
+  }
+
   async createSession(workspaceName: string): Promise<void> {
     await this.sidebar
       .getByRole("button", { name: `New session in ${workspaceName}` })

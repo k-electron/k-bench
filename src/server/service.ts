@@ -71,6 +71,47 @@ export class Service {
     return { id, name, folder };
   }
 
+  /** Renames and/or re-folders a Workspace; both changes are checked before either is made. */
+  updateWorkspace(id: string, changes: { name?: string; folder?: string }) {
+    const workspace = this.store.getWorkspace(id);
+    if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
+    const update: { name?: string; folder?: string } = {};
+    if (changes.name !== undefined) {
+      const name = changes.name.trim();
+      if (!name) throw new ServiceError("invalid", "name must not be blank");
+      this.assertWorkspaceNameFree(name, id);
+      update.name = name;
+    }
+    if (changes.folder !== undefined) {
+      const folder = resolve(changes.folder);
+      if (!isDirectory(folder)) {
+        throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
+      }
+      update.folder = folder;
+    }
+    this.store.updateWorkspace(id, update);
+    return { ...workspace, ...update };
+  }
+
+  /** `ids` must be every Workspace exactly once, in the order the owner wants. */
+  reorderWorkspaces(ids: string[]): void {
+    const known = this.store.listWorkspaces().map((w) => w.id);
+    if (ids.length !== known.length || !known.every((id) => ids.includes(id))) {
+      throw new ServiceError("invalid", "ids must list every Workspace exactly once");
+    }
+    this.store.setWorkspaceOrder(ids);
+  }
+
+  /** Ends the Workspace's shells first, then forgets it. The folder on disk is never touched. */
+  async deleteWorkspace(id: string): Promise<void> {
+    if (!this.store.getWorkspace(id))
+      throw new ServiceError("not_found", "Unknown Workspace");
+    for (const session of this.store.listSessions(id)) {
+      await this.tmux.killSession(session.id);
+    }
+    this.store.deleteWorkspace(id);
+  }
+
   private workspaceNames(exceptId?: string): Set<string> {
     return new Set(
       this.store

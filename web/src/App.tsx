@@ -19,7 +19,7 @@ import { useAppState } from "./useAppState";
 
 /** The app shell: the sidebar beside the main view (one or two Panes). */
 export function App() {
-  const { state, refresh } = useAppState();
+  const { state, refresh, reorderWorkspaces } = useAppState();
   const [layout, update] = useLayout();
 
   const [error, setError] = useState<string>();
@@ -57,6 +57,15 @@ export function App() {
         onOpenInOtherPane={(id) => update((l) => openInOtherPane(l, id))}
         onCreateWorkspace={async (input) => {
           await api.createWorkspace(input);
+          await refresh();
+        }}
+        onReorderWorkspaces={reorderWorkspaces}
+        onUpdateWorkspace={async (id, changes) => {
+          await api.updateWorkspace(id, changes);
+          await refresh();
+        }}
+        onDeleteWorkspace={async (id) => {
+          await api.deleteWorkspace(id);
           await refresh();
         }}
         onCreateSession={async (workspaceId) => {
