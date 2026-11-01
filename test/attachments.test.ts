@@ -12,16 +12,6 @@ import { tmuxClientProcessCount, tmuxSessionNames } from "./harness/tmux.ts";
 const SIZE = { cols: 120, rows: 30 };
 
 describe("Attachments", () => {
-  it("shows the viewer the output of what it types into the Session", async () => {
-    const { attachments, sessionId } = await bootAttachments();
-    const viewer = new RecordingViewer();
-
-    const terminal = attachments.attach(sessionId, SIZE, viewer);
-    terminal.input(`${echoCommand("marker-71c0de")}\r`);
-
-    await viewer.waitForOutput("marker-71c0de");
-  });
-
   it("shrugs off input and resizes once the Session's shell has exited", async () => {
     const { attachments, sessionId, socket } = await bootAttachments();
     const viewer = new RecordingViewer();
@@ -107,8 +97,8 @@ describe("Attachments", () => {
       await attachments.stop();
 
       expect(tmuxClientProcessCount(socket)).toBe(0);
-      expect(first.endings).toEqual(["stopped"]);
-      expect(second.endings).toEqual(["stopped"]);
+      expect(first.endings).toEqual(["server-stopping"]);
+      expect(second.endings).toEqual(["server-stopping"]);
       expect(tmuxSessionNames(socket)).toEqual([`kb-${sessionId}`]);
     });
 
@@ -126,7 +116,7 @@ describe("Attachments", () => {
       await allowTimeToMisbehave();
 
       expect(tmuxClientProcessCount(socket)).toBe(0);
-      expect(viewer.endings).toEqual(["stopped"]);
+      expect(viewer.endings).toEqual(["server-stopping"]);
       expect(viewer.output).toBe("");
       terminal.input("x");
       terminal.detach();
@@ -146,7 +136,43 @@ describe("Attachments", () => {
       await attachments.stop();
 
       expect(tmuxClientProcessCount(socket)).toBe(0);
-      expect(viewer.endings).toEqual(["stopped"]);
+      expect(viewer.endings).toEqual(["server-stopping"]);
+    });
+
+    it("drains every terminal even when a viewer throws as it is ended", async () => {
+      const { attachments, sessionId, socket } = await bootAttachments();
+      const throwing = new RecordingViewer();
+      throwing.end = () => {
+        throw new Error("the socket is broken");
+      };
+      const other = new RecordingViewer();
+      attachments.attach(sessionId, SIZE, throwing);
+      attachments.attach(sessionId, SIZE, other).input(`${echoCommand("up-7e21")}\r`);
+      await other.waitForOutput("up-7e21");
+      expect(tmuxClientProcessCount(socket)).toBe(2);
+
+      await attachments.stop();
+
+      expect(tmuxClientProcessCount(socket)).toBe(0);
+      expect(other.endings).toEqual(["server-stopping"]);
+    });
+
+    it("refuses a viewer that reattaches as it is ended", async () => {
+      const { attachments, sessionId, socket } = await bootAttachments();
+      const reattached = new RecordingViewer();
+      const first = new RecordingViewer();
+      first.end = (reason) => {
+        first.endings.push(reason);
+        attachments.attach(sessionId, SIZE, reattached);
+      };
+      attachments.attach(sessionId, SIZE, first).input(`${echoCommand("up-c40b")}\r`);
+      await first.waitForOutput("up-c40b");
+
+      await attachments.stop();
+      await allowTimeToMisbehave();
+
+      expect(reattached.endings).toEqual(["server-stopping"]);
+      expect(tmuxClientProcessCount(socket)).toBe(0);
     });
 
     it("ends a terminal opened after it at once, starting no tmux client", async () => {
@@ -157,7 +183,7 @@ describe("Attachments", () => {
       attachments.attach(sessionId, SIZE, viewer).input("x");
       await allowTimeToMisbehave();
 
-      expect(viewer.endings).toEqual(["stopped"]);
+      expect(viewer.endings).toEqual(["server-stopping"]);
       expect(tmuxClientProcessCount(socket)).toBe(0);
     });
   });

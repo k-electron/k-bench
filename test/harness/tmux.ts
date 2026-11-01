@@ -7,10 +7,14 @@ import { execFileSync } from "node:child_process";
  * reach the Installed or Dev instance.
  */
 
-function tmux(socket: string, ...args: string[]): string {
+function assertTestSocket(socket: string): void {
   if (!socket.startsWith("kb-test-")) {
     throw new Error(`refusing to touch tmux socket ${socket}`);
   }
+}
+
+function tmux(socket: string, ...args: string[]): string {
+  assertTestSocket(socket);
   const { TMUX: _tmux, TMUX_PANE: _pane, ...env } = process.env;
   return execFileSync("tmux", ["-L", socket, ...args], {
     env,
@@ -65,9 +69,7 @@ export function tmuxSessionNames(socket: string): string[] {
  * This counts a client tmux has already let go of but that has not exited yet, too.
  */
 export function tmuxClientProcessCount(socket: string): number {
-  if (!socket.startsWith("kb-test-")) {
-    throw new Error(`refusing to look at tmux socket ${socket}`);
-  }
+  assertTestSocket(socket);
   try {
     return execFileSync("pgrep", ["-f", "--", `-L ${socket} attach-session`])
       .toString()

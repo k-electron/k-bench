@@ -1,12 +1,12 @@
-import type { TmuxClient, TmuxDriver } from "./tmux.ts";
+import type { Size, TmuxClient, TmuxDriver } from "./tmux.ts";
 
 /**
  * Why a terminal ended, told to its viewer:
  * - `session-ended`: the Session is unknown, not running, its shell exited, or it was deleted;
  * - `failed`: the tmux client could not be started;
- * - `stopped`: the server is stopping. The Session keeps running.
+ * - `server-stopping`: the server is stopping. The Session keeps running.
  */
-export type EndReason = "session-ended" | "failed" | "stopped";
+export type EndReason = "session-ended" | "failed" | "server-stopping";
 
 /** The browser side of one terminal, which the module shows output to. */
 export interface Viewer {
@@ -38,11 +38,6 @@ export interface Sessions {
   hasRunningShell(sessionId: string): Promise<boolean>;
   /** The owner has seen the Session: its Bell is cleared. */
   markSeen(sessionId: string): Promise<void>;
-}
-
-export interface Size {
-  cols: number;
-  rows: number;
 }
 
 /** A terminal dimension a pty can take: a whole number from 1 to 999. */
@@ -109,7 +104,7 @@ export class Attachments {
   attach(sessionId: string, size: Size, viewer: Viewer): Attachment {
     const terminal = new Terminal(this.context, sessionId, size, viewer);
     if (this.stopping) {
-      terminal.end("stopped");
+      terminal.end("server-stopping");
     } else {
       this.terminals.add(terminal);
       void terminal.open();
@@ -124,13 +119,15 @@ export class Attachments {
    * (a tmux client that connects after that can start a fresh tmux server). Idempotent.
    */
   stop(): Promise<void> {
-    this.stopping ??= this.drain();
+    // Assigned before any terminal is ended, so a viewer that reattaches from its `end` is
+    // already refused.
+    this.stopping ??= Promise.resolve().then(() => this.drain());
     return this.stopping;
   }
 
   private async drain(): Promise<void> {
     const draining = [...this.terminals];
-    for (const terminal of draining) terminal.end("stopped");
+    for (const terminal of draining) terminal.end("server-stopping");
     const gone = Promise.allSettled(draining.map((terminal) => terminal.gone));
     if (await settlesWithin(gone, CLIENT_EXIT_TIMEOUT_MS)) return;
     for (const terminal of draining) terminal.kill();
@@ -154,11 +151,12 @@ class Terminal implements Attachment {
   private readonly context: TerminalContext;
   private readonly viewer: Viewer;
   private phase: Phase = "looking-up";
-  private ended = false;
+  /** The viewer has been told the terminal ended, or has left: it is told nothing more. */
+  private viewerDone = false;
   private size: Size;
   private client: TmuxClient | undefined;
   /** Input sent before the tmux client was attached, in order. */
-  private early: string[] = [];
+  private pendingInput: string[] = [];
   /** Writes run one at a time, so waiting for tmux to resize never reorders input. */
   private writes: Promise<void> = Promise.resolve();
   private markGone!: () => void;
@@ -207,12 +205,12 @@ class Terminal implements Attachment {
     // Opening the terminal is viewing the Session. Cleared after attaching, so a bell that
     // rings from here on finds a client attached and is not recorded as unseen.
     void this.context.sessions.markSeen(this.sessionId).catch(() => undefined);
-    for (const data of this.early.splice(0)) this.input(data);
+    for (const data of this.pendingInput.splice(0)) this.input(data);
   }
 
   input(data: string): void {
     if (data === "") return;
-    if (this.phase === "looking-up") this.early.push(data);
+    if (this.phase === "looking-up") this.pendingInput.push(data);
     else if (this.phase === "attached") {
       // Nothing in a write throws; the catch keeps one that did from stopping all the rest.
       this.writes = this.writes.then(() => this.writeSizedToTyper(data)).catch(() => {});
@@ -222,54 +220,62 @@ class Terminal implements Attachment {
   resize(cols: number, rows: number): void {
     if (!isDimension(cols) || !isDimension(rows)) return;
     this.size = { cols, rows };
-    if (this.phase === "attached") this.toClient((client) => client.resize(cols, rows));
+    if (this.phase === "attached")
+      this.ignoringExitedPty((client) => client.resize(cols, rows));
   }
 
   detach(): void {
-    this.ended = true; // a viewer that left is not told anything more
+    this.viewerDone = true;
     this.leave();
   }
 
-  /** Tells the viewer why the terminal ended (once), and lets go of the tmux client. */
+  /** Lets go of the tmux client, and tells the viewer why the terminal ended (once). */
   end(reason: EndReason): void {
-    if (!this.ended) {
-      this.ended = true;
-      this.viewer.end(reason);
-    }
+    // Let go first, so a viewer that throws cannot keep a tmux client running.
     this.leave();
+    if (this.viewerDone) return;
+    this.viewerDone = true;
+    try {
+      this.viewer.end(reason);
+    } catch (error) {
+      console.error(
+        `terminal for Session ${this.sessionId} failed to end its viewer`,
+        error,
+      );
+    }
   }
 
   /** Kills a tmux client that would not detach. */
   kill(): void {
-    if (this.phase === "detaching") this.client?.kill("SIGKILL");
+    if (this.phase === "detaching") this.ignoringExitedPty((c) => c.kill("SIGKILL"));
   }
 
   private leave(): void {
     if (this.phase === "looking-up") this.becomeGone();
     else if (this.phase === "attached") {
       this.phase = "detaching";
-      this.client?.kill();
+      this.ignoringExitedPty((client) => client.kill());
     }
   }
 
   private becomeGone(): void {
     if (this.phase === "gone") return;
     this.phase = "gone";
-    this.early = [];
+    this.pendingInput = [];
     this.context.forget(this);
     this.markGone();
   }
 
   /** Writes to the tmux client only while it is attached; a gone pty must not be written. */
   private write(data: string): void {
-    if (this.phase === "attached") this.toClient((client) => client.write(data));
+    if (this.phase === "attached") this.ignoringExitedPty((client) => client.write(data));
   }
 
   /**
-   * The pty can close a moment before its exit is reported, and then refuses writes and
-   * resizes. That is not an error: the exit, already on its way, ends the terminal.
+   * The pty can close a moment before its exit is reported, and then refuses writes, resizes
+   * and signals. That is not an error: the exit, already on its way, ends the terminal.
    */
-  private toClient(use: (client: TmuxClient) => void): void {
+  private ignoringExitedPty(use: (client: TmuxClient) => void): void {
     if (!this.client) return;
     try {
       use(this.client);

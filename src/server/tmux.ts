@@ -45,6 +45,12 @@ function serverConfiguration(): string[][] {
   ];
 }
 
+/** A terminal's size in character cells. */
+export interface Size {
+  cols: number;
+  rows: number;
+}
+
 /** A tmux client attached to one Session under a pty: a bare handle with no state. */
 export interface TmuxClient {
   /** Output bytes from the Session. */
@@ -140,7 +146,7 @@ export class TmuxDriver {
   }
 
   /** The size of the Session's window, which is what its shell sees. */
-  async windowSize(id: string): Promise<{ cols: number; rows: number }> {
+  async windowSize(id: string): Promise<Size> {
     const out = await this.run([
       "display-message",
       "-p",
@@ -153,7 +159,7 @@ export class TmuxDriver {
   }
 
   /** Starts a tmux client attached to the Session under a pty; tmux redraws the full screen. */
-  spawnClient(id: string, size: { cols: number; rows: number }): TmuxClient {
+  spawnClient(id: string, size: Size): TmuxClient {
     const client = pty.spawn(
       "tmux",
       [...this.baseArgs(), "attach-session", "-t", `=${PREFIX}${id}`],

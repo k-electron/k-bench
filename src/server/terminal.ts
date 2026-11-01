@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import type { Attachments, EndReason } from "./attachments.ts";
+import type { Size } from "./tmux.ts";
 
 /**
  * The terminal's Session was deleted, or its shell exited: reconnecting is pointless.
@@ -46,7 +47,7 @@ export class TerminalSockets {
     );
   }
 
-  private serve(ws: WebSocket, sessionId: string, size: { cols: number; rows: number }) {
+  private serve(ws: WebSocket, sessionId: string, size: Size) {
     // Attached before any message can arrive: what the client types the moment its socket
     // opens is held by the attachment until its tmux client is ready.
     const attachment = this.attachments.attach(sessionId, size, {
@@ -74,7 +75,7 @@ export class TerminalSockets {
 }
 
 function endSocket(ws: WebSocket, reason: EndReason): void {
-  if (reason === "stopped") ws.terminate();
+  if (reason === "server-stopping") ws.terminate();
   else if (reason === "failed") ws.close(CLOSE_INTERNAL_ERROR, "Could not attach");
   else ws.close(CLOSE_SESSION_ENDED, "Session ended");
 }

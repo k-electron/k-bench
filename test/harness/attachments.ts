@@ -9,16 +9,13 @@ import { createTestInstance } from "./instance.ts";
 import { pollUntil } from "./poll.ts";
 import { stripAnsi } from "./terminal.ts";
 
-/** What a test's Session lookup answers: a value now, or a promise it settles later. */
-export type LookupAnswer = boolean | Promise<boolean>;
-
 /**
  * A running Session on a throwaway tmux socket, and an Attachments module over it, for
  * tests at the module's interface. The lookup says the Session is running unless the test
  * passes its own. Everything is stopped and removed after the test.
  */
 export async function bootAttachments(
-  options: { lookup?: (sessionId: string) => LookupAnswer } = {},
+  options: { lookup?: (sessionId: string) => boolean | Promise<boolean> } = {},
 ) {
   const instance = createTestInstance();
   const socket = instance.config.tmuxSocket;
