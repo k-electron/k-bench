@@ -105,6 +105,8 @@ export function useAppState(): {
         }
       };
       socket.onclose = () => {
+        // A restarted server numbers its revisions from 0 again.
+        latest.current = undefined;
         retry = setTimeout(connect, delay);
         delay = Math.min(delay * 2, MAX_BACKOFF_MS);
       };
@@ -125,9 +127,9 @@ export function useAppState(): {
 
   const actions = useMemo((): Actions => {
     /** Resolves once state shows `change`: true, or false if it timed out first. */
-    const shown = ({ revision }: Change<unknown>): Promise<boolean> => {
+    const whenShown = ({ revision }: Change<unknown>): Promise<boolean> => {
       // The snapshot may well arrive before the response that names its revision.
-      if (revision === undefined || (latest.current ?? -1) >= revision) {
+      if ((latest.current ?? -1) >= revision) {
         return Promise.resolve(true);
       }
       return new Promise((resolve) => {
@@ -144,8 +146,8 @@ export function useAppState(): {
         waiters.current.add(waiter);
       });
     };
-    const apply = async (request: Promise<Change<unknown>>) => {
-      await shown(await request);
+    const act = async (request: Promise<Change<unknown>>) => {
+      await whenShown(await request);
     };
     /** For the actions with no form: a refusal goes in `error` rather than rejecting. */
     const reporting = async <T>(request: () => Promise<T>): Promise<T | undefined> => {
@@ -160,8 +162,8 @@ export function useAppState(): {
     };
 
     return {
-      createWorkspace: (input) => apply(api.createWorkspace(input)),
-      updateWorkspace: (id, changes) => apply(api.updateWorkspace(id, changes)),
+      createWorkspace: (input) => act(api.createWorkspace(input)),
+      updateWorkspace: (id, changes) => act(api.updateWorkspace(id, changes)),
       reorderWorkspaces: (ids) => {
         setState(
           (current) =>
@@ -173,18 +175,18 @@ export function useAppState(): {
             },
         );
         // A refused order sends no snapshot: reconnect for one, putting the order right.
-        return apply(api.reorderWorkspaces(ids)).catch(() => reconnect.current());
+        return act(api.reorderWorkspaces(ids)).catch(() => reconnect.current());
       },
-      deleteWorkspace: (id) => apply(api.deleteWorkspace(id)),
+      deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>
         reporting(async () => {
           const change = await api.createSession(workspaceId);
-          return (await shown(change)) ? change.value.id : undefined;
+          return (await whenShown(change)) ? change.value.id : undefined;
         }),
-      renameSession: (sessionId, name) => apply(api.renameSession(sessionId, name)),
-      deleteSession: (sessionId) => apply(api.deleteSession(sessionId)),
+      renameSession: (sessionId, name) => act(api.renameSession(sessionId, name)),
+      deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {
-        await reporting(() => apply(api.restartSession(sessionId)));
+        await reporting(() => act(api.restartSession(sessionId)));
       },
     };
   }, []);

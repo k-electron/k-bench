@@ -30,11 +30,12 @@ export class ApiError extends Error {}
 
 /**
  * What a change request answered: its body, and the state revision from which the events
- * WebSocket's snapshots show the change (undefined if the server did not say).
+ * WebSocket's snapshots show the change. Every successful change answers with one; were it
+ * missing, the revision is NaN, which no snapshot reaches, so a wait for it times out.
  */
 export interface Change<T> {
   value: T;
-  revision: number | undefined;
+  revision: number;
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
@@ -42,8 +43,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok)
     throw new ApiError(body.error ?? `Request failed (${response.status})`);
-  const revision = response.headers.get("State-Revision");
-  return { value: body as T, revision: revision === null ? undefined : Number(revision) };
+  const revision = Number(response.headers.get("State-Revision") ?? Number.NaN);
+  return { value: body as T, revision };
 }
 
 async function get<T>(path: string): Promise<T> {
