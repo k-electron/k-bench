@@ -116,7 +116,13 @@ export class Service {
     // Killing the shells closes their terminals; they must see "deleted", not "Stopped".
     for (const sessionId of ids) this.ending.add(sessionId);
     try {
-      for (const sessionId of ids) await this.tmux.killSession(sessionId);
+      // Every shell gets its kill, even if one fails; a failure keeps the Workspace so the
+      // owner can retry (killing is idempotent), instead of leaving a half-killed one.
+      const kills = await Promise.allSettled(
+        ids.map((sessionId) => this.tmux.killSession(sessionId)),
+      );
+      const failed = kills.find((kill) => kill.status === "rejected");
+      if (failed) throw failed.reason;
       this.store.deleteWorkspace(id);
     } finally {
       for (const sessionId of ids) this.ending.delete(sessionId);

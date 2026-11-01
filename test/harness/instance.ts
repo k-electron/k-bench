@@ -44,26 +44,43 @@ export class TestServer {
   /** The login sent with every request, or undefined to send none. */
   readonly login: string | undefined;
   private readonly running: RunningServer;
+  private readonly extraHeaders: Record<string, string>;
 
-  constructor(running: RunningServer, login: string | undefined) {
+  constructor(
+    running: RunningServer,
+    login: string | undefined,
+    extraHeaders: Record<string, string> = {},
+  ) {
     this.running = running;
     this.login = login;
+    this.extraHeaders = extraHeaders;
     this.baseUrl = `http://127.0.0.1:${running.port}`;
   }
 
   /** The same server, with every request sent as `login`. */
   as(login: string): TestServer {
-    return new TestServer(this.running, login);
+    return new TestServer(this.running, login, this.extraHeaders);
   }
 
   /** The same server, with no login header at all. */
   anonymous(): TestServer {
-    return new TestServer(this.running, undefined);
+    return new TestServer(this.running, undefined, this.extraHeaders);
+  }
+
+  /**
+   * The same server, with `headers` added to every request and WebSocket upgrade: a browser
+   * page's `Origin`, or the `Host` a proxy such as `tailscale serve` forwards.
+   */
+  withHeaders(headers: Record<string, string>): TestServer {
+    return new TestServer(this.running, this.login, { ...this.extraHeaders, ...headers });
   }
 
   /** Headers every request carries. An explicit header in a request's own init wins. */
   private get loginHeaders(): Record<string, string> {
-    return this.login === undefined ? {} : { [LOGIN_HEADER]: this.login };
+    return {
+      ...(this.login === undefined ? {} : { [LOGIN_HEADER]: this.login }),
+      ...this.extraHeaders,
+    };
   }
 
   async request(path: string, init: RequestInit = {}): Promise<Response> {

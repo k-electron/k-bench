@@ -39,14 +39,23 @@ export async function startServer(
   // The guard sits in front of everything the server answers, so no route or static file
   // (now or added later) can be reached without the allowed login.
   const guard = new AccessGuard(config.allowedLogin);
+  const app = createApp(service, {
+    webDir: options.webDir,
+    pickerRoot: config.pickerRoot,
+    onMutation: () => feed.notify(),
+  });
+  // Requests whose handlers are still running. A handler outlives its connection (closing
+  // the sockets does not cancel it), so stopping waits for them before the database closes.
+  const inFlight = new Set<Promise<unknown>>();
+  const guarded = guard.wrapFetch(app.fetch);
   const server = serve({
-    fetch: guard.wrapFetch(
-      createApp(service, {
-        webDir: options.webDir,
-        pickerRoot: config.pickerRoot,
-        onMutation: () => feed.notify(),
-      }).fetch,
-    ),
+    fetch: (request) => {
+      const handled = Promise.resolve(guarded(request));
+      inFlight.add(handled);
+      const forget = () => inFlight.delete(handled);
+      handled.then(forget, forget);
+      return handled;
+    },
     port: config.port,
     hostname: "127.0.0.1",
   }) as Server;
@@ -74,12 +83,14 @@ export async function startServer(
   const stop = () => {
     stopping ??= (async () => {
       events.closeAll();
-      feed.stop();
       terminals.closeAll();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
       });
+      // Nothing may read the database once it is closed: let in-flight reads finish first.
+      await feed.close();
+      await Promise.allSettled([...inFlight]);
       store.close();
     })();
     return stopping;

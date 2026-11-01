@@ -150,6 +150,22 @@ await step(
   },
 );
 
+// The old server stops before its folder is replaced: otherwise it would keep running from
+// a deleted directory, and KeepAlive could restart it against a half-swapped tree. Stopping
+// the agent leaves tmux, and so every Session, running (AbandonProcessGroup, ADR-0001).
+await step(
+  `stop the running LaunchAgent (launchctl bootout, ${domain}), if loaded`,
+  async () => {
+    if (launchctl(["print", `${domain}/${LABEL}`])) {
+      launchctl(["bootout", `${domain}/${LABEL}`]);
+      await waitFor(
+        "launchd to unload the old agent",
+        () => !launchctl(["print", `${domain}/${LABEL}`]),
+      );
+    }
+  },
+);
+
 await step(`swap the staged copy in as ${appDir}`, () =>
   swapInStagedApp({ appDir, stagingDir }),
 );
@@ -175,16 +191,8 @@ await step(`write the LaunchAgent ${plistPath}`, () => {
 });
 
 await step(
-  `(re)load the LaunchAgent (launchctl bootout, then bootstrap, ${domain})`,
+  `load the LaunchAgent (launchctl bootstrap, ${domain}) and wait for it to answer`,
   async () => {
-    // Stopping the agent leaves tmux, and so every Session, running (AbandonProcessGroup).
-    if (launchctl(["print", `${domain}/${LABEL}`])) {
-      launchctl(["bootout", `${domain}/${LABEL}`]);
-      await waitFor(
-        "launchd to unload the old agent",
-        () => !launchctl(["print", `${domain}/${LABEL}`]),
-      );
-    }
     execFileSync("launchctl", ["bootstrap", domain, plistPath], { stdio: "inherit" });
     // Up and guarded: without a Tailscale-User-Login header the server answers 403.
     await waitFor("k-bench to answer on 127.0.0.1", async () => {

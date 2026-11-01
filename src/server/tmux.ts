@@ -169,6 +169,7 @@ export class TmuxDriver {
     write: (data: string) => void,
     data: string,
   ): Promise<void> {
+    if (data === "") return;
     if (this.lastTyper.get(id) === typer || TERMINAL_REPORT.test(data))
       return write(data);
     this.lastTyper.set(id, typer);

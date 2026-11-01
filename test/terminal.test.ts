@@ -54,6 +54,51 @@ describe("Terminal WebSocket", () => {
     await terminal.waitForOutput(/^31 97$/m);
   });
 
+  it("shrugs off nonsense resize messages and keeps serving everyone", async () => {
+    const { server, session } = await bootSession();
+    const bystander = await server.openTerminal(session.id);
+    bystander.run(echoCommand("marker-a17c52"));
+    await bystander.waitForOutput("marker-a17c52");
+    const misbehaving = await server.openTerminal(session.id);
+
+    for (const [cols, rows] of [
+      [-1, 0],
+      [0, 0],
+      [-5, 24],
+      [1e9, 1e9],
+    ] as const) {
+      misbehaving.resize(cols, rows);
+    }
+    misbehaving.type("\r");
+    bystander.run(echoCommand("marker-b41e07"));
+
+    await bystander.waitForOutput("marker-b41e07");
+    // The server did not die: new connections still work, and so does the misbehaving one.
+    const fresh = await server.openTerminal(session.id);
+    fresh.run(echoCommand("marker-c92d18"));
+    await fresh.waitForOutput("marker-c92d18");
+    misbehaving.run(echoCommand("marker-d03a29"));
+    await misbehaving.waitForOutput("marker-d03a29");
+  });
+
+  it("sends nothing to the shell for an empty input message", async () => {
+    const { server, session } = await bootSession();
+    const first = await server.openTerminal(session.id, { cols: 120, rows: 30 });
+    const second = await server.openTerminal(session.id, { cols: 100, rows: 20 });
+    first.run(echoCommand("shell-up-6a1b"));
+    await first.waitForOutput("shell-up-6a1b");
+    // cat -v shows any control byte it receives, such as a stray NUL as ^@.
+    first.run("cat -v");
+    first.type("ready\r");
+    await first.waitForOutput(/^ready\r?\nready$/m);
+
+    second.type("");
+    second.type("after\r");
+
+    await second.waitForOutput(/^after$/m);
+    expect(second.output).not.toContain("^@");
+  });
+
   it("closes the socket with a distinct code for an unknown Session", async () => {
     const instance = createTestInstance();
     const server = await instance.start();

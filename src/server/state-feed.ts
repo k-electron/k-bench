@@ -54,6 +54,13 @@ export class StateFeed {
     this.listeners.clear();
     this.fresh.clear();
     this.last = undefined;
+    this.dirty = false;
+  }
+
+  /** Stops, then waits for a read that is still running, so nothing reads afterwards. */
+  async close(): Promise<void> {
+    this.stop();
+    await this.reading;
   }
 
   /** One read at a time; a request that arrives during a read triggers another straight after. */

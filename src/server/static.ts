@@ -18,7 +18,12 @@ async function isFile(path: string): Promise<boolean> {
 export function mountStatic(app: Hono, webDir: string): void {
   const root = resolve(webDir);
   app.get("*", async (c) => {
-    const pathname = decodeURIComponent(new URL(c.req.url).pathname);
+    let pathname: string;
+    try {
+      pathname = decodeURIComponent(new URL(c.req.url).pathname);
+    } catch {
+      return c.notFound(); // A malformed percent escape names no file.
+    }
     if (pathname.startsWith("/api/")) return c.notFound();
     const requested = resolve(join(root, normalize(pathname)));
     const insideRoot = requested === root || requested.startsWith(root + sep);

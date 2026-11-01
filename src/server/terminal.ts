@@ -6,13 +6,19 @@ import type { TerminalAttachment, TmuxDriver } from "./tmux.ts";
 /** Close codes the client uses to decide whether to reconnect. */
 export const CLOSE_SESSION_DELETED = 4404;
 export const CLOSE_SESSION_STOPPED = 4410;
+const CLOSE_INTERNAL_ERROR = 1011;
 
 const TERMINAL_PATH = /^\/api\/sessions\/([^/]+)\/terminal$/;
+
+/** A terminal dimension a pty can take: a whole number from 1 to 999. */
+function isDimension(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) > 0 && (value as number) < 1000;
+}
 
 function parseSize(url: URL): { cols: number; rows: number } {
   const clamp = (value: string | null, fallback: number) => {
     const n = Number(value);
-    return Number.isInteger(n) && n > 0 && n < 1000 ? n : fallback;
+    return isDimension(n) ? n : fallback;
   };
   return {
     cols: clamp(url.searchParams.get("cols"), 80),
@@ -61,7 +67,12 @@ export class TerminalSockets {
   ): Promise<void> {
     // Listeners go on before any await: a client may type the moment its socket opens,
     // and those messages must wait for the attachment instead of being dropped.
-    const attached = this.attach(ws, sessionId, size);
+    // A failure to attach (tmux or the pty cannot start) ends this socket, not the server.
+    const attached = this.attach(ws, sessionId, size).catch((error: unknown) => {
+      console.error(`terminal for Session ${sessionId} failed to attach`, error);
+      ws.close(CLOSE_INTERNAL_ERROR, "Could not attach");
+      return undefined;
+    });
     ws.on("message", (raw: RawData) => {
       let message: { type?: string; data?: unknown; cols?: unknown; rows?: unknown };
       try {
@@ -71,14 +82,19 @@ export class TerminalSockets {
       }
       void attached.then((attachment) => {
         if (!attachment) return;
-        if (message.type === "input" && typeof message.data === "string") {
-          attachment.write(message.data);
-        } else if (
-          message.type === "resize" &&
-          Number.isInteger(message.cols) &&
-          Number.isInteger(message.rows)
-        ) {
-          attachment.resize(message.cols as number, message.rows as number);
+        try {
+          if (message.type === "input" && typeof message.data === "string") {
+            attachment.write(message.data);
+          } else if (
+            message.type === "resize" &&
+            isDimension(message.cols) &&
+            isDimension(message.rows)
+          ) {
+            attachment.resize(message.cols, message.rows);
+          }
+        } catch (error) {
+          // The pty is gone or refused; its exit is reported separately.
+          console.error(`terminal for Session ${sessionId} rejected a message`, error);
         }
       });
     });
@@ -111,7 +127,7 @@ export class TerminalSockets {
     // The shell ended, or the Session was deleted (which kills its shell): say which.
     attachment.onExit(async () => {
       if (ws.readyState !== ws.OPEN) return; // The client left; nothing to tell it.
-      const now = await this.service.terminalTarget(sessionId);
+      const now = await this.service.terminalTarget(sessionId).catch(() => "stopped");
       if (ws.readyState !== ws.OPEN) return;
       if (now === "unknown") ws.close(CLOSE_SESSION_DELETED, "Session deleted");
       else ws.close(CLOSE_SESSION_STOPPED, "Session stopped");

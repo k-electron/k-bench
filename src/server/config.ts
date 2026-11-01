@@ -28,6 +28,17 @@ const PRESETS = {
   },
 } as const;
 
+function parsePort(value: string | undefined): number | undefined {
+  if (value === undefined || value === "") return undefined;
+  const port = /^\d+$/.test(value) ? Number(value) : Number.NaN;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `K_BENCH_PORT must be a whole number from 1 to 65535, got "${value}"`,
+    );
+  }
+  return port;
+}
+
 /**
  * Resolves the instance config. `K_BENCH_INSTANCE` picks the preset (`installed` or `dev`,
  * default `dev`, so a stray run can never touch the Installed instance); each value can be
@@ -44,7 +55,7 @@ export function resolveConfig(
   return {
     dataDir: resolve(env.K_BENCH_DATA_DIR ?? preset.dataDir),
     tmuxSocket: env.K_BENCH_TMUX_SOCKET ?? preset.tmuxSocket,
-    port: env.K_BENCH_PORT ? Number(env.K_BENCH_PORT) : preset.port,
+    port: parsePort(env.K_BENCH_PORT) ?? preset.port,
     allowedLogin: env.K_BENCH_ALLOWED_LOGIN ?? "",
     pickerRoot: resolve(env.K_BENCH_PICKER_ROOT ?? homedir()),
   };
