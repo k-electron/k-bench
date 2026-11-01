@@ -3,8 +3,13 @@ import { type AppPage, expect, test } from "./harness.ts";
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
-/** Prints 200 numbered lines, far more than fit on screen. */
-const PRINT_LINES = "printf 'scroll-%03d-end\\n' $(seq 1 200)";
+/**
+ * Prints 100 numbered lines: well beyond one screen, yet few enough that scrolling back to
+ * the top takes a few rounds of scroll steps, each of which is slow when the machine is busy.
+ */
+const PRINT_LINES = "printf 'scroll-%03d-end\\n' $(seq 1 100)";
+/** The last line `PRINT_LINES` prints. */
+const LAST_LINE = "scroll-100-end";
 
 async function openSession(app: AppPage, folder: string) {
   await app.createWorkspace(folder);
@@ -38,7 +43,7 @@ test("scrolling up with the mouse wheel reveals earlier lines", async ({
   page,
 }) => {
   const terminal = await openSession(app, kbench.instance.makeFolder("project"));
-  await app.runCommand(terminal, PRINT_LINES, "scroll-200-end");
+  await app.runCommand(terminal, PRINT_LINES, LAST_LINE);
   await expect(terminal).not.toContainText("scroll-003-end");
 
   await terminal.hover();
@@ -57,7 +62,8 @@ test("swiping down on the terminal reveals earlier lines", async ({
   page,
 }) => {
   const terminal = await openSession(app, kbench.instance.makeFolder("project"));
-  await app.runCommand(terminal, PRINT_LINES, "scroll-200-end");
+  await app.runCommand(terminal, PRINT_LINES, LAST_LINE);
+  await expect(terminal).not.toContainText("scroll-003-end");
   const box = await terminal.boundingBox();
   if (!box) throw new Error("terminal not visible");
   const x = box.x + box.width / 2;
