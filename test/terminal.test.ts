@@ -11,6 +11,11 @@ async function bootSession(folderName = "project") {
   return { instance, server, folder, workspace, session };
 }
 
+/** Prints `tag=COLSxROWS` as the shell sees its terminal; the typed text never contains that. */
+function sizeProbe(tag: string): string {
+  return `printf '%s=%sx%s\\n' ${tag} $(tput cols) $(tput lines)`;
+}
+
 describe("Terminal WebSocket", () => {
   it("shows the output of a command typed into the Session", async () => {
     const { server, session } = await bootSession();
@@ -56,5 +61,47 @@ describe("Terminal WebSocket", () => {
     const terminal = await server.openTerminal("no-such-session");
 
     expect(await terminal.waitForClose()).toBe(4404);
+  });
+
+  describe("the same Session open on two devices", () => {
+    it("shows both of them the output of input sent by either", async () => {
+      const { server, session } = await bootSession();
+      const phone = await server.openTerminal(session.id, { cols: 50, rows: 20 });
+      const laptop = await server.openTerminal(session.id, { cols: 120, rows: 30 });
+
+      phone.run(echoCommand("from-the-phone-1a2b"));
+      await phone.waitForOutput("from-the-phone-1a2b");
+      await laptop.waitForOutput("from-the-phone-1a2b");
+
+      laptop.run(echoCommand("from-the-laptop-3c4d"));
+      await laptop.waitForOutput("from-the-laptop-3c4d");
+      await phone.waitForOutput("from-the-laptop-3c4d");
+    });
+
+    it("gives the shell the size of whichever client sent input most recently", async () => {
+      const { server, session } = await bootSession();
+      const phone = await server.openTerminal(session.id, { cols: 50, rows: 20 });
+      const laptop = await server.openTerminal(session.id, { cols: 120, rows: 30 });
+
+      phone.run(sizeProbe("phone-size"));
+      await phone.waitForOutput(/phone-size=50x20/);
+
+      laptop.run(sizeProbe("laptop-size"));
+      await laptop.waitForOutput(/laptop-size=120x30/);
+
+      phone.run(sizeProbe("phone-again"));
+      await phone.waitForOutput(/phone-again=50x20/);
+    });
+
+    it("keeps the Session usable for the other device when one disconnects", async () => {
+      const { server, session } = await bootSession();
+      const phone = await server.openTerminal(session.id, { cols: 50, rows: 20 });
+      const laptop = await server.openTerminal(session.id, { cols: 120, rows: 30 });
+      phone.close();
+
+      laptop.run(echoCommand("still-here-5e6f"));
+
+      await laptop.waitForOutput("still-here-5e6f");
+    });
   });
 });
