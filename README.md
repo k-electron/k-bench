@@ -21,12 +21,16 @@ pnpm test        # Vitest
 
 ## Layout
 
-- `src/server/`: `config.ts` (instance config), `store.ts` (SQLite and migrations), `tmux.ts` (tmux driver), `service.ts` (domain operations), `app.ts` (HTTP API), `terminal.ts` (terminal WebSocket), `server.ts` (`startServer`), `main.ts` (entry point).
+- `src/server/`: `config.ts` (instance config), `access-guard.ts` (the `Tailscale-User-Login` check, ADR-0003), `store.ts` (SQLite and migrations), `tmux.ts` (tmux driver), `service.ts` (domain operations), `app.ts` (HTTP API), `terminal.ts` (terminal WebSocket), `server.ts` (`startServer`), `main.ts` (entry point).
 - `test/`: outcome-based tests, see `docs/testing.md`.
-- `test/harness/`: the Seam 1 harness. `createTestInstance()` gives an isolated instance (temp data folder, unique `kb-test-*` tmux socket) that is cleaned up after each test; `instance.start()` boots the real server in-process and can be called again after `stop()` to simulate a restart; `server.openTerminal()` returns a `TerminalClient` with `run()`, `resize()` and `waitForOutput()`; `pollUntil()` waits for outcomes.
+- `test/harness/`: the Seam 1 harness. `createTestInstance()` gives an isolated instance (temp data folder, unique `kb-test-*` tmux socket) that is cleaned up after each test; `instance.start()` boots the real server in-process and can be called again after `stop()` to simulate a restart; every request and upgrade carries the instance's configured login in `Tailscale-User-Login` by default (`server.as(login)` and `server.anonymous()` give views that send another login or none, `server.upgradeStatus(path)` reports the status refusing an upgrade); `server.openTerminal()` returns a `TerminalClient` with `run()`, `resize()` and `waitForOutput()`; `pollUntil()` waits for outcomes.
 
 ## API (so far)
 
 - `GET /api/state`: Workspaces with their Sessions (`running` or `stopped`).
 - `POST /api/workspaces` `{folder, name?}` and `POST /api/workspaces/:id/sessions` `{name?}`.
 - `GET /api/sessions/:id/terminal?cols=&rows=` (WebSocket): output arrives as binary frames; send JSON text frames `{"type":"input","data":"..."}` or `{"type":"resize","cols":120,"rows":30}`. Close code 4404 means the Session no longer exists, 4410 that it is Stopped.
+
+## Access
+
+Every HTTP request and WebSocket upgrade must carry `Tailscale-User-Login` equal to `K_BENCH_ALLOWED_LOGIN`, otherwise it gets 403. With no login configured, everything is refused. The server listens on `127.0.0.1` only.
