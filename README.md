@@ -29,7 +29,7 @@ Playwright needs its browser once: `pnpm exec playwright install chromium`.
 ## Layout
 
 - `src/server/`: `config.ts` (instance config), `access-guard.ts` (the `Tailscale-User-Login` check, ADR-0003), `store.ts` (SQLite and migrations), `tmux.ts` (tmux driver), `service.ts` (domain operations), `app.ts` (HTTP API), `static.ts` (serves the built front end), `terminal.ts` (terminal WebSocket), `server.ts` (`startServer`), `main.ts` (entry point).
-- `web/`: the front end (Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js). `src/App.tsx` is the shell, `src/components/` holds `Sidebar`, `NewWorkspaceDialog`, `Pane` (one slot in the main view) and `TerminalView` (xterm.js on the terminal WebSocket), `src/components/ui/` the shadcn/ui components, `src/api.ts` the API client, `src/layout.ts` the per-device layout kept in browser storage. `@/` aliases `web/src/`.
+- `web/`: the front end (Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js). `src/App.tsx` is the shell, `src/components/` holds `Sidebar`, `NewWorkspaceDialog`, `WorkspaceRow` (a sortable Workspace row with its menu), `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `Pane` (one slot in the main view) and `TerminalView` (xterm.js on the terminal WebSocket), `src/components/ui/` the shadcn/ui components, `src/api.ts` the API client, `src/layout.ts` the per-device layout kept in browser storage. `@/` aliases `web/src/`.
 - `test/`: outcome-based tests, see `docs/testing.md`.
 - `test/harness/`: the Seam 1 harness. `createTestInstance()` gives an isolated instance (temp data folder, unique `kb-test-*` tmux socket) that is cleaned up after each test; `instance.start()` boots the real server in-process and can be called again after `stop()` to simulate a restart; every request and upgrade carries the instance's configured login in `Tailscale-User-Login` by default (`server.as(login)` and `server.anonymous()` give views that send another login or none, `server.upgradeStatus(path)` reports the status refusing an upgrade); `server.openTerminal()` returns a `TerminalClient` with `run()`, `resize()` and `waitForOutput()`; `pollUntil()` waits for outcomes.
 
@@ -42,6 +42,9 @@ Playwright needs its browser once: `pnpm exec playwright install chromium`.
 - `GET /api/state`: Workspaces with their Sessions (`running` or `stopped`).
 - `GET /api/directories?path=`: the subfolders of `path` (default: the configured picker root) for the folder picker; 422 if the path is not an existing absolute folder.
 - `POST /api/workspaces` `{folder, name?}`: the name defaults to the folder name, with a "(2)"-style suffix when taken; an explicit name that is taken gets 409, a missing folder 422. And `POST /api/workspaces/:id/sessions` `{name?}`.
+- `PATCH /api/workspaces/:id` `{name?, folder?}`: rename and/or change the folder; 409 for a taken name, 422 for a blank name or a folder that does not exist (neither change is made if one is refused), 404 for an unknown Workspace.
+- `PUT /api/workspaces/order` `{ids}`: the full ordered list of Workspace ids (422 unless it is every Workspace exactly once).
+- `DELETE /api/workspaces/:id`: ends every Session's shell, then removes the Workspace (204). The folder on disk is never touched.
 - `GET /api/sessions/:id/terminal?cols=&rows=` (WebSocket): output arrives as binary frames; send JSON text frames `{"type":"input","data":"..."}` or `{"type":"resize","cols":120,"rows":30}`. Close code 4404 means the Session no longer exists, 4410 that it is Stopped.
 
 ## Access

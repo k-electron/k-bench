@@ -40,6 +40,14 @@ function post<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+function send(method: string, path: string, body?: unknown): Promise<unknown> {
+  return call(path, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 export const api = {
   getState: () => call<AppState>("/api/state"),
   /** Subfolders of `path`, or of the configured root when omitted. */
@@ -51,6 +59,13 @@ export const api = {
     ),
   createWorkspace: (input: { folder: string; name?: string }) =>
     post<{ id: string; name: string; folder: string }>("/api/workspaces", input),
+  updateWorkspace: (id: string, changes: { name?: string; folder?: string }) =>
+    send("PATCH", `/api/workspaces/${id}`, changes).then(() => undefined),
+  /** `ids` is every Workspace, in the order wanted. */
+  reorderWorkspaces: (ids: string[]) =>
+    send("PUT", "/api/workspaces/order", { ids }).then(() => undefined),
+  deleteWorkspace: (id: string) =>
+    send("DELETE", `/api/workspaces/${id}`).then(() => undefined),
   createSession: (workspaceId: string, name?: string) =>
     post<{ id: string; name: string }>(`/api/workspaces/${workspaceId}/sessions`, {
       name,
