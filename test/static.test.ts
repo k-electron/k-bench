@@ -45,4 +45,12 @@ describe("serving the built front end", () => {
     expect(await response.text()).not.toContain("SQLite");
     expect(response.status).toBe(404);
   });
+
+  it("answers a malformed percent escape in the path with 404, not an error", async () => {
+    const server = await createTestInstance().start({ webDir: buildFolder() });
+
+    for (const path of ["/%", "/%zz", "/assets/%E0%A4%A"]) {
+      expect((await server.request(path)).status, path).toBe(404);
+    }
+  });
 });
