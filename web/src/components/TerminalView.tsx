@@ -22,15 +22,25 @@ function terminalUrl(sessionId: string, cols: number, rows: number): string {
  */
 export function TerminalView({
   sessionId,
+  focused,
   onEnded,
 }: {
   sessionId: string;
+  /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
+  focused: boolean;
   /** The server closed the socket because the Session was deleted or is Stopped. */
   onEnded?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<Terminal>(null);
+  const focusedRef = useRef(focused);
+  focusedRef.current = focused;
   const ended = useRef(onEnded);
   ended.current = onEnded;
+
+  useEffect(() => {
+    if (focused) terminalRef.current?.focus();
+  }, [focused]);
 
   useEffect(() => {
     const element = container.current;
@@ -66,9 +76,11 @@ export function TerminalView({
     );
     const observer = new ResizeObserver(() => fit.fit());
     observer.observe(element);
-    terminal.focus();
+    terminalRef.current = terminal;
+    if (focusedRef.current) terminal.focus();
 
     return () => {
+      terminalRef.current = null;
       observer.disconnect();
       input.dispose();
       resized.dispose();
