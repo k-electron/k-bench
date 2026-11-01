@@ -69,6 +69,18 @@ export function createApp(
     return c.json(session, 201);
   });
 
+  app.patch("/api/sessions/:id", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    return c.json(
+      service.renameSession(c.req.param("id"), optionalString(body.name) ?? ""),
+    );
+  });
+
+  app.delete("/api/sessions/:id", async (c) => {
+    await service.deleteSession(c.req.param("id"));
+    return c.body(null, 204);
+  });
+
   // Last, so it only answers what the API did not.
   if (options.webDir) mountStatic(app, options.webDir);
 

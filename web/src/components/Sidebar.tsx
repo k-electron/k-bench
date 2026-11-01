@@ -1,7 +1,7 @@
-import { FolderIcon, PlusIcon, TerminalIcon } from "lucide-react";
+import { FolderIcon, PlusIcon } from "lucide-react";
 import type { AppState } from "@/api";
-import { cn } from "@/lib/utils";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { SessionRow } from "./SessionRow";
 import { Button } from "./ui/button";
 
 interface SidebarProps {
@@ -10,6 +10,8 @@ interface SidebarProps {
   onOpen: (sessionId: string) => void;
   onCreateWorkspace: (input: { folder: string; name?: string }) => Promise<void>;
   onCreateSession: (workspaceId: string) => Promise<void>;
+  onRenameSession: (sessionId: string, name: string) => Promise<void>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
 }
 
 /** The tree of Workspaces and their Sessions. */
@@ -19,6 +21,8 @@ export function Sidebar({
   onOpen,
   onCreateWorkspace,
   onCreateSession,
+  onRenameSession,
+  onDeleteSession,
 }: SidebarProps) {
   return (
     <nav
@@ -46,20 +50,13 @@ export function Sidebar({
             <ul>
               {workspace.sessions.map((session) => (
                 <li key={session.id}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      "w-full justify-start pl-6 font-normal",
-                      session.id === openId && "bg-accent",
-                      session.status === "stopped" && "text-muted-foreground",
-                    )}
-                    aria-current={session.id === openId ? "true" : undefined}
-                    onClick={() => onOpen(session.id)}
-                  >
-                    <TerminalIcon />
-                    {session.name}
-                  </Button>
+                  <SessionRow
+                    session={session}
+                    isOpen={session.id === openId}
+                    onOpen={() => onOpen(session.id)}
+                    onRename={(name) => onRenameSession(session.id, name)}
+                    onDelete={() => onDeleteSession(session.id)}
+                  />
                 </li>
               ))}
             </ul>
