@@ -207,6 +207,7 @@ export class TmuxDriver {
       detach: () => {
         if (this.lastTyper.get(id) === typer) this.lastTyper.delete(id);
         if (alive) process.kill();
+        alive = false;
       },
     };
   }
