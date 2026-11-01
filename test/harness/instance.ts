@@ -24,6 +24,7 @@ export interface State {
   workspaces: Array<
     WorkspaceInfo & {
       position: number;
+      missing: boolean;
       sessions: Array<SessionInfo & { status: "running" | "stopped" }>;
     }
   >;
