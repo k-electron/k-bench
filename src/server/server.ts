@@ -34,7 +34,12 @@ export async function startServer(
   // (now or added later) can be reached without the allowed login.
   const guard = new AccessGuard(config.allowedLogin);
   const server = serve({
-    fetch: guard.wrapFetch(createApp(service, { webDir: options.webDir }).fetch),
+    fetch: guard.wrapFetch(
+      createApp(service, {
+        webDir: options.webDir,
+        pickerRoot: config.pickerRoot,
+      }).fetch,
+    ),
     port: config.port,
     hostname: "127.0.0.1",
   }) as Server;

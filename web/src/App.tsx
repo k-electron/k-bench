@@ -24,14 +24,22 @@ export function App() {
         state={state}
         openId={openId}
         onOpen={setOpenId}
-        onCreateWorkspace={async (folder) => {
-          await api.createWorkspace({ folder });
+        onCreateWorkspace={async (input) => {
+          await api.createWorkspace(input);
           await refresh();
         }}
         onCreateSession={async (workspaceId) => {
           const session = await api.createSession(workspaceId);
           await refresh();
           setOpenId(session.id);
+        }}
+        onRenameSession={async (sessionId, name) => {
+          await api.renameSession(sessionId, name);
+          await refresh();
+        }}
+        onDeleteSession={async (sessionId) => {
+          await api.deleteSession(sessionId);
+          await refresh();
         }}
       />
       <main className="min-w-0 flex-1">
