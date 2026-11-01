@@ -10,7 +10,9 @@ async function bootWithVanishedFolder() {
   const server = await instance.start();
   const brokenFolder = instance.makeFolder("broken");
   const broken = await server.createWorkspace({ folder: brokenFolder });
-  const healthy = await server.createWorkspace({ folder: instance.makeFolder("healthy") });
+  const healthy = await server.createWorkspace({
+    folder: instance.makeFolder("healthy"),
+  });
   const running = await server.createSession(broken.id);
   const stopped = await server.createSession(broken.id);
   const healthyStopped = await server.createSession(healthy.id);
@@ -18,7 +20,16 @@ async function bootWithVanishedFolder() {
   terminal.run("exit");
   await terminal.waitForClose();
   rmSync(brokenFolder, { recursive: true });
-  return { instance, server, brokenFolder, broken, healthy, running, stopped, healthyStopped };
+  return {
+    instance,
+    server,
+    brokenFolder,
+    broken,
+    healthy,
+    running,
+    stopped,
+    healthyStopped,
+  };
 }
 
 describe("Missing Workspaces", () => {

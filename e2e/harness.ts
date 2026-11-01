@@ -145,7 +145,9 @@ export class AppPage {
   missingNotice(workspaceName: string): Locator {
     return this.sidebar
       .getByRole("listitem")
-      .filter({ has: this.page.getByRole("heading", { name: workspaceName, exact: true }) })
+      .filter({
+        has: this.page.getByRole("heading", { name: workspaceName, exact: true }),
+      })
       .getByRole("note");
   }
 
