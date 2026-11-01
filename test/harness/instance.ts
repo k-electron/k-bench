@@ -9,7 +9,7 @@ import {
   type ServerOptions,
   startServer,
 } from "../../src/server/server.ts";
-import { TerminalClient } from "./terminal.ts";
+import { TerminalClient, upgradeStatus } from "./terminal.ts";
 
 export interface WorkspaceInfo {
   id: string;
@@ -29,18 +29,45 @@ export interface State {
   >;
 }
 
-/** A booted server, driven only through HTTP and WebSockets. */
+/** The header `tailscale serve` adds to every request it proxies. */
+export const LOGIN_HEADER = "Tailscale-User-Login";
+
+/**
+ * A booted server, driven only through HTTP and WebSockets. Like `tailscale serve`, it sends
+ * a login header on every request and WebSocket upgrade: the instance's configured login by
+ * default. Use `as(login)` or `anonymous()` for a view that sends another login or none.
+ */
 export class TestServer {
   readonly baseUrl: string;
+  /** The login sent with every request, or undefined to send none. */
+  readonly login: string | undefined;
   private readonly running: RunningServer;
 
-  constructor(running: RunningServer) {
+  constructor(running: RunningServer, login: string | undefined) {
     this.running = running;
+    this.login = login;
     this.baseUrl = `http://127.0.0.1:${running.port}`;
   }
 
+  /** The same server, with every request sent as `login`. */
+  as(login: string): TestServer {
+    return new TestServer(this.running, login);
+  }
+
+  /** The same server, with no login header at all. */
+  anonymous(): TestServer {
+    return new TestServer(this.running, undefined);
+  }
+
+  /** Headers every request carries. An explicit header in a request's own init wins. */
+  private get loginHeaders(): Record<string, string> {
+    return this.login === undefined ? {} : { [LOGIN_HEADER]: this.login };
+  }
+
   async request(path: string, init: RequestInit = {}): Promise<Response> {
-    return fetch(new URL(path, this.baseUrl), init);
+    const headers = new Headers(this.loginHeaders);
+    for (const [name, value] of new Headers(init.headers)) headers.set(name, value);
+    return fetch(new URL(path, this.baseUrl), { ...init, headers });
   }
 
   async post(path: string, body?: unknown): Promise<Response> {
@@ -83,7 +110,15 @@ export class TestServer {
     sessionId: string,
     size?: { cols: number; rows: number },
   ): Promise<TerminalClient> {
-    return TerminalClient.open(this.baseUrl, sessionId, size);
+    return TerminalClient.open(this.baseUrl, sessionId, size, this.loginHeaders);
+  }
+
+  /**
+   * Attempts a WebSocket upgrade on `path` and returns the HTTP status that refused it, or
+   * 101 if it was accepted (the socket is closed again).
+   */
+  upgradeStatus(path: string): Promise<number> {
+    return upgradeStatus(this.baseUrl, path, this.loginHeaders);
   }
 
   /** Stops the server process-equivalent. tmux, and so every Session, keeps running. */
@@ -114,7 +149,10 @@ export class TestInstance {
   }
 
   async start(options?: ServerOptions): Promise<TestServer> {
-    const server = new TestServer(await startServer(this.config, options));
+    const server = new TestServer(
+      await startServer(this.config, options),
+      this.config.allowedLogin,
+    );
     this.servers.push(server);
     return server;
   }

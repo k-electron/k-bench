@@ -4,6 +4,11 @@ import { resolveConfig } from "./config.ts";
 import { startServer } from "./server.ts";
 
 const config = resolveConfig();
+if (!config.allowedLogin) {
+  console.warn(
+    "K_BENCH_ALLOWED_LOGIN is not set: every request will be refused with 403 until it is.",
+  );
+}
 // A production build (`pnpm build`) is served by this server alone. In `pnpm dev` there is
 // usually none, and Vite serves the front end instead.
 const webDir = resolve("dist/web");

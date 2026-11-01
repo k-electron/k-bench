@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
+import { AccessGuard } from "./access-guard.ts";
 import { createApp } from "./app.ts";
 import type { InstanceConfig } from "./config.ts";
 import { Service } from "./service.ts";
@@ -29,19 +30,25 @@ export async function startServer(
   const service = new Service(store, tmux);
   const terminals = new TerminalSockets(service, tmux);
 
+  // The guard sits in front of everything the server answers, so no route or static file
+  // (now or added later) can be reached without the allowed login.
+  const guard = new AccessGuard(config.allowedLogin);
   const server = serve({
-    fetch: createApp(service, { webDir: options.webDir }).fetch,
+    fetch: guard.wrapFetch(createApp(service, { webDir: options.webDir }).fetch),
     port: config.port,
     hostname: "127.0.0.1",
   }) as Server;
-  server.on("upgrade", (request, socket, head) => {
-    const sessionId = TerminalSockets.match(request);
-    if (sessionId === undefined) {
-      socket.destroy();
-      return;
-    }
-    terminals.handleUpgrade(request, socket, head, sessionId);
-  });
+  server.on(
+    "upgrade",
+    guard.wrapUpgrade((request, socket, head) => {
+      const sessionId = TerminalSockets.match(request);
+      if (sessionId === undefined) {
+        socket.destroy();
+        return;
+      }
+      terminals.handleUpgrade(request, socket, head, sessionId);
+    }),
+  );
   await new Promise<void>((resolve, reject) => {
     server.once("listening", resolve);
     server.once("error", reject);
