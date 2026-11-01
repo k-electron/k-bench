@@ -1,11 +1,23 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { DirectoryError, listDirectories } from "./directories.ts";
 import { type Service, ServiceError } from "./service.ts";
 import { mountStatic } from "./static.ts";
 
+/**
+ * The JSON object in a request body ({} when there is none). A body must be declared
+ * `application/json`: a page on another site cannot send that without a preflight the
+ * server never grants, so it is a second line behind the Origin check.
+ */
 async function jsonBody(request: Request): Promise<Record<string, unknown>> {
+  const text = await request.text();
+  if (text === "") return {};
+  const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  if (type !== "application/json") {
+    throw new HTTPException(415, { message: "Send the body as application/json" });
+  }
   try {
-    const body = await request.json();
+    const body = JSON.parse(text);
     return body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   } catch {
     return {};
@@ -29,6 +41,9 @@ export function createApp(
   const app = new Hono();
 
   app.onError((error, c) => {
+    if (error instanceof HTTPException) {
+      return c.json({ error: error.message }, error.status);
+    }
     if (error instanceof ServiceError) {
       const status =
         error.kind === "not_found" ? 404 : error.kind === "conflict" ? 409 : 422;
