@@ -31,6 +31,12 @@ export interface State {
   >;
 }
 
+/**
+ * What the events WebSocket pushes: the state, plus the revision it is fresh to. A change
+ * request answers with the revision (`State-Revision` header) whose snapshot first shows it.
+ */
+export type Snapshot = State & { revision: number };
+
 /** The header `tailscale serve` adds to every request it proxies. */
 export const LOGIN_HEADER = "Tailscale-User-Login";
 
@@ -167,8 +173,8 @@ export class TestServer {
   }
 
   /** Opens the events WebSocket, which pushes a full state snapshot whenever state changes. */
-  openEvents(): Promise<EventsClient<State>> {
-    return EventsClient.open<State>(this.baseUrl, this.loginHeaders);
+  openEvents(): Promise<EventsClient<Snapshot>> {
+    return EventsClient.open<Snapshot>(this.baseUrl, this.loginHeaders);
   }
 
   /**

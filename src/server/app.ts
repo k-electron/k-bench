@@ -34,8 +34,12 @@ export function createApp(
   options: {
     webDir?: string;
     pickerRoot?: string;
-    /** Called after every request that changed something, so open clients hear about it. */
-    onMutation?: () => void;
+    /**
+     * Called after every request that changed something, so open clients hear about it.
+     * Returns the state revision from which the change shows; the response carries it in
+     * the `State-Revision` header, so the client that made the change can wait for it.
+     */
+    onMutation?: () => number;
   } = {},
 ): Hono {
   const app = new Hono();
@@ -56,7 +60,9 @@ export function createApp(
   // Any API call that is not a read and succeeded may have changed the state.
   app.use("/api/*", async (c, next) => {
     await next();
-    if (c.req.method !== "GET" && c.res.status < 400) options.onMutation?.();
+    if (c.req.method === "GET" || c.res.status >= 400) return;
+    const revision = options.onMutation?.();
+    if (revision !== undefined) c.res.headers.set("State-Revision", String(revision));
   });
 
   app.get("/api/state", async (c) => c.json(await service.getState()));

@@ -2,15 +2,25 @@ import { describe, expect, it } from "vitest";
 import { createTestInstance, type State } from "./harness/instance.ts";
 import { killTmuxServer } from "./harness/tmux.ts";
 
-function sessionsOf(state: State): Array<{ name: string; status: string }> {
+function sessionsOf(state: State): Array<{ id: string; name: string; status: string }> {
   return state.workspaces.flatMap((w) =>
-    w.sessions.map((s) => ({ name: s.name, status: s.status })),
+    w.sessions.map((s) => ({ id: s.id, name: s.name, status: s.status })),
   );
 }
 
-async function boot() {
+/** No poll, so only a change itself can produce a snapshot. */
+const NO_POLL = { statePollMs: 600_000 };
+
+/** The `State-Revision` a change request answered with; fails unless it is a revision. */
+function revisionOf(response: Response): number {
+  const revision = Number(response.headers.get("State-Revision"));
+  expect(revision).toBeGreaterThan(0);
+  return revision;
+}
+
+async function boot(options?: { statePollMs: number }) {
   const instance = createTestInstance();
-  const server = await instance.start();
+  const server = await instance.start(options);
   const workspace = await server.createWorkspace({
     folder: instance.makeFolder("project"),
   });
@@ -104,6 +114,36 @@ describe("Events WebSocket", () => {
     await events.waitForSnapshot(
       (state) => sessionsOf(state)[0]?.status === "stopped",
       "the Session to be Stopped",
+    );
+  });
+
+  it("answers a change with the revision of the first snapshot that shows it", async () => {
+    const { server, workspace } = await boot(NO_POLL);
+    const events = await server.openEvents();
+    await events.waitForSnapshot(() => true);
+
+    const response = await server.post(`/api/workspaces/${workspace.id}/sessions`, {});
+    const revision = revisionOf(response);
+    const created = (await response.json()) as { id: string };
+
+    const snapshot = await events.waitForSnapshot(
+      (state) => state.revision >= revision,
+      `a snapshot at revision ${revision}`,
+    );
+    expect(sessionsOf(snapshot).map((s) => s.id)).toContain(created.id);
+  });
+
+  it("sends a snapshot at a change's revision even when the change altered nothing", async () => {
+    const { server, workspace } = await boot(NO_POLL);
+    const events = await server.openEvents();
+    await events.waitForSnapshot(() => true);
+
+    const response = await server.put("/api/workspaces/order", { ids: [workspace.id] });
+    const revision = revisionOf(response);
+
+    await events.waitForSnapshot(
+      (state) => state.revision >= revision,
+      `a snapshot at revision ${revision}`,
     );
   });
 

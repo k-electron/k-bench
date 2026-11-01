@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import type { SessionState } from "@/api";
 import { cn } from "@/lib/utils";
+import { useActions } from "@/useAppState";
 import { BellBadge } from "./BellBadge";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
@@ -25,9 +26,6 @@ export interface SessionRowProps {
   isOpen: boolean;
   onOpen: () => void;
   onOpenInOtherPane: () => void;
-  onRename: (name: string) => Promise<void>;
-  onDelete: () => Promise<void>;
-  onRestart: () => Promise<void>;
 }
 
 /**
@@ -39,10 +37,8 @@ export function SessionRow({
   isOpen,
   onOpen,
   onOpenInOtherPane,
-  onRename,
-  onDelete,
-  onRestart,
 }: SessionRowProps) {
+  const actions = useActions();
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -91,7 +87,7 @@ export function SessionRow({
             Open in other pane
           </DropdownMenuItem>
           {session.status === "stopped" && (
-            <DropdownMenuItem onSelect={() => void onRestart()}>
+            <DropdownMenuItem onSelect={() => void actions.restartSession(session.id)}>
               <RotateCcwIcon />
               Restart
             </DropdownMenuItem>
@@ -110,13 +106,13 @@ export function SessionRow({
         open={renaming}
         onOpenChange={setRenaming}
         currentName={session.name}
-        onRename={onRename}
+        onRename={(name) => actions.renameSession(session.id, name)}
       />
       <DeleteSessionDialog
         open={deleting}
         onOpenChange={setDeleting}
         sessionName={session.name}
-        onDelete={onDelete}
+        onDelete={() => actions.deleteSession(session.id)}
       />
     </div>
   );

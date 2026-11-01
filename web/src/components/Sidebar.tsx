@@ -16,6 +16,7 @@ import {
 import { useState } from "react";
 import type { AppState, WorkspaceState } from "@/api";
 import { cn } from "@/lib/utils";
+import { useActions } from "@/useAppState";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -28,40 +29,28 @@ interface SidebarProps {
   openId: string | undefined;
   onOpen: (sessionId: string) => void;
   onOpenInOtherPane: (sessionId: string) => void;
-  onCreateWorkspace: (input: { folder: string; name?: string }) => Promise<void>;
+  /** Creates a Session and opens it. */
   onCreateSession: (workspaceId: string) => Promise<void>;
-  onReorderWorkspaces: (ids: string[]) => Promise<void>;
-  onUpdateWorkspace: (
-    id: string,
-    changes: { name?: string; folder?: string },
-  ) => Promise<void>;
-  onDeleteWorkspace: (id: string) => Promise<void>;
-  onRenameSession: (sessionId: string, name: string) => Promise<void>;
-  onDeleteSession: (sessionId: string) => Promise<void>;
-  onRestartSession: (sessionId: string) => Promise<void>;
-  /** Why the last action failed, if it did. */
+  /** Why the last Session create or restart was refused, if it was. */
   error?: string;
   /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */
   className?: string;
 }
 
-/** The tree of Workspaces and their Sessions. */
+/**
+ * The tree of Workspaces and their Sessions. Opening a Session is up to the caller; every
+ * other action comes from `useActions`.
+ */
 export function Sidebar({
   state,
   openId,
   onOpen,
   onOpenInOtherPane,
-  onCreateWorkspace,
   onCreateSession,
-  onReorderWorkspaces,
-  onUpdateWorkspace,
-  onDeleteWorkspace,
-  onRenameSession,
-  onDeleteSession,
-  onRestartSession,
   error,
   className,
 }: SidebarProps) {
+  const actions = useActions();
   const [dialog, setDialog] = useState<{
     workspace: WorkspaceState;
     action: WorkspaceEdit | "delete";
@@ -80,7 +69,7 @@ export function Sidebar({
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
     ids.splice(to, 0, ...ids.splice(from, 1));
-    void onReorderWorkspaces(ids);
+    void actions.reorderWorkspaces(ids);
   };
 
   return (
@@ -88,7 +77,7 @@ export function Sidebar({
       aria-label="Workspaces"
       className={cn("flex shrink-0 flex-col gap-2 border-r bg-card p-2", className)}
     >
-      <NewWorkspaceDialog onCreate={onCreateWorkspace} />
+      <NewWorkspaceDialog onCreate={actions.createWorkspace} />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -114,9 +103,6 @@ export function Sidebar({
                         isOpen={session.id === openId}
                         onOpen={() => onOpen(session.id)}
                         onOpenInOtherPane={() => onOpenInOtherPane(session.id)}
-                        onRename={(name) => onRenameSession(session.id, name)}
-                        onDelete={() => onDeleteSession(session.id)}
-                        onRestart={() => onRestartSession(session.id)}
                       />
                     </li>
                   ))}
@@ -130,14 +116,14 @@ export function Sidebar({
         <EditWorkspaceDialog
           workspace={dialog.workspace}
           edit={dialog.action}
-          onSave={(changes) => onUpdateWorkspace(dialog.workspace.id, changes)}
+          onSave={(changes) => actions.updateWorkspace(dialog.workspace.id, changes)}
           onClose={() => setDialog(undefined)}
         />
       )}
       {dialog?.action === "delete" && (
         <DeleteWorkspaceDialog
           workspace={dialog.workspace}
-          onDelete={() => onDeleteWorkspace(dialog.workspace.id)}
+          onDelete={() => actions.deleteWorkspace(dialog.workspace.id)}
           onClose={() => setDialog(undefined)}
         />
       )}

@@ -28,27 +28,34 @@ export interface DirectoryListing {
 
 export class ApiError extends Error {}
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * What a change request answered: its body, and the state revision from which the events
+ * WebSocket's snapshots show the change. Every successful change answers with one; were it
+ * missing, the revision is NaN, which no snapshot reaches, so a wait for it times out.
+ */
+export interface Change<T> {
+  value: T;
+  revision: number;
+}
+
+async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const response = await fetch(path, init);
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok)
     throw new ApiError(body.error ?? `Request failed (${response.status})`);
-  return body as T;
+  const revision = Number(response.headers.get("State-Revision") ?? Number.NaN);
+  return { value: body as T, revision };
 }
 
-function post<T>(path: string, body: unknown): Promise<T> {
-  return call<T>(path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+async function get<T>(path: string): Promise<T> {
+  return (await call<T>(path)).value;
 }
 
 function send<T>(
-  method: "PATCH" | "PUT" | "DELETE",
+  method: "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
-): Promise<T> {
+): Promise<Change<T>> {
   return call<T>(path, {
     method,
     headers: body === undefined ? undefined : { "content-type": "application/json" },
@@ -56,17 +63,21 @@ function send<T>(
   });
 }
 
+/**
+ * The server's API. Reads return their value; changes return a `Change`, so the caller can
+ * wait for the change to show in state (see `useAppState`), which is the one way the
+ * Workspaces and Sessions reach the page.
+ */
 export const api = {
-  getState: () => call<AppState>("/api/state"),
   /** Subfolders of `path`, or of the configured root when omitted. */
   listDirectories: (path?: string) =>
-    call<DirectoryListing>(
+    get<DirectoryListing>(
       path === undefined
         ? "/api/directories"
         : `/api/directories?path=${encodeURIComponent(path)}`,
     ),
   createWorkspace: (input: { folder: string; name?: string }) =>
-    post<{ id: string; name: string; folder: string }>("/api/workspaces", input),
+    send<{ id: string; name: string; folder: string }>("POST", "/api/workspaces", input),
   updateWorkspace: (id: string, changes: { name?: string; folder?: string }) =>
     send<void>("PATCH", `/api/workspaces/${id}`, changes),
   /** `ids` is every Workspace, in the order wanted. */
@@ -74,13 +85,15 @@ export const api = {
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   createSession: (workspaceId: string, name?: string) =>
-    post<{ id: string; name: string }>(`/api/workspaces/${workspaceId}/sessions`, {
-      name,
-    }),
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/workspaces/${workspaceId}/sessions`,
+      { name },
+    ),
   renameSession: (sessionId: string, name: string) =>
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
   restartSession: (sessionId: string) =>
-    post<{ id: string; name: string }>(`/api/sessions/${sessionId}/restart`, {}),
+    send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
 };
