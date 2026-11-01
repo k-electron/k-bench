@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { resolveConfig } from "./config.ts";
 import { startServer } from "./server.ts";
@@ -16,8 +16,18 @@ const server = await startServer(config, {
   webDir: existsSync(webDir) ? webDir : undefined,
 });
 console.log(
-  `k-bench listening on http://127.0.0.1:${server.port} (tmux socket "${config.tmuxSocket}", data ${config.dataDir})`,
+  `k-bench ${describeBuild()} listening on http://127.0.0.1:${server.port} (tmux socket "${config.tmuxSocket}", data ${config.dataDir})`,
 );
+
+/** Which commit is running: `pnpm install-app` records it in build-info.json. */
+function describeBuild(): string {
+  try {
+    const info = JSON.parse(readFileSync(resolve("build-info.json"), "utf8"));
+    return `${String(info.commit).slice(0, 7)}${info.dirty ? "+uncommitted" : ""} (installed ${info.installedAt})`;
+  } catch {
+    return "(uninstalled checkout)";
+  }
+}
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
