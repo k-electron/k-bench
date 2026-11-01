@@ -17,6 +17,8 @@ import {
 } from "./layout";
 import { useAppState } from "./useAppState";
 
+const DELETED_NOTICE = "This Session was deleted.";
+
 /** The app shell: the sidebar beside the main view (one or two Panes). */
 export function App() {
   const { state, refresh, reorderWorkspaces } = useAppState();
@@ -26,14 +28,22 @@ export function App() {
 
   const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
 
-  // A Session deleted elsewhere empties its Pane rather than reconnecting to nothing.
+  // A Session deleted (here or on another device) empties its Pane, with a notice, rather
+  // than reconnecting to nothing.
+  const [notices, setNotices] = useState<[string | null, string | null]>([null, null]);
   useEffect(() => {
     if (!state) return;
     const existing = new Set(
       state.workspaces.flatMap((w) => w.sessions.map((s) => s.id)),
     );
+    const gone = (id: string | null) => id !== null && !existing.has(id);
+    const [a, b] = layout.sessions;
+    // A Pane showing a Session has no notice; one whose Session just vanished gets one.
+    const next = (id: string | null, notice: string | null) =>
+      id === null ? notice : gone(id) ? DELETED_NOTICE : null;
+    setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
     update((l) => forgetMissingSessions(l, existing));
-  }, [state, update]);
+  }, [state, layout.sessions, update]);
 
   // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
   useEffect(() => {
@@ -115,6 +125,7 @@ export function App() {
         <PaneArea
           layout={layout}
           sessions={sessions}
+          notices={notices}
           emptyMessage={
             state?.workspaces.length === 0
               ? "Create a Workspace to get started."

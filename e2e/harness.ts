@@ -220,6 +220,8 @@ interface Fixtures {
   kbench: { instance: TestInstance; url: string };
   /** The app, already open in the page. */
   app: AppPage;
+  /** The app open in a second browser context: another device of the same owner. */
+  otherDevice: AppPage;
 }
 
 export const test = base.extend<Fixtures>({
@@ -237,6 +239,18 @@ export const test = base.extend<Fixtures>({
   app: async ({ page, kbench }, use) => {
     await page.goto(kbench.url);
     await use(new AppPage(page));
+  },
+  otherDevice: async ({ browser, kbench }, use) => {
+    const context = await browser.newContext({
+      extraHTTPHeaders: { "Tailscale-User-Login": LOGIN },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(kbench.url);
+      await use(new AppPage(page));
+    } finally {
+      await context.close();
+    }
   },
 });
 
