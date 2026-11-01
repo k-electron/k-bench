@@ -1,4 +1,5 @@
 import {
+  Columns2Icon as ColumnsIcon,
   MoreHorizontalIcon,
   PencilIcon,
   RotateCcwIcon,
@@ -22,6 +23,7 @@ export interface SessionRowProps {
   session: SessionState;
   isOpen: boolean;
   onOpen: () => void;
+  onOpenInOtherPane: () => void;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onRestart: () => Promise<void>;
@@ -35,6 +37,7 @@ export function SessionRow({
   session,
   isOpen,
   onOpen,
+  onOpenInOtherPane,
   onRename,
   onDelete,
   onRestart,
@@ -63,7 +66,8 @@ export function SessionRow({
           session.status === "stopped" && "text-muted-foreground",
         )}
         aria-current={isOpen ? "true" : undefined}
-        onClick={onOpen}
+        // ⌘-click opens it in the other Pane.
+        onClick={(event) => (event.metaKey ? onOpenInOtherPane() : onOpen())}
       >
         <TerminalIcon />
         <span className="truncate">{session.name}</span>
@@ -80,6 +84,10 @@ export function SessionRow({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onOpenInOtherPane}>
+            <ColumnsIcon />
+            Open in other pane
+          </DropdownMenuItem>
           {session.status === "stopped" && (
             <DropdownMenuItem onSelect={() => void onRestart()}>
               <RotateCcwIcon />
