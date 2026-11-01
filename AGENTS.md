@@ -1,5 +1,9 @@
 # k-bench
 
+k-bench is a web app, reachable only on the owner's tailnet, that runs persistent terminal Sessions on their Mac, organised into Workspaces.
+
+This project uses pnpm.
+
 ## Agent skills
 
 ### Issue tracker
@@ -16,15 +20,6 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ## Conventions
 
-### .gitignore
+The repo holds only product: source, config and docs. Machine-local files (runtime data, logs, `.env*`, build output, editor and agent state) stay out of git, so when a change introduces a new kind of one, update `.gitignore` in the same change.
 
-The repo holds only product: source, config, docs. Anything machine-local (runtime data such as the SQLite DB, logs, `.env*`, build output, editor and agent local state) stays out of git. Whenever a change introduces a new kind of generated or machine-local file, update `.gitignore` in the same change.
-
-### Testing
-
-Tests are outcome-based: they assert what the owner (or a client of the server's API) can observe, never how the code produces it.
-
-- Drive the system through its public seams: the server's HTTP/WebSocket API, or the UI in a real browser. Use real tmux and real SQLite (isolated per test), never mocks of them.
-- No change detectors: don't assert on SQL rows, tmux commands issued, internal function calls, component internals, or snapshots of markup.
-- No tautologies: a test must be able to fail when the behaviour is wrong, not just mirror the implementation.
-- No brittleness: wait for outcomes with poll-until-timeout, never fixed sleeps. Select UI elements by role and accessible name, not by CSS classes or DOM structure.
+When writing tests, see `docs/testing.md`.
