@@ -179,6 +179,7 @@ describe("installing the app files", () => {
     const repo = tempDir();
     write(join(repo, "src/server/main.ts"), `main ${version}`);
     write(join(repo, "src/server/app.ts"), `app ${version}`);
+    write(join(repo, "src/shared/terminal-protocol.ts"), `protocol ${version}`);
     write(join(repo, "dist/web/index.html"), `<html>${version}</html>`);
     write(join(repo, "package.json"), "{}");
     write(join(repo, "pnpm-lock.yaml"), "lock");
@@ -194,6 +195,10 @@ describe("installing the app files", () => {
     const staged = join(tempDir(), "app.staging");
     stageApp({ repoDir: fakeRepo("1"), stagingDir: staged });
     expect(readFileSync(join(staged, "src/server/main.ts"), "utf8")).toBe("main 1");
+    // The server imports the terminal protocol it shares with the browser.
+    expect(readFileSync(join(staged, "src/shared/terminal-protocol.ts"), "utf8")).toBe(
+      "protocol 1",
+    );
     expect(readFileSync(join(staged, "dist/web/index.html"), "utf8")).toBe(
       "<html>1</html>",
     );

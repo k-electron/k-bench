@@ -129,9 +129,13 @@ ${env}
 `;
 }
 
-/** What the installed app needs from the repo: the server, built assets and the manifest. */
+/**
+ * What the installed app needs from the repo: the server, the modules it shares with the
+ * browser, built assets and the manifest.
+ */
 const APP_FILES = [
   "src/server",
+  "src/shared",
   "dist/web",
   "package.json",
   "pnpm-lock.yaml",
