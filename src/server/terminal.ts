@@ -107,6 +107,7 @@ export class TerminalSockets {
     });
     // The shell ended, or the Session was deleted (which kills its shell): say which.
     attachment.onExit(async () => {
+      if (ws.readyState !== ws.OPEN) return; // The client left; nothing to tell it.
       const now = await this.service.terminalTarget(sessionId);
       if (ws.readyState !== ws.OPEN) return;
       if (now === "unknown") ws.close(CLOSE_SESSION_DELETED, "Session deleted");

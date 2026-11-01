@@ -19,7 +19,12 @@ function optionalString(value: unknown): string | undefined {
 /** The JSON HTTP API. */
 export function createApp(
   service: Service,
-  options: { webDir?: string; pickerRoot?: string } = {},
+  options: {
+    webDir?: string;
+    pickerRoot?: string;
+    /** Called after every request that changed something, so open clients hear about it. */
+    onMutation?: () => void;
+  } = {},
 ): Hono {
   const app = new Hono();
 
@@ -31,6 +36,12 @@ export function createApp(
     }
     console.error(error);
     return c.json({ error: "Internal error" }, 500);
+  });
+
+  // Any API call that is not a read and succeeded may have changed the state.
+  app.use("/api/*", async (c, next) => {
+    await next();
+    if (c.req.method !== "GET" && c.res.status < 400) options.onMutation?.();
   });
 
   app.get("/api/state", async (c) => c.json(await service.getState()));

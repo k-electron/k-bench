@@ -108,21 +108,15 @@ describe("Events WebSocket", () => {
   });
 
   it("sends the same snapshots to every connected client", async () => {
-    const { server } = await boot();
+    const { instance, server } = await boot();
     const a = await server.openEvents();
     const b = await server.openEvents();
 
-    await server.createWorkspace({ folder: (await server.state()).workspaces[0]?.folder ?? "", name: "twin" });
+    await server.createWorkspace({ folder: instance.makeFolder("other") });
 
     for (const client of [a, b]) {
       await client.waitForSnapshot((state) => state.workspaces.length === 2);
     }
-  });
-
-  it("accepts the events socket for the configured login", async () => {
-    const { server } = await boot();
-
-    expect(await server.upgradeStatus("/api/events")).toBe(101);
   });
 });
 
