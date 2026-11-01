@@ -15,10 +15,18 @@ export function App() {
   const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
   const openSession = sessions.find((s) => s.id === openId);
 
-  // The open Session was deleted elsewhere: forget it rather than reconnect to nothing.
+  // The open Session was deleted (here or on another device): empty the Pane, with a
+  // notice, rather than reconnect to nothing.
+  const [notice, setNotice] = useState<string>();
   useEffect(() => {
-    if (state && openId && !openSession) setOpenId(undefined);
+    if (state && openId && !openSession) {
+      setOpenId(undefined);
+      setNotice("This Session was deleted.");
+    }
   }, [state, openId, openSession, setOpenId]);
+  useEffect(() => {
+    if (openId) setNotice(undefined);
+  }, [openId]);
 
   return (
     <div className="flex h-full">
@@ -64,9 +72,13 @@ export function App() {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {state?.workspaces.length === 0
-              ? "Create a Workspace to get started."
-              : "Select a Session."}
+            {notice ? (
+              <p role="status">{notice} Select another Session.</p>
+            ) : state?.workspaces.length === 0 ? (
+              "Create a Workspace to get started."
+            ) : (
+              "Select a Session."
+            )}
           </div>
         )}
       </main>
