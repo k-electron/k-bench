@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
+import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 
 const RETRY_FIRST_MS = 500;
 const RETRY_MAX_MS = 5000;
@@ -131,6 +132,12 @@ export function TerminalView({
     if (focused) terminalRef.current?.focus();
   }, [focused]);
 
+  // The phone's extra keys go to the terminal in the Focused Pane, as if typed.
+  useEffect(() => {
+    if (!focused) return;
+    return registerTerminal((data) => terminalRef.current?.input(data, true));
+  }, [focused]);
+
   useEffect(() => {
     const element = container.current;
     if (!element) return;
@@ -161,8 +168,13 @@ export function TerminalView({
     let attempts = 0;
     let disposed = false;
 
+    // Input typed while a socket is still connecting (a freshly opened Session) is kept,
+    // not dropped, and sent once it opens.
+    const queued: string[] = [];
     const send = (message: object) => {
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+      const text = JSON.stringify(message);
+      if (socket?.readyState === WebSocket.OPEN) socket.send(text);
+      else if (socket?.readyState === WebSocket.CONNECTING) queued.push(text);
     };
 
     const connect = () => {
@@ -174,6 +186,7 @@ export function TerminalView({
         attempts = 0;
         setReconnecting(false);
         terminal.reset(); // tmux is about to redraw the whole screen
+        for (const text of queued.splice(0)) ws.send(text);
       };
       ws.onmessage = (event) => {
         if (event.data instanceof ArrayBuffer) terminal.write(new Uint8Array(event.data));
@@ -203,7 +216,9 @@ export function TerminalView({
     document.addEventListener("visibilitychange", retryNow);
     window.addEventListener("online", retryNow);
 
-    const input = terminal.onData((data) => send({ type: "input", data }));
+    const input = terminal.onData((data) =>
+      send({ type: "input", data: applyArmedCtrl(data) }),
+    );
     const resized = terminal.onResize(({ cols, rows }) =>
       send({ type: "resize", cols, rows }),
     );

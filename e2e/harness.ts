@@ -23,6 +23,24 @@ export class AppPage {
     return this.page.getByRole("navigation", { name: "Workspaces" });
   }
 
+  /** On the phone: the sidebar's slide-out drawer (hidden until the menu button opens it). */
+  get drawer(): Locator {
+    return this.sidebar;
+  }
+
+  /** On the phone: opens the drawer from the menu button. */
+  async openDrawer(): Promise<void> {
+    await this.page.getByRole("button", { name: "Menu", exact: true }).tap();
+    await expect(this.drawer).toBeVisible();
+  }
+
+  /** On the phone: a button in the extra-keys row (Esc, Tab, Shift Tab, Ctrl, Up, ...). */
+  extraKey(name: string): Locator {
+    return this.page
+      .getByRole("group", { name: "Extra keys", exact: true })
+      .getByRole("button", { name, exact: true });
+  }
+
   /** A Session's row in the sidebar. */
   session(name: string): Locator {
     return this.sidebar.getByRole("button", { name, exact: true });

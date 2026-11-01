@@ -15,10 +15,17 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   outputDir: "test-results",
   projects: [
-    // Later tickets add a phone project here.
+    // A spec runs on the desktop project, except `phone.spec.ts`, which runs only on the
+    // phone project (a touch device narrower than the layout breakpoint).
     {
       name: "desktop",
+      testIgnore: /phone\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: "phone",
+      testMatch: /phone\.spec\.ts/,
+      use: { ...devices["Pixel 7"] },
     },
   ],
 });
