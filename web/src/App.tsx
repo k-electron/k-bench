@@ -74,20 +74,24 @@ export function App() {
   // A Session that a Pane shows is being viewed, so its Bell is seen: opening a Session
   // clears it, and so does a Bell raised in a Session that is already showing (for instance
   // while its terminal is between connections).
+  const shown = layout.sessions.slice(0, layout.paneCount);
+  // A string, so the effect below re-runs only when the set of Sessions to clear changes,
+  // not on every render; a failed call is therefore not retried in a tight loop.
+  const unseenShown = sessions
+    .filter((session) => session.bell && shown.includes(session.id))
+    .map((session) => session.id)
+    .join(",");
   const clearing = useRef(new Set<string>());
   useEffect(() => {
-    if (!state) return;
-    const shown = layout.sessions.slice(0, layout.paneCount);
-    for (const session of sessions) {
-      if (!session.bell || !shown.includes(session.id)) continue;
-      if (clearing.current.has(session.id)) continue;
-      clearing.current.add(session.id);
+    for (const id of unseenShown === "" ? [] : unseenShown.split(",")) {
+      if (clearing.current.has(id)) continue;
+      clearing.current.add(id);
       api
-        .markSeen(session.id)
+        .markSeen(id)
         .catch(() => undefined)
-        .finally(() => clearing.current.delete(session.id));
+        .finally(() => clearing.current.delete(id));
     }
-  }, [state, sessions, layout.sessions, layout.paneCount]);
+  }, [unseenShown]);
 
   // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
   useEffect(() => {
