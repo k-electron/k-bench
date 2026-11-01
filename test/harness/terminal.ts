@@ -19,6 +19,41 @@ export function echoCommand(marker: string): string {
   return `printf '%s%s\\n' '${marker.slice(0, mid)}' '${marker.slice(mid)}'`;
 }
 
+function wsUrl(baseUrl: string, path: string): URL {
+  const url = new URL(path, baseUrl);
+  url.protocol = "ws:";
+  return url;
+}
+
+/** Thrown when the server answers a WebSocket upgrade with an ordinary HTTP response. */
+export class UpgradeRefused extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`WebSocket upgrade refused with HTTP ${status}`);
+    this.status = status;
+  }
+}
+
+/** Tries an upgrade on `path`; resolves with the refusing HTTP status, or 101 if accepted. */
+export function upgradeStatus(
+  baseUrl: string,
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(wsUrl(baseUrl, path), { headers });
+    socket.once("open", () => {
+      socket.close();
+      resolve(101);
+    });
+    socket.once("unexpected-response", (_request, response) => {
+      response.resume();
+      resolve(response.statusCode ?? 0);
+    });
+    socket.once("error", reject);
+  });
+}
+
 /** A client of the terminal WebSocket: sends input/resizes and collects output. */
 export class TerminalClient {
   private readonly socket: WebSocket;
@@ -40,15 +75,19 @@ export class TerminalClient {
     baseUrl: string,
     sessionId: string,
     size: { cols: number; rows: number } = { cols: 120, rows: 30 },
+    headers: Record<string, string> = {},
   ): Promise<TerminalClient> {
-    const url = new URL(`/api/sessions/${sessionId}/terminal`, baseUrl);
-    url.protocol = "ws:";
+    const url = wsUrl(baseUrl, `/api/sessions/${sessionId}/terminal`);
     url.searchParams.set("cols", String(size.cols));
     url.searchParams.set("rows", String(size.rows));
-    const socket = new WebSocket(url);
+    const socket = new WebSocket(url, { headers });
     const client = new TerminalClient(socket);
     await new Promise<void>((resolve, reject) => {
       socket.once("open", () => resolve());
+      socket.once("unexpected-response", (_request, response) => {
+        response.resume();
+        reject(new UpgradeRefused(response.statusCode ?? 0));
+      });
       socket.once("error", reject);
     });
     return client;
