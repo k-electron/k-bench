@@ -4,7 +4,9 @@ import { serve } from "@hono/node-server";
 import { AccessGuard } from "./access-guard.ts";
 import { createApp } from "./app.ts";
 import type { InstanceConfig } from "./config.ts";
+import { EventSockets } from "./events.ts";
 import { Service } from "./service.ts";
+import { StateFeed } from "./state-feed.ts";
 import { Store } from "./store.ts";
 import { TerminalSockets } from "./terminal.ts";
 import { TmuxDriver } from "./tmux.ts";
@@ -31,6 +33,8 @@ export async function startServer(
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();
   const terminals = new TerminalSockets(service, tmux);
+  const feed = new StateFeed(() => service.getState());
+  const events = new EventSockets(feed);
 
   // The guard sits in front of everything the server answers, so no route or static file
   // (now or added later) can be reached without the allowed login.
@@ -40,6 +44,7 @@ export async function startServer(
       createApp(service, {
         webDir: options.webDir,
         pickerRoot: config.pickerRoot,
+        onMutation: () => feed.notify(),
       }).fetch,
     ),
     port: config.port,
@@ -48,6 +53,10 @@ export async function startServer(
   server.on(
     "upgrade",
     guard.wrapUpgrade((request, socket, head) => {
+      if (EventSockets.match(request)) {
+        events.handleUpgrade(request, socket, head);
+        return;
+      }
       const sessionId = TerminalSockets.match(request);
       if (sessionId === undefined) {
         socket.destroy();
@@ -64,6 +73,8 @@ export async function startServer(
   let stopping: Promise<void> | undefined;
   const stop = () => {
     stopping ??= (async () => {
+      events.closeAll();
+      feed.stop();
       terminals.closeAll();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
