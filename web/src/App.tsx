@@ -26,8 +26,8 @@ export function App() {
         state={state}
         openId={openId}
         onOpen={setOpenId}
-        onCreateWorkspace={async (folder) => {
-          await api.createWorkspace({ folder });
+        onCreateWorkspace={async (input) => {
+          await api.createWorkspace(input);
           await refresh();
         }}
         onCreateSession={async (workspaceId) => {

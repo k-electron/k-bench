@@ -8,7 +8,7 @@ interface SidebarProps {
   state: AppState | undefined;
   openId: string | undefined;
   onOpen: (sessionId: string) => void;
-  onCreateWorkspace: (folder: string) => Promise<void>;
+  onCreateWorkspace: (input: { folder: string; name?: string }) => Promise<void>;
   onCreateSession: (workspaceId: string) => Promise<void>;
   onRestart: (sessionId: string) => Promise<void>;
   /** Why the last action failed, if it did. */
@@ -36,9 +36,9 @@ export function Sidebar({
           <li key={workspace.id}>
             <div className="flex items-center gap-1 px-2 py-1 text-sm font-medium">
               <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate" title={workspace.folder}>
+              <h2 className="min-w-0 flex-1 truncate" title={workspace.folder}>
                 {workspace.name}
-              </span>
+              </h2>
               <Button
                 variant="ghost"
                 size="icon"
