@@ -40,6 +40,14 @@ export class AppPage {
     return this.page.getByRole("group", { name: `Pane ${n}`, exact: true });
   }
 
+  /** The terminal showing the named Session, found inside Pane `n`. */
+  terminalIn(n: 1 | 2, sessionName: string): Locator {
+    return this.pane(n).getByRole("region", {
+      name: `Terminal ${sessionName}`,
+      exact: true,
+    });
+  }
+
   /** The toggle between one and two Panes. */
   get panesToggle(): Locator {
     return this.page.getByRole("button", { name: "Two panes", exact: true });
@@ -56,6 +64,18 @@ export class AppPage {
   /** The draggable divider between the two Panes. */
   get divider(): Locator {
     return this.page.getByRole("separator", { name: "Resize panes" });
+  }
+
+  /** Drags the divider horizontally by `dx` pixels with the mouse. */
+  async dragDivider(dx: number): Promise<void> {
+    const box = await this.divider.boundingBox();
+    if (!box) throw new Error("The divider is not visible");
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await this.page.mouse.move(x, y);
+    await this.page.mouse.down();
+    await this.page.mouse.move(x + dx, y, { steps: 10 });
+    await this.page.mouse.up();
   }
 
   /** Opens a Session's row menu and picks "Open in other pane". */
@@ -96,15 +116,29 @@ export class AppPage {
   }
 
   /**
+   * Creates `count` Sessions ("session 1", "session 2", ...), waiting for each to open in
+   * the Focused Pane before creating the next, so a late open can't disturb the layout.
+   */
+  async createSessions(workspaceName: string, count: number): Promise<void> {
+    for (let n = 1; n <= count; n++) {
+      await this.createSession(workspaceName);
+      await expect(this.session(`session ${n}`)).toHaveAttribute("aria-current", "true");
+    }
+  }
+
+  /**
    * Types a command into `terminal` and waits for its output. The output is built by the
    * shell (the marker never appears in the typed command), so seeing it proves the shell
-   * ran the command and not just that the keystrokes were echoed.
+   * ran the command and not just that the keystrokes were echoed. Keystrokes typed before
+   * the terminal has connected are dropped, so a freshly opened terminal is retried.
    */
   async runMarker(terminal: Locator, marker: string): Promise<void> {
-    await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
-    await this.page.keyboard.type(echoCommand(marker));
-    await this.page.keyboard.press("Enter");
-    await expect(terminal).toContainText(marker);
+    await expect(async () => {
+      await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+      await this.page.keyboard.type(echoCommand(marker));
+      await this.page.keyboard.press("Enter");
+      await expect(terminal).toContainText(marker, { timeout: 2_000 });
+    }).toPass();
   }
 }
 
