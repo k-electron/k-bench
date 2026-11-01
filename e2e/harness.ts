@@ -52,10 +52,32 @@ export class AppPage {
     return { cols: Number(cols), rows: Number(rows) };
   }
 
-  async createWorkspace(folder: string): Promise<void> {
+  async createWorkspace(folder: string, options: { name?: string } = {}): Promise<void> {
     await this.page.getByRole("button", { name: "New Workspace" }).click();
     await this.page.getByRole("textbox", { name: "Folder path" }).fill(folder);
+    if (options.name !== undefined) {
+      await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
+    }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
+  }
+
+  /**
+   * Creates a Workspace by browsing the Host's folders from the picker's root: opens each
+   * named folder in turn, then creates a Workspace on the last one.
+   */
+  async createWorkspaceByBrowsing(...path: string[]): Promise<void> {
+    await this.page.getByRole("button", { name: "New Workspace" }).click();
+    await this.page.getByRole("button", { name: "Browse folders" }).click();
+    const browser = this.page.getByRole("region", { name: "Folder browser" });
+    for (const folder of path) {
+      await browser.getByRole("button", { name: folder, exact: true }).click();
+    }
+    await this.page.getByRole("button", { name: "Create Workspace" }).click();
+  }
+
+  /** A Workspace's heading in the sidebar. */
+  workspace(name: string): Locator {
+    return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
   async createSession(workspaceName: string): Promise<void> {
