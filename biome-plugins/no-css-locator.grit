@@ -1,0 +1,3 @@
+`$obj.locator($selector)` where {
+  register_diagnostic(span=$selector, message="Selector-based locator: find the element by role and accessible name (getByRole, getByLabel, getByText) instead (docs/testing.md).")
+}
