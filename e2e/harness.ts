@@ -28,12 +28,73 @@ export class AppPage {
     return this.sidebar.getByRole("button", { name, exact: true });
   }
 
+  /** Opens a Session row's menu and picks `item` (for example "Rename" or "Delete"). */
+  async sessionMenu(sessionName: string, item: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Actions for ${sessionName}`, exact: true })
+      .click();
+    await this.page.getByRole("menuitem", { name: item, exact: true }).click();
+  }
+
   /** The terminal showing the named Session. */
   terminal(sessionName: string): Locator {
     return this.page.getByRole("region", {
       name: `Terminal ${sessionName}`,
       exact: true,
     });
+  }
+
+  /** One of the (at most two) side-by-side slots in the main view; `n` is 1 or 2. */
+  pane(n: 1 | 2): Locator {
+    return this.page.getByRole("group", { name: `Pane ${n}`, exact: true });
+  }
+
+  /** The terminal showing the named Session, found inside Pane `n`. */
+  terminalIn(n: 1 | 2, sessionName: string): Locator {
+    return this.pane(n).getByRole("region", {
+      name: `Terminal ${sessionName}`,
+      exact: true,
+    });
+  }
+
+  /** The toggle between one and two Panes. */
+  get panesToggle(): Locator {
+    return this.page.getByRole("button", { name: "Two panes", exact: true });
+  }
+
+  /** Switches the main view to two Panes if it is not already. */
+  async showTwoPanes(): Promise<void> {
+    if ((await this.panesToggle.getAttribute("aria-pressed")) !== "true") {
+      await this.panesToggle.click();
+    }
+    await expect(this.pane(2)).toBeVisible();
+  }
+
+  /** The draggable divider between the two Panes. */
+  get divider(): Locator {
+    return this.page.getByRole("separator", { name: "Resize panes" });
+  }
+
+  /** Drags the divider horizontally by `dx` pixels with the mouse. */
+  async dragDivider(dx: number): Promise<void> {
+    const box = await this.divider.boundingBox();
+    if (!box) throw new Error("The divider is not visible");
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await this.page.mouse.move(x, y);
+    await this.page.mouse.down();
+    await this.page.mouse.move(x + dx, y, { steps: 10 });
+    await this.page.mouse.up();
+  }
+
+  /** Opens a Session's row menu and picks "Open in other pane". */
+  async openInOtherPane(sessionName: string): Promise<void> {
+    await this.sessionMenu(sessionName, "Open in other pane");
+  }
+
+  /** The running/Stopped indicator beside a Session in the sidebar. */
+  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
   }
 
   private sizeProbes = 0;
@@ -53,16 +114,80 @@ export class AppPage {
     return { cols: Number(cols), rows: Number(rows) };
   }
 
-  async createWorkspace(folder: string): Promise<void> {
+  async createWorkspace(folder: string, options: { name?: string } = {}): Promise<void> {
     await this.page.getByRole("button", { name: "New Workspace" }).click();
     await this.page.getByRole("textbox", { name: "Folder path" }).fill(folder);
+    if (options.name !== undefined) {
+      await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
+    }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
+  }
+
+  /**
+   * Creates a Workspace by browsing the Host's folders from the picker's root: opens each
+   * named folder in turn, then creates a Workspace on the last one.
+   */
+  async createWorkspaceByBrowsing(...path: string[]): Promise<void> {
+    await this.page.getByRole("button", { name: "New Workspace" }).click();
+    await this.page.getByRole("button", { name: "Browse folders" }).click();
+    const browser = this.page.getByRole("region", { name: "Folder browser" });
+    for (const folder of path) {
+      await browser.getByRole("button", { name: folder, exact: true }).click();
+    }
+    await this.page.getByRole("button", { name: "Create Workspace" }).click();
+  }
+
+  /** A Workspace's heading in the sidebar. */
+  workspace(name: string): Locator {
+    return this.sidebar.getByRole("heading", { name, exact: true });
+  }
+
+  /** The Workspaces' names in sidebar order. */
+  async workspaceNames(): Promise<string[]> {
+    return this.sidebar.getByRole("heading").allTextContents();
+  }
+
+  /** Opens a Workspace's row menu and picks `item` (Rename, Change folder, Delete). */
+  async workspaceAction(workspaceName: string, item: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Actions for ${workspaceName}`, exact: true })
+      .click();
+    await this.page.getByRole("menuitem", { name: item, exact: true }).click();
+  }
+
+  /** Drags a Workspace by its handle onto the row of the Workspace named `target`. */
+  async dragWorkspaceOnto(workspaceName: string, target: string): Promise<void> {
+    const handle = this.sidebar.getByRole("button", {
+      name: `Reorder ${workspaceName}`,
+      exact: true,
+    });
+    const from = await handle.boundingBox();
+    const dest = await this.workspace(target).boundingBox();
+    if (!from || !dest) throw new Error("Workspace rows are not visible");
+    const { mouse } = this.page;
+    await mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await mouse.down();
+    // Pointer-driven drags need intermediate moves to register.
+    await mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 5, { steps: 3 });
+    await mouse.move(dest.x + dest.width / 2, dest.y + dest.height / 2, { steps: 10 });
+    await mouse.up();
   }
 
   async createSession(workspaceName: string): Promise<void> {
     await this.sidebar
       .getByRole("button", { name: `New session in ${workspaceName}` })
       .click();
+  }
+
+  /**
+   * Creates `count` Sessions ("session 1", "session 2", ...), waiting for each to open in
+   * the Focused Pane before creating the next, so a late open can't disturb the layout.
+   */
+  async createSessions(workspaceName: string, count: number): Promise<void> {
+    for (let n = 1; n <= count; n++) {
+      await this.createSession(workspaceName);
+      await expect(this.session(`session ${n}`)).toHaveAttribute("aria-current", "true");
+    }
   }
 
   /**
@@ -74,16 +199,22 @@ export class AppPage {
     await this.runCommand(terminal, echoCommand(marker), marker);
   }
 
-  /** Types `command` into `terminal`, presses Enter and waits for `expectedOutput`. */
+  /**
+   * Types `command` into `terminal`, presses Enter and waits for `expectedOutput`.
+   * Keystrokes typed before the terminal has connected are dropped, so a freshly opened
+   * terminal is retried.
+   */
   async runCommand(
     terminal: Locator,
     command: string,
     expectedOutput: string,
   ): Promise<void> {
-    await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
-    await this.page.keyboard.type(command);
-    await this.page.keyboard.press("Enter");
-    await expect(terminal).toContainText(expectedOutput);
+    await expect(async () => {
+      await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+      await this.page.keyboard.type(command);
+      await this.page.keyboard.press("Enter");
+      await expect(terminal).toContainText(expectedOutput, { timeout: 2_000 });
+    }).toPass();
   }
 }
 

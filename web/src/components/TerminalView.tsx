@@ -2,12 +2,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 
-/** Close codes from the server that mean reconnecting is pointless (see `terminal.ts`). */
-const CLOSE_SESSION_DELETED = 4404;
-const CLOSE_SESSION_STOPPED = 4410;
-
 const RETRY_FIRST_MS = 500;
 const RETRY_MAX_MS = 5000;
+
+/** Close codes the server uses (see `src/server/terminal.ts`); reconnecting is pointless after them. */
+const SESSION_DELETED = 4404;
+const SESSION_STOPPED = 4410;
 
 /** The terminal WebSocket URL for a Session at a given size. */
 function terminalUrl(sessionId: string, cols: number, rows: number): string {
@@ -108,9 +108,28 @@ function swipeScrolls(
  * resizes go out as JSON (see `src/server/terminal.ts`). When the connection drops it
  * reconnects by itself with backoff, and tmux redraws the screen on every attach.
  */
-export function TerminalView({ sessionId }: { sessionId: string }) {
+export function TerminalView({
+  sessionId,
+  focused,
+  onEnded,
+}: {
+  sessionId: string;
+  /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
+  focused: boolean;
+  /** The server closed the socket because the Session was deleted or is Stopped. */
+  onEnded?: () => void;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const [reconnecting, setReconnecting] = useState(false);
+  const terminalRef = useRef<Terminal>(null);
+  const focusedRef = useRef(focused);
+  focusedRef.current = focused;
+  const ended = useRef(onEnded);
+  ended.current = onEnded;
+
+  useEffect(() => {
+    if (focused) terminalRef.current?.focus();
+  }, [focused]);
 
   useEffect(() => {
     const element = container.current;
@@ -161,10 +180,8 @@ export function TerminalView({ sessionId }: { sessionId: string }) {
       };
       ws.onclose = (event) => {
         if (disposed || socket !== ws) return;
-        if (
-          event.code === CLOSE_SESSION_DELETED ||
-          event.code === CLOSE_SESSION_STOPPED
-        ) {
+        if (event.code === SESSION_DELETED || event.code === SESSION_STOPPED) {
+          ended.current?.();
           return;
         }
         setReconnecting(true);
@@ -192,9 +209,11 @@ export function TerminalView({ sessionId }: { sessionId: string }) {
     );
     const observer = new ResizeObserver(() => fit.fit());
     observer.observe(element);
-    terminal.focus();
+    terminalRef.current = terminal;
+    if (focusedRef.current) terminal.focus();
 
     return () => {
+      terminalRef.current = null;
       disposed = true;
       clearTimeout(retry);
       document.removeEventListener("visibilitychange", retryNow);

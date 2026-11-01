@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { DirectoryError, listDirectories } from "./directories.ts";
 import { type Service, ServiceError } from "./service.ts";
 import { mountStatic } from "./static.ts";
 
@@ -16,12 +17,16 @@ function optionalString(value: unknown): string | undefined {
 }
 
 /** The JSON HTTP API. */
-export function createApp(service: Service, options: { webDir?: string } = {}): Hono {
+export function createApp(
+  service: Service,
+  options: { webDir?: string; pickerRoot?: string } = {},
+): Hono {
   const app = new Hono();
 
   app.onError((error, c) => {
     if (error instanceof ServiceError) {
-      const status = error.kind === "not_found" ? 404 : 422;
+      const status =
+        error.kind === "not_found" ? 404 : error.kind === "conflict" ? 409 : 422;
       return c.json({ error: error.message }, status);
     }
     console.error(error);
@@ -29,6 +34,20 @@ export function createApp(service: Service, options: { webDir?: string } = {}): 
   });
 
   app.get("/api/state", async (c) => c.json(await service.getState()));
+
+  // The folder picker. Defaults to the configured root.
+  app.get("/api/directories", (c) => {
+    const path = c.req.query("path") || options.pickerRoot;
+    if (!path) throw new ServiceError("invalid", "path is required");
+    try {
+      return c.json(listDirectories(path));
+    } catch (error) {
+      if (error instanceof DirectoryError) {
+        throw new ServiceError("invalid", error.message);
+      }
+      throw error;
+    }
+  });
 
   app.post("/api/workspaces", async (c) => {
     const body = await jsonBody(c.req.raw);
@@ -41,6 +60,30 @@ export function createApp(service: Service, options: { webDir?: string } = {}): 
     return c.json(workspace, 201);
   });
 
+  // Declared before `/:id` routes so "order" is never taken for an id.
+  app.put("/api/workspaces/order", async (c) => {
+    const { ids } = await jsonBody(c.req.raw);
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "ids must be a list of Workspace ids");
+    }
+    service.reorderWorkspaces(ids);
+    return c.json({ ids });
+  });
+
+  app.patch("/api/workspaces/:id", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    const workspace = service.updateWorkspace(c.req.param("id"), {
+      name: optionalString(body.name),
+      folder: optionalString(body.folder),
+    });
+    return c.json(workspace);
+  });
+
+  app.delete("/api/workspaces/:id", async (c) => {
+    await service.deleteWorkspace(c.req.param("id"));
+    return c.body(null, 204);
+  });
+
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
     const session = await service.createSession(
@@ -49,6 +92,21 @@ export function createApp(service: Service, options: { webDir?: string } = {}): 
     );
     return c.json(session, 201);
   });
+
+  app.patch("/api/sessions/:id", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    return c.json(
+      service.renameSession(c.req.param("id"), optionalString(body.name) ?? ""),
+    );
+  });
+
+  app.delete("/api/sessions/:id", async (c) => {
+    await service.deleteSession(c.req.param("id"));
+    return c.body(null, 204);
+  });
+  app.post("/api/sessions/:id/restart", async (c) =>
+    c.json(await service.restartSession(c.req.param("id"))),
+  );
 
   // Last, so it only answers what the API did not.
   if (options.webDir) mountStatic(app, options.webDir);

@@ -8,12 +8,34 @@ import { type AppState, api } from "./api";
 export function useAppState(): {
   state: AppState | undefined;
   refresh: () => Promise<void>;
+  /** Shows the new Workspace order at once, then saves it (and re-reads the truth). */
+  reorderWorkspaces: (ids: string[]) => Promise<void>;
 } {
   const [state, setState] = useState<AppState>();
 
   const refresh = useCallback(async () => {
     setState(await api.getState());
   }, []);
+
+  const reorderWorkspaces = useCallback(
+    async (ids: string[]) => {
+      setState(
+        (current) =>
+          current && {
+            ...current,
+            workspaces: ids.flatMap(
+              (id) => current.workspaces.find((w) => w.id === id) ?? [],
+            ),
+          },
+      );
+      try {
+        await api.reorderWorkspaces(ids);
+      } finally {
+        await refresh();
+      }
+    },
+    [refresh],
+  );
 
   useEffect(() => {
     void refresh();
@@ -22,5 +44,5 @@ export function useAppState(): {
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
-  return { state, refresh };
+  return { state, refresh, reorderWorkspaces };
 }
