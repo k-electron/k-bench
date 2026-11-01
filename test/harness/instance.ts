@@ -231,12 +231,17 @@ export class TestInstance {
         .toString()
         .trim();
     try {
-      const socketPath = tmux("display-message", "-p", "#{socket_path}");
       tmux("kill-server");
-      rmSync(socketPath, { force: true });
     } catch {
-      // No tmux server on this socket: nothing to kill.
+      // No tmux server on this socket (a test killed it, or its last shell exited).
     }
+    // tmux can leave the socket file behind even when its server is already gone, so remove
+    // it by its well-known path rather than asking a server that may not exist.
+    const socketDir = join(
+      process.env.TMUX_TMPDIR ?? "/tmp",
+      `tmux-${process.getuid?.()}`,
+    );
+    rmSync(join(socketDir, this.config.tmuxSocket), { force: true });
   }
 
   /** Stops servers, kills this instance's tmux server and removes its data. */
