@@ -50,6 +50,10 @@ export function createApp(service: Service, options: { webDir?: string } = {}): 
     return c.json(session, 201);
   });
 
+  app.post("/api/sessions/:id/restart", async (c) =>
+    c.json(await service.restartSession(c.req.param("id"))),
+  );
+
   // Last, so it only answers what the API did not.
   if (options.webDir) mountStatic(app, options.webDir);
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
@@ -42,10 +43,18 @@ function isDirectory(path: string): boolean {
 export class Service {
   private readonly store: Store;
   private readonly tmux: TmuxDriver;
+  private readonly reconciler: Reconciler;
+  private readonly restarts = new Map<string, Promise<void>>();
 
   constructor(store: Store, tmux: TmuxDriver) {
     this.store = store;
     this.tmux = tmux;
+    this.reconciler = new Reconciler(store, tmux);
+  }
+
+  /** Kills tmux sessions that have no store record. Runs at startup and on every state read. */
+  async reconcile(): Promise<void> {
+    await this.reconciler.reconcile();
   }
 
   createWorkspace(input: { name?: string; folder: string }) {
@@ -72,18 +81,20 @@ export class Service {
       name = `session ${n}`;
     }
     const id = randomUUID();
-    await this.tmux.createSession(id, workspace.folder);
-    try {
-      this.store.addSession({ id, workspaceId, name });
-    } catch (error) {
-      await this.tmux.killSession(id);
-      throw error;
-    }
+    await this.reconciler.whileStarting(id, async () => {
+      await this.tmux.createSession(id, workspace.folder);
+      try {
+        this.store.addSession({ id, workspaceId, name });
+      } catch (error) {
+        await this.tmux.killSession(id);
+        throw error;
+      }
+    });
     return { id, name };
   }
 
   async getState(): Promise<State> {
-    const live = new Set(await this.tmux.listSessions());
+    const live = await this.reconciler.reconcile();
     return {
       workspaces: this.store.listWorkspaces().map((workspace) => ({
         ...workspace,
@@ -94,6 +105,33 @@ export class Service {
         })),
       })),
     };
+  }
+
+  /**
+   * Gives a Stopped Session a fresh shell in its Workspace folder, keeping its id and name.
+   * A Session that is already running is left alone.
+   */
+  async restartSession(sessionId: string): Promise<{ id: string; name: string }> {
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    // Two restarts of the same Session (a double click) share one start.
+    let restart = this.restarts.get(sessionId);
+    if (!restart) {
+      restart = this.startStopped(session).finally(() => this.restarts.delete(sessionId));
+      this.restarts.set(sessionId, restart);
+    }
+    await restart;
+    return { id: session.id, name: session.name };
+  }
+
+  private async startStopped(session: { id: string; folder: string }): Promise<void> {
+    if ((await this.tmux.listSessions()).includes(session.id)) return;
+    if (!isDirectory(session.folder)) {
+      throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
+    }
+    await this.reconciler.whileStarting(session.id, () =>
+      this.tmux.createSession(session.id, session.folder),
+    );
   }
 
   /** What the terminal WebSocket needs to know before attaching. */
