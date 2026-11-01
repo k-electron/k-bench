@@ -26,6 +26,8 @@ export interface WorkspaceState {
   name: string;
   folder: string;
   position: number;
+  /** The folder no longer exists on the Host. */
+  missing: boolean;
   sessions: SessionState[];
 }
 export interface State {
@@ -210,6 +212,7 @@ export class Service {
     return {
       workspaces: this.store.listWorkspaces().map((workspace) => ({
         ...workspace,
+        missing: !isDirectory(workspace.folder),
         sessions: this.store.listSessions(workspace.id).map((session) => ({
           id: session.id,
           name: session.name,

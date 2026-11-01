@@ -10,6 +10,8 @@ export interface WorkspaceState {
   name: string;
   folder: string;
   position: number;
+  /** The folder no longer exists on the Host. */
+  missing: boolean;
   sessions: SessionState[];
 }
 export interface AppState {
