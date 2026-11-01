@@ -23,8 +23,10 @@ import { WorkspaceRow } from "./WorkspaceRow";
 
 interface SidebarProps {
   state: AppState | undefined;
+  /** The Session in the Focused Pane. */
   openId: string | undefined;
   onOpen: (sessionId: string) => void;
+  onOpenInOtherPane: (sessionId: string) => void;
   onCreateWorkspace: (input: { folder: string; name?: string }) => Promise<void>;
   onCreateSession: (workspaceId: string) => Promise<void>;
   onReorderWorkspaces: (ids: string[]) => Promise<void>;
@@ -45,6 +47,7 @@ export function Sidebar({
   state,
   openId,
   onOpen,
+  onOpenInOtherPane,
   onCreateWorkspace,
   onCreateSession,
   onReorderWorkspaces,
@@ -106,6 +109,7 @@ export function Sidebar({
                         session={session}
                         isOpen={session.id === openId}
                         onOpen={() => onOpen(session.id)}
+                        onOpenInOtherPane={() => onOpenInOtherPane(session.id)}
                         onRename={(name) => onRenameSession(session.id, name)}
                         onDelete={() => onDeleteSession(session.id)}
                         onRestart={() => onRestartSession(session.id)}
