@@ -107,6 +107,47 @@ describe("Events WebSocket", () => {
     );
   });
 
+  it("answers a change with the revision of the first snapshot that shows it", async () => {
+    const instance = createTestInstance();
+    // No poll, so only the change itself can produce the snapshot.
+    const server = await instance.start({ statePollMs: 600_000 });
+    const workspace = await server.createWorkspace({
+      folder: instance.makeFolder("project"),
+    });
+    const events = await server.openEvents();
+    await events.waitForSnapshot(() => true);
+
+    const response = await server.post(`/api/workspaces/${workspace.id}/sessions`, {});
+    const revision = Number(response.headers.get("State-Revision"));
+    const created = (await response.json()) as { id: string };
+
+    expect(revision).toBeGreaterThan(0);
+    const snapshot = await events.waitForSnapshot(
+      (state) => state.revision >= revision,
+      `a snapshot at revision ${revision}`,
+    );
+    expect(snapshot.workspaces[0]?.sessions.map((s) => s.id)).toEqual([created.id]);
+  });
+
+  it("sends a snapshot at a change's revision even when the change altered nothing", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start({ statePollMs: 600_000 });
+    const workspace = await server.createWorkspace({
+      folder: instance.makeFolder("project"),
+    });
+    const events = await server.openEvents();
+    await events.waitForSnapshot(() => true);
+
+    const response = await server.put("/api/workspaces/order", { ids: [workspace.id] });
+    const revision = Number(response.headers.get("State-Revision"));
+
+    expect(revision).toBeGreaterThan(0);
+    await events.waitForSnapshot(
+      (state) => state.revision >= revision,
+      `a snapshot at revision ${revision}`,
+    );
+  });
+
   it("sends the same snapshots to every connected client", async () => {
     const { instance, server } = await boot();
     const a = await server.openEvents();

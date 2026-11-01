@@ -5,7 +5,6 @@ import { PaneArea } from "@/components/PaneArea";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ApiError, api } from "./api";
 import {
   focusedSession,
   focusPane,
@@ -19,7 +18,7 @@ import {
   togglePaneCount,
   useLayout,
 } from "./layout";
-import { useAppState } from "./useAppState";
+import { ActionsProvider, useAppState } from "./useAppState";
 import { useIsPhone } from "./useIsPhone";
 
 const DELETED_NOTICE = "This Session was deleted.";
@@ -29,7 +28,7 @@ const DELETED_NOTICE = "This Session was deleted.";
  * phone, one Pane filling the screen, the sidebar in a slide-out drawer, and the extra keys.
  */
 export function App() {
-  const { state, refresh, reorderWorkspaces } = useAppState();
+  const { state, actions, error } = useAppState();
   const phone = useIsPhone();
   const [stored, updateStored] = useLayout();
   // The phone has one Pane; the same stored layout drives it, showing the Focused Pane.
@@ -49,8 +48,6 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerShown]);
-
-  const [error, setError] = useState<string>();
 
   const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
 
@@ -85,116 +82,80 @@ export function App() {
   }, [update]);
 
   return (
-    <div className="flex h-full">
-      {drawerShown && (
-        <button
-          type="button"
-          aria-label="Close menu"
-          className="fixed inset-0 z-30 bg-black/60"
-          onClick={() => setDrawerOpen(false)}
-        />
-      )}
-      <Sidebar
-        className={cn(
-          phone
-            ? "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] border-r transition-[transform,visibility]"
-            : "w-64",
-          phone && !drawerOpen && "invisible -translate-x-full",
+    <ActionsProvider value={actions}>
+      <div className="flex h-full">
+        {drawerShown && (
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 z-30 bg-black/60"
+            onClick={() => setDrawerOpen(false)}
+          />
         )}
-        state={state}
-        openId={focusedSession(layout) ?? undefined}
-        onOpen={(id) => {
-          update((l) => openInFocusedPane(l, id));
-          setDrawerOpen(false);
-        }}
-        onOpenInOtherPane={(id) => update((l) => openInOtherPane(l, id))}
-        onCreateWorkspace={async (input) => {
-          await api.createWorkspace(input);
-          await refresh();
-        }}
-        onReorderWorkspaces={reorderWorkspaces}
-        onUpdateWorkspace={async (id, changes) => {
-          await api.updateWorkspace(id, changes);
-          await refresh();
-        }}
-        onDeleteWorkspace={async (id) => {
-          await api.deleteWorkspace(id);
-          await refresh();
-        }}
-        onCreateSession={async (workspaceId) => {
-          setError(undefined);
-          try {
-            const session = await api.createSession(workspaceId);
-            await refresh();
-            update((l) => openInFocusedPane(l, session.id));
+        <Sidebar
+          className={cn(
+            phone
+              ? "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] border-r transition-[transform,visibility]"
+              : "w-64",
+            phone && !drawerOpen && "invisible -translate-x-full",
+          )}
+          state={state}
+          openId={focusedSession(layout) ?? undefined}
+          onOpen={(id) => {
+            update((l) => openInFocusedPane(l, id));
             setDrawerOpen(false);
-          } catch (failure) {
-            if (!(failure instanceof ApiError)) throw failure;
-            setError(failure.message);
-            await refresh();
-          }
-        }}
-        onRenameSession={async (sessionId, name) => {
-          await api.renameSession(sessionId, name);
-          await refresh();
-        }}
-        onDeleteSession={async (sessionId) => {
-          await api.deleteSession(sessionId);
-          await refresh();
-        }}
-        onRestartSession={async (sessionId) => {
-          setError(undefined);
-          try {
-            await api.restartSession(sessionId);
-          } catch (failure) {
-            if (!(failure instanceof ApiError)) throw failure;
-            setError(failure.message);
-          }
-          await refresh();
-        }}
-        error={error}
-      />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
-          {phone ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Menu"
-              onClick={() => setDrawerOpen(true)}
-            >
-              <MenuIcon />
-            </Button>
-          ) : (
-            <span />
-          )}
-          {!phone && (
-            <Button
-              variant={layout.paneCount === 2 ? "secondary" : "ghost"}
-              size="sm"
-              aria-label="Two panes"
-              aria-pressed={layout.paneCount === 2}
-              onClick={() => update(togglePaneCount)}
-            >
-              <Columns2Icon />
-            </Button>
-          )}
-        </div>
-        <PaneArea
-          layout={layout}
-          sessions={sessions}
-          notices={notices}
-          emptyMessage={
-            state?.workspaces.length === 0
-              ? "Create a Workspace to get started."
-              : "Select a Session."
-          }
-          onEnded={() => void refresh()}
-          onFocus={(pane) => update((l) => focusPane(l, pane))}
-          onResize={(ratio) => update((l) => setRatio(l, ratio))}
+          }}
+          onOpenInOtherPane={(id) => update((l) => openInOtherPane(l, id))}
+          onCreateSession={async (workspaceId) => {
+            // Resolves once the new Session is in state, so the Pane knows it.
+            const id = await actions.createSession(workspaceId);
+            if (id === undefined) return;
+            update((l) => openInFocusedPane(l, id));
+            setDrawerOpen(false);
+          }}
+          error={error}
         />
-        {phone && focusedSession(layout) && <ExtraKeys />}
-      </main>
-    </div>
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
+            {phone ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Menu"
+                onClick={() => setDrawerOpen(true)}
+              >
+                <MenuIcon />
+              </Button>
+            ) : (
+              <span />
+            )}
+            {!phone && (
+              <Button
+                variant={layout.paneCount === 2 ? "secondary" : "ghost"}
+                size="sm"
+                aria-label="Two panes"
+                aria-pressed={layout.paneCount === 2}
+                onClick={() => update(togglePaneCount)}
+              >
+                <Columns2Icon />
+              </Button>
+            )}
+          </div>
+          <PaneArea
+            layout={layout}
+            sessions={sessions}
+            notices={notices}
+            emptyMessage={
+              state?.workspaces.length === 0
+                ? "Create a Workspace to get started."
+                : "Select a Session."
+            }
+            onFocus={(pane) => update((l) => focusPane(l, pane))}
+            onResize={(ratio) => update((l) => setRatio(l, ratio))}
+          />
+          {phone && focusedSession(layout) && <ExtraKeys />}
+        </main>
+      </div>
+    </ActionsProvider>
   );
 }

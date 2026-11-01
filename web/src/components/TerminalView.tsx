@@ -149,21 +149,16 @@ function swipeScrolls(
 export function TerminalView({
   sessionId,
   focused,
-  onEnded,
 }: {
   sessionId: string;
   /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
   focused: boolean;
-  /** The server ended the terminal: the Session was deleted or its shell exited. */
-  onEnded?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const terminalRef = useRef<Terminal>(null);
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
-  const ended = useRef(onEnded);
-  ended.current = onEnded;
 
   useEffect(() => {
     if (focused) terminalRef.current?.focus();
@@ -232,10 +227,8 @@ export function TerminalView({
       };
       ws.onclose = (event) => {
         if (disposed || socket !== ws) return;
-        if (event.code === CLOSE_SESSION_ENDED) {
-          ended.current?.();
-          return;
-        }
+        // The Session was deleted or its shell exited: the state feed shows which.
+        if (event.code === CLOSE_SESSION_ENDED) return;
         setReconnecting(true);
         const delay = Math.min(RETRY_FIRST_MS * 2 ** attempts, RETRY_MAX_MS);
         attempts += 1;

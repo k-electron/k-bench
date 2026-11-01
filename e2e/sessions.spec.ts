@@ -52,3 +52,24 @@ test("the terminal fits the Pane and resizes with the window", async ({
     })
     .toBe(true);
 });
+
+test("a new Session opens in the Focused Pane straight away, even when state pushes lag", async ({
+  app,
+  kbench,
+}) => {
+  // Each state push reaches the page well after the answer to the request that caused it.
+  await app.page.routeWebSocket(/\/api\/events$/, (page) => {
+    const server = page.connectToServer();
+    // biome-ignore lint/style/noRestrictedGlobals: this delays a push to simulate a slow network; it is not a wait
+    server.onMessage((message) => setTimeout(() => page.send(message), 300));
+  });
+  await app.page.reload();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+
+  for (let n = 1; n <= 10; n++) {
+    await app.createSession("project");
+
+    await expect(app.terminalIn(1, `session ${n}`)).toBeVisible();
+    await expect(app.page.getByRole("status", { name: "Pane notice" })).toBeHidden();
+  }
+});

@@ -13,8 +13,6 @@ interface PaneAreaProps {
   notices: [string | null, string | null];
   onFocus: (pane: 0 | 1) => void;
   onResize: (ratio: number) => void;
-  /** A Pane's terminal closed because its Session was deleted or its shell ended. */
-  onEnded: () => void;
 }
 
 /** The main view: one or two Panes side by side, with a draggable divider between them. */
@@ -25,7 +23,6 @@ export function PaneArea({
   notices,
   onFocus,
   onResize,
-  onEnded,
 }: PaneAreaProps) {
   const grid = useRef<HTMLDivElement>(null);
   const two = layout.paneCount === 2;
@@ -47,7 +44,7 @@ export function PaneArea({
         )}
       >
         {session ? (
-          <Pane key={session.id} session={session} focused={focused} onEnded={onEnded} />
+          <Pane key={session.id} session={session} focused={focused} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {notices[index] ? (
