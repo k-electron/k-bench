@@ -78,6 +78,26 @@ export class TestServer {
     });
   }
 
+  private sendJson(method: string, path: string, body: unknown): Promise<Response> {
+    return this.request(path, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  patch(path: string, body: unknown): Promise<Response> {
+    return this.sendJson("PATCH", path, body);
+  }
+
+  put(path: string, body: unknown): Promise<Response> {
+    return this.sendJson("PUT", path, body);
+  }
+
+  delete(path: string): Promise<Response> {
+    return this.request(path, { method: "DELETE" });
+  }
+
   async createWorkspace(input: {
     folder: string;
     name?: string;
