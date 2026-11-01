@@ -43,6 +43,11 @@ export class AppPage {
     });
   }
 
+  /** The running/Stopped indicator beside a Session in the sidebar. */
+  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+  }
+
   private sizeProbes = 0;
 
   /**
