@@ -33,6 +33,14 @@ export function App() {
           await refresh();
           setOpenId(session.id);
         }}
+        onRenameSession={async (sessionId, name) => {
+          await api.renameSession(sessionId, name);
+          await refresh();
+        }}
+        onDeleteSession={async (sessionId) => {
+          await api.deleteSession(sessionId);
+          await refresh();
+        }}
       />
       <main className="min-w-0 flex-1">
         {openSession ? (

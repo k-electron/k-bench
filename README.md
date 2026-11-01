@@ -41,6 +41,7 @@ Playwright needs its browser once: `pnpm exec playwright install chromium`.
 
 - `GET /api/state`: Workspaces with their Sessions (`running` or `stopped`).
 - `POST /api/workspaces` `{folder, name?}` and `POST /api/workspaces/:id/sessions` `{name?}`.
+- `PATCH /api/sessions/:id` `{name}` renames a Session (409 if the name is taken in its Workspace, 422 if empty); `DELETE /api/sessions/:id` ends its shell and removes it (204). Session names are unique per Workspace; created without a name, a Session gets "session N" with the next free N.
 - `GET /api/sessions/:id/terminal?cols=&rows=` (WebSocket): output arrives as binary frames; send JSON text frames `{"type":"input","data":"..."}` or `{"type":"resize","cols":120,"rows":30}`. Close code 4404 means the Session no longer exists, 4410 that it is Stopped.
 
 ## Access
