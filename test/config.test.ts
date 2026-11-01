@@ -24,7 +24,11 @@ async function startWithPort(port: string): Promise<{ code: number; stderr: stri
     });
     return { code: 0, stderr: "" };
   } catch (error) {
-    const failure = error as { code?: number | string; stderr?: string; killed?: boolean };
+    const failure = error as {
+      code?: number | string;
+      stderr?: string;
+      killed?: boolean;
+    };
     return {
       code: failure.killed ? 0 : Number(failure.code ?? 1),
       stderr: failure.stderr ?? "",

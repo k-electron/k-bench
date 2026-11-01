@@ -32,7 +32,9 @@ function parsePort(value: string | undefined): number | undefined {
   if (value === undefined || value === "") return undefined;
   const port = /^\d+$/.test(value) ? Number(value) : Number.NaN;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`K_BENCH_PORT must be a whole number from 1 to 65535, got "${value}"`);
+    throw new Error(
+      `K_BENCH_PORT must be a whole number from 1 to 65535, got "${value}"`,
+    );
   }
   return port;
 }

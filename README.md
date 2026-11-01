@@ -55,7 +55,7 @@ It never touches `./.data/` or the `k-bench-dev` tmux socket.
 
 ### Update
 
-`git pull`, then `pnpm install-app` again. The app folder is replaced and the agent reloaded in place; Sessions live in tmux, which the agent abandons rather than kills, so every Session keeps running. Open browser tabs reconnect on their own.
+`git pull`, then `pnpm install-app` again. The agent is stopped, the app folder replaced, and the agent loaded again (so the old server never runs from a half-swapped folder); Sessions live in tmux, which the agent abandons rather than kills, so every Session keeps running. Open browser tabs reconnect on their own.
 
 ### The Dev instance on the tailnet
 
@@ -101,6 +101,10 @@ Mechanism: **a tmux hook**, not a poll (ticket #11 asked for this to be recorded
 - The Bell lives in tmux (ADR-0002) as an option on the Session, so it survives a k-bench restart and needs no store column. It is lost only when tmux itself dies, when the Session is Stopped anyway.
 - tmux's own bell flag can't be cleared with no client attached (re-selecting the current window is a no-op), so polling it would have needed a window-switching workaround. The option clears with one command.
 - The `session_attached == 0` condition means a bell rung while a client is viewing the Session is never recorded, so it can't linger unseen. The terminal WebSocket clears after attaching, so the attach itself leaves nothing stale.
+
+Known limitation: `session_attached` counts every attached client, on any device, not clients that are actually showing the Session. A stale browser tab (or a laptop left open) with the Session's terminal still connected suppresses the Bell while you are elsewhere. This is the deliberate trade-off above, a bell rung while someone is looking must not linger. Close the stale tab to get Bells again.
+
+The events socket's 400ms poll runs `getState()` (one `tmux list-sessions`, a `stat` per Workspace, the orphan check) only while some browser is subscribed. That is a deliberate cost of noticing shells that exit and Bells with no request to announce them; it is cheap at this scale and has not been tuned.
 
 ## Playwright tests (Seam 2)
 
