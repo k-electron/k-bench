@@ -51,11 +51,13 @@ describe("Stopping the server", () => {
         busy.push(server.request("/api/state").catch(() => undefined));
         busy.push(server.createSession(workspace.id).catch(() => undefined));
       }, 2);
+      // biome-ignore lint/style/noRestrictedGlobals: lets requests pile up so some are mid-flight at the stop; there is no outcome to wait for.
       await new Promise((resolve) => setTimeout(resolve, 100));
       await server.stop();
       clearInterval(pump);
       await Promise.all(busy);
       // Give anything that outlived the stop (a poll tick, a late handler) time to log.
+      // biome-ignore lint/style/noRestrictedGlobals: proving an absence (no late errors) has no outcome to poll for.
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       expect(errors.mock.calls).toEqual([]);

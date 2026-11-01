@@ -137,6 +137,21 @@ await step(`copy the server and built assets into ${stagingDir}`, () =>
   stageApp({ repoDir, stagingDir }),
 );
 
+await step("record the installed commit in build-info.json", () => {
+  const git = (args: string[]) =>
+    execFileSync("git", args, { cwd: repoDir, encoding: "utf8" }).trim();
+  const buildInfo = {
+    commit: git(["rev-parse", "HEAD"]),
+    // Uncommitted changes were installed too, so the commit alone doesn't describe the app.
+    dirty: git(["status", "--porcelain"]) !== "",
+    installedAt: new Date().toISOString(),
+  };
+  writeFileSync(
+    join(stagingDir, "build-info.json"),
+    `${JSON.stringify(buildInfo, null, 2)}\n`,
+  );
+});
+
 await step(
   "install production dependencies there (pnpm install --prod --frozen-lockfile)",
   () => {

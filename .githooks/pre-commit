@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fast checks on every commit (installed by `pnpm install` via the `prepare` script).
+# CI runs the full suite: `pnpm check` and `pnpm test:e2e`.
+set -e
+pnpm exec biome check --staged --error-on-warnings --no-errors-on-unmatched
+pnpm -s typecheck

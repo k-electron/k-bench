@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +9,7 @@ import {
   startServer,
 } from "../../src/server/server.ts";
 import { EventsClient } from "./events.ts";
+import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
 
 export interface WorkspaceInfo {
@@ -198,7 +198,7 @@ export class TestInstance {
     this.root = realpathSync(mkdtempSync(join(tmpdir(), "kb-test-")));
     this.config = {
       dataDir: join(this.root, "data"),
-      tmuxSocket: `kb-test-${randomBytes(6).toString("hex")}`,
+      tmuxSocket: testSocketName(),
       port: 0,
       allowedLogin: "owner@example.com",
       pickerRoot: this.root,
@@ -224,24 +224,16 @@ export class TestInstance {
 
   /** Kills this instance's tmux server and removes the socket file tmux leaves behind. */
   private killTmux(): void {
-    const tmux = (...args: string[]) =>
-      execFileSync("tmux", ["-L", this.config.tmuxSocket, ...args], {
-        stdio: ["ignore", "pipe", "ignore"],
-      })
-        .toString()
-        .trim();
     try {
-      tmux("kill-server");
+      execFileSync("tmux", ["-L", this.config.tmuxSocket, "kill-server"], {
+        stdio: "ignore",
+      });
     } catch {
       // No tmux server on this socket (a test killed it, or its last shell exited).
     }
     // tmux can leave the socket file behind even when its server is already gone, so remove
     // it by its well-known path rather than asking a server that may not exist.
-    const socketDir = join(
-      process.env.TMUX_TMPDIR ?? "/tmp",
-      `tmux-${process.getuid?.()}`,
-    );
-    rmSync(join(socketDir, this.config.tmuxSocket), { force: true });
+    rmSync(join(tmuxSocketDir(), this.config.tmuxSocket), { force: true });
   }
 
   /** Stops servers, kills this instance's tmux server and removes its data. */

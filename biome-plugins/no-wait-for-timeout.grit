@@ -1,0 +1,3 @@
+`$obj.waitForTimeout($args)` where {
+  register_diagnostic(span=$obj, message="Fixed sleep in a test: wait for an outcome with the poll helper instead (docs/testing.md).")
+}

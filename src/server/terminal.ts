@@ -32,10 +32,17 @@ function parseSize(url: URL): { cols: number; rows: number } {
  * Server to client: binary frames of terminal output.
  * Client to server: JSON text frames, `{type:"input",data}` or `{type:"resize",cols,rows}`.
  */
+/** How long a stop waits for detached tmux clients to exit before giving up on them. */
+const CLIENT_EXIT_TIMEOUT_MS = 3_000;
+
 export class TerminalSockets {
   private readonly service: Service;
   private readonly tmux: TmuxDriver;
   private readonly wss = new WebSocketServer({ noServer: true });
+  /** Attaches still deciding whether to start, so `closeAll` can wait them out. */
+  private readonly pendingAttaches = new Set<Promise<unknown>>();
+  /** Every started tmux client, with a promise that settles when its process has exited. */
+  private readonly liveAttachments = new Map<TerminalAttachment, Promise<void>>();
 
   constructor(service: Service, tmux: TmuxDriver) {
     this.service = service;
@@ -73,6 +80,8 @@ export class TerminalSockets {
       ws.close(CLOSE_INTERNAL_ERROR, "Could not attach");
       return undefined;
     });
+    this.pendingAttaches.add(attached);
+    void attached.finally(() => this.pendingAttaches.delete(attached));
     ws.on("message", (raw: RawData) => {
       let message: { type?: string; data?: unknown; cols?: unknown; rows?: unknown };
       try {
@@ -109,6 +118,9 @@ export class TerminalSockets {
     size: { cols: number; rows: number },
   ): Promise<TerminalAttachment | undefined> {
     const target = await this.service.terminalTarget(sessionId);
+    // The client left, or the server is stopping, while the Session was being looked up:
+    // starting a tmux client now would outlive the socket (and, on stop, the server).
+    if (ws.readyState !== ws.OPEN) return undefined;
     if (target === "unknown") {
       ws.close(CLOSE_SESSION_DELETED, "Session deleted");
       return undefined;
@@ -118,6 +130,15 @@ export class TerminalSockets {
       return undefined;
     }
     const attachment = this.tmux.attach(sessionId, size);
+    this.liveAttachments.set(
+      attachment,
+      new Promise<void>((exited) =>
+        attachment.onExit(() => {
+          this.liveAttachments.delete(attachment);
+          exited();
+        }),
+      ),
+    );
     // Opening the terminal is viewing the Session. Cleared after attaching, so a bell that
     // rings from here on finds a client attached and is not recorded as unseen.
     void this.service.markSeen(sessionId).catch(() => undefined);
@@ -135,8 +156,22 @@ export class TerminalSockets {
     return attachment;
   }
 
-  /** Closes every open terminal; attached tmux clients detach and Sessions keep running. */
-  closeAll(): void {
+  /**
+   * Closes every open terminal; attached tmux clients detach and Sessions keep running.
+   * Resolves once no tmux client this server started is still running or about to start.
+   * A tmux client that is still connecting can start a fresh tmux server (attach-session
+   * may), so anything that kills tmux after a stop must not race one.
+   */
+  async closeAll(): Promise<void> {
     for (const client of this.wss.clients) client.terminate();
+    await Promise.allSettled([...this.pendingAttaches]);
+    const exits = [...this.liveAttachments].map(([attachment, exited]) => {
+      attachment.detach();
+      return exited;
+    });
+    await Promise.race([
+      Promise.allSettled(exits),
+      new Promise((giveUp) => setTimeout(giveUp, CLIENT_EXIT_TIMEOUT_MS)),
+    ]);
   }
 }

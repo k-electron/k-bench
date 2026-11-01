@@ -83,7 +83,7 @@ export async function startServer(
   const stop = () => {
     stopping ??= (async () => {
       events.closeAll();
-      terminals.closeAll();
+      await terminals.closeAll();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();

@@ -11,17 +11,21 @@ A web app, reachable only on the owner's tailnet, that runs persistent terminal 
 ## Commands
 
 ```sh
-pnpm install     # also restores the execute bit on node-pty's spawn-helper
+pnpm install     # also restores the execute bit on node-pty's spawn-helper, and turns on the git hooks in .githooks
 pnpm dev         # Dev instance: server (watch mode) on port 7690 plus Vite on :5173, which proxies /api; data in ./.data, tmux socket "k-bench-dev"
 pnpm dev:serve   # publish the Dev instance on the tailnet at https port 8443
 pnpm build       # production front end into dist/web
 pnpm start       # the server alone; serves dist/web when it exists
 pnpm install-app # build and install the Installed instance (launchd + tailscale serve); --dry-run to preview
-pnpm lint        # Biome
+pnpm smoke       # build, then probe the production server on a throwaway instance and clean up; --hold keeps it up for manual requests
+pnpm lint        # Biome (warnings fail it too)
 pnpm typecheck   # tsc, for the server/tests and for the front end (web/)
 pnpm test        # Vitest (Seam 1, the server)
 pnpm test:e2e    # Playwright (Seam 2, the browser); builds the front end first
+pnpm check       # lint + typecheck + test
 ```
+
+Every commit runs Biome on the staged files and the typecheck (`.githooks/pre-commit`). CI (`.github/workflows/ci.yml`, macOS) runs `pnpm check` and `pnpm test:e2e` on every push to `main` and every pull request.
 
 The access guard refuses requests without the right `Tailscale-User-Login`, so run `pnpm dev` with `K_BENCH_ALLOWED_LOGIN=you@example.com`: Vite's proxy then adds that header to `/api` requests, standing in for `tailscale serve`.
 
@@ -49,6 +53,7 @@ This builds k-bench and installs it as the Installed instance:
 - the server, built assets and production dependencies (including node-pty, with its `spawn-helper` execute bit checked) go to `~/Library/Application Support/k-bench/app/`; the database lives beside it in `~/Library/Application Support/k-bench/`;
 - `~/Library/LaunchAgents/com.k-bench.server.plist` is written and (re)loaded: `RunAtLoad`, `KeepAlive`, `AbandonProcessGroup`, the absolute Node path, a PATH that includes `/opt/homebrew/bin` (tmux is found by name), and the installed instance's environment (`K_BENCH_INSTANCE=installed`, port 7680, tmux socket `k-bench`). Logs go to `~/Library/Logs/k-bench/k-bench.log`;
 - your tailnet login, read from `tailscale status --json`, is recorded in the plist as `K_BENCH_ALLOWED_LOGIN` (`--login you@example.com` skips the lookup);
+- the commit being installed (and whether there were uncommitted changes) is recorded in `app/build-info.json`, and the server's startup line in the log names it;
 - `tailscale serve --bg --https=443 http://127.0.0.1:7680` publishes it at `https://<this machine>.<tailnet>.ts.net/`. This replaces whatever `tailscale serve` already publishes at port 443 of this machine.
 
 It never touches `./.data/` or the `k-bench-dev` tmux socket.
@@ -85,7 +90,7 @@ To remove the install: `launchctl bootout gui/$(id -u)/com.k-bench.server`, dele
 
 ## Layout
 
-- `scripts/`: `dev.mjs` (`pnpm dev`), `dev-serve.ts` (`pnpm dev:serve`), `install.ts` (`pnpm install-app`) with its pure, unit-tested parts in `install-lib.ts`, and `fix-node-pty.mjs`.
+- `scripts/`: `dev.mjs` (`pnpm dev`), `dev-serve.ts` (`pnpm dev:serve`), `install.ts` (`pnpm install-app`) with its pure, unit-tested parts in `install-lib.ts`, `smoke.ts` (`pnpm smoke`), and `fix-node-pty.mjs`.
 - `src/server/`: `config.ts` (instance config), `access-guard.ts` (the `Tailscale-User-Login` check, ADR-0003), `store.ts` (SQLite and migrations), `tmux.ts` (tmux driver), `reconciler.ts` (kills tmux sessions with no store row, at startup and on every state read), `service.ts` (domain operations), `app.ts` (HTTP API), `static.ts` (serves the built front end), `terminal.ts` (terminal WebSocket), `state-feed.ts` (change detection: re-reads the state after a mutation and on a short poll, and hands each changed snapshot to subscribers), `events.ts` (events WebSocket), `server.ts` (`startServer`), `main.ts` (entry point).
 - `web/`: the front end (Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js). `src/App.tsx` is the shell, `src/components/` holds `Sidebar`, `NewWorkspaceDialog`, `WorkspaceRow` (a sortable Workspace row with its menu), `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `SessionRow`, `BellBadge`, `PaneArea` (one or two Panes with a draggable divider), `Pane` (a Session's terminal in one slot) and `TerminalView` (xterm.js on the terminal WebSocket: wheel and swipe scroll tmux history, OSC 52 copies to the clipboard, shift-drag selects in the browser, and a dropped connection reconnects with backoff behind a "reconnecting…" badge), `src/components/ui/` the shadcn/ui components, `src/api.ts` the API client, `src/layout.ts` the per-device Pane layout (a `Layout` value plus pure functions such as `openInFocusedPane`, `openInOtherPane`, `togglePaneCount`, `moveFocus`, `setRatio`, and `useLayout()` which keeps it in browser storage). `src/useIsPhone.ts` is the single desktop/phone breakpoint (767px); on a phone `App.tsx` shows one Pane (the stored layout's Focused Pane), the sidebar as a slide-out drawer opened by the "Menu" button, and `components/ExtraKeys` (Esc, Tab, Shift Tab, one-shot Ctrl, arrows), whose keys and Ctrl state live in `src/terminalInput.ts` and reach the shell through the terminal's normal input path. `@/` aliases `web/src/`.
 - `test/`: outcome-based tests, see `docs/testing.md`.
