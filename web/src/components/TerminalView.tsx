@@ -2,6 +2,10 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 
+/** Close codes the server uses (see `src/server/terminal.ts`). */
+const SESSION_DELETED = 4404;
+const SESSION_STOPPED = 4410;
+
 /** The terminal WebSocket URL for a Session at a given size. */
 function terminalUrl(sessionId: string, cols: number, rows: number): string {
   const url = new URL(`/api/sessions/${sessionId}/terminal`, window.location.href);
@@ -19,15 +23,20 @@ function terminalUrl(sessionId: string, cols: number, rows: number): string {
 export function TerminalView({
   sessionId,
   focused,
+  onEnded,
 }: {
   sessionId: string;
   /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
   focused: boolean;
+  /** The server closed the socket because the Session was deleted or is Stopped. */
+  onEnded?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal>(null);
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
+  const ended = useRef(onEnded);
+  ended.current = onEnded;
 
   useEffect(() => {
     if (focused) terminalRef.current?.focus();
@@ -56,6 +65,11 @@ export function TerminalView({
     socket.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) terminal.write(new Uint8Array(event.data));
     };
+    socket.onclose = (event) => {
+      if (event.code === SESSION_DELETED || event.code === SESSION_STOPPED) {
+        ended.current?.();
+      }
+    };
     const input = terminal.onData((data) => send({ type: "input", data }));
     const resized = terminal.onResize(({ cols, rows }) =>
       send({ type: "resize", cols, rows }),
@@ -70,6 +84,7 @@ export function TerminalView({
       observer.disconnect();
       input.dispose();
       resized.dispose();
+      socket.onclose = null;
       socket.close();
       terminal.dispose();
     };

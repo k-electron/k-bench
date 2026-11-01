@@ -15,7 +15,7 @@ function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
+          "z-50 min-w-36 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
           className,
         )}
         {...props}
@@ -26,12 +26,17 @@ function DropdownMenuContent({
 
 function DropdownMenuItem({
   className,
+  variant,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Item>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+  variant?: "destructive";
+}) {
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
         "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0",
+        variant === "destructive" &&
+          "text-destructive data-[highlighted]:text-destructive",
         className,
       )}
       {...props}

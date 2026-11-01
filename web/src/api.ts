@@ -16,6 +16,12 @@ export interface AppState {
   workspaces: WorkspaceState[];
 }
 
+export interface DirectoryListing {
+  path: string;
+  parent?: string;
+  directories: Array<{ name: string; path: string }>;
+}
+
 export class ApiError extends Error {}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -34,12 +40,33 @@ function post<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+function send<T>(method: "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+  return call<T>(path, {
+    method,
+    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 export const api = {
   getState: () => call<AppState>("/api/state"),
+  /** Subfolders of `path`, or of the configured root when omitted. */
+  listDirectories: (path?: string) =>
+    call<DirectoryListing>(
+      path === undefined
+        ? "/api/directories"
+        : `/api/directories?path=${encodeURIComponent(path)}`,
+    ),
   createWorkspace: (input: { folder: string; name?: string }) =>
     post<{ id: string; name: string; folder: string }>("/api/workspaces", input),
   createSession: (workspaceId: string, name?: string) =>
     post<{ id: string; name: string }>(`/api/workspaces/${workspaceId}/sessions`, {
       name,
     }),
+  renameSession: (sessionId: string, name: string) =>
+    send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
+  deleteSession: (sessionId: string) =>
+    send<void>("DELETE", `/api/sessions/${sessionId}`),
+  restartSession: (sessionId: string) =>
+    post<{ id: string; name: string }>(`/api/sessions/${sessionId}/restart`, {}),
 };

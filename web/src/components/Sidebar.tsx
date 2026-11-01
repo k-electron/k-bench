@@ -1,14 +1,8 @@
-import { EllipsisIcon, FolderIcon, PlusIcon, TerminalIcon } from "lucide-react";
+import { FolderIcon, PlusIcon } from "lucide-react";
 import type { AppState } from "@/api";
-import { cn } from "@/lib/utils";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { SessionRow } from "./SessionRow";
 import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 
 interface SidebarProps {
   state: AppState | undefined;
@@ -16,8 +10,13 @@ interface SidebarProps {
   openId: string | undefined;
   onOpen: (sessionId: string) => void;
   onOpenInOtherPane: (sessionId: string) => void;
-  onCreateWorkspace: (folder: string) => Promise<void>;
+  onCreateWorkspace: (input: { folder: string; name?: string }) => Promise<void>;
   onCreateSession: (workspaceId: string) => Promise<void>;
+  onRenameSession: (sessionId: string, name: string) => Promise<void>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
+  onRestartSession: (sessionId: string) => Promise<void>;
+  /** Why the last action failed, if it did. */
+  error?: string;
 }
 
 /** The tree of Workspaces and their Sessions. */
@@ -28,6 +27,10 @@ export function Sidebar({
   onOpenInOtherPane,
   onCreateWorkspace,
   onCreateSession,
+  onRenameSession,
+  onDeleteSession,
+  onRestartSession,
+  error,
 }: SidebarProps) {
   return (
     <nav
@@ -40,9 +43,9 @@ export function Sidebar({
           <li key={workspace.id}>
             <div className="flex items-center gap-1 px-2 py-1 text-sm font-medium">
               <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate" title={workspace.folder}>
+              <h2 className="min-w-0 flex-1 truncate" title={workspace.folder}>
                 {workspace.name}
-              </span>
+              </h2>
               <Button
                 variant="ghost"
                 size="icon"
@@ -54,46 +57,27 @@ export function Sidebar({
             </div>
             <ul>
               {workspace.sessions.map((session) => (
-                <li key={session.id} className="flex items-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      "min-w-0 flex-1 justify-start pl-6 font-normal",
-                      session.id === openId && "bg-accent",
-                      session.status === "stopped" && "text-muted-foreground",
-                    )}
-                    aria-current={session.id === openId ? "true" : undefined}
-                    onClick={(event) =>
-                      // ⌘-click opens it in the other Pane.
-                      event.metaKey ? onOpenInOtherPane(session.id) : onOpen(session.id)
-                    }
-                  >
-                    <TerminalIcon />
-                    {session.name}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Menu for ${session.name}`}
-                      >
-                        <EllipsisIcon />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem onSelect={() => onOpenInOtherPane(session.id)}>
-                        Open in other pane
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <li key={session.id}>
+                  <SessionRow
+                    session={session}
+                    isOpen={session.id === openId}
+                    onOpen={() => onOpen(session.id)}
+                    onOpenInOtherPane={() => onOpenInOtherPane(session.id)}
+                    onRename={(name) => onRenameSession(session.id, name)}
+                    onDelete={() => onDeleteSession(session.id)}
+                    onRestart={() => onRestartSession(session.id)}
+                  />
                 </li>
               ))}
             </ul>
           </li>
         ))}
       </ul>
+      {error && (
+        <p role="alert" className="px-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </nav>
   );
 }

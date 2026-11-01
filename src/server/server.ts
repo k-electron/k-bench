@@ -28,13 +28,20 @@ export async function startServer(
   const store = new Store(config.dataDir);
   const tmux = new TmuxDriver(config.tmuxSocket);
   const service = new Service(store, tmux);
+  // Anything on the socket that the store does not know is left over: clean it up first.
+  await service.reconcile();
   const terminals = new TerminalSockets(service, tmux);
 
   // The guard sits in front of everything the server answers, so no route or static file
   // (now or added later) can be reached without the allowed login.
   const guard = new AccessGuard(config.allowedLogin);
   const server = serve({
-    fetch: guard.wrapFetch(createApp(service, { webDir: options.webDir }).fetch),
+    fetch: guard.wrapFetch(
+      createApp(service, {
+        webDir: options.webDir,
+        pickerRoot: config.pickerRoot,
+      }).fetch,
+    ),
     port: config.port,
     hostname: "127.0.0.1",
   }) as Server;

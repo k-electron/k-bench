@@ -1,9 +1,9 @@
 import { Columns2Icon } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PaneArea } from "@/components/PaneArea";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import {
   focusedSession,
   focusPane,
@@ -21,6 +21,8 @@ import { useAppState } from "./useAppState";
 export function App() {
   const { state, refresh } = useAppState();
   const [layout, update] = useLayout();
+
+  const [error, setError] = useState<string>();
 
   const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
 
@@ -53,8 +55,8 @@ export function App() {
         openId={focusedSession(layout) ?? undefined}
         onOpen={(id) => update((l) => openInFocusedPane(l, id))}
         onOpenInOtherPane={(id) => update((l) => openInOtherPane(l, id))}
-        onCreateWorkspace={async (folder) => {
-          await api.createWorkspace({ folder });
+        onCreateWorkspace={async (input) => {
+          await api.createWorkspace(input);
           await refresh();
         }}
         onCreateSession={async (workspaceId) => {
@@ -62,6 +64,25 @@ export function App() {
           await refresh();
           update((l) => openInFocusedPane(l, session.id));
         }}
+        onRenameSession={async (sessionId, name) => {
+          await api.renameSession(sessionId, name);
+          await refresh();
+        }}
+        onDeleteSession={async (sessionId) => {
+          await api.deleteSession(sessionId);
+          await refresh();
+        }}
+        onRestartSession={async (sessionId) => {
+          setError(undefined);
+          try {
+            await api.restartSession(sessionId);
+          } catch (failure) {
+            if (!(failure instanceof ApiError)) throw failure;
+            setError(failure.message);
+          }
+          await refresh();
+        }}
+        error={error}
       />
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-9 shrink-0 items-center justify-end border-b px-2">
@@ -83,6 +104,7 @@ export function App() {
               ? "Create a Workspace to get started."
               : "Select a Session."
           }
+          onEnded={() => void refresh()}
           onFocus={(pane) => update((l) => focusPane(l, pane))}
           onResize={(ratio) => update((l) => setRatio(l, ratio))}
         />

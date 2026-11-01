@@ -162,7 +162,7 @@ test("dragging the divider resizes both terminals and both shells see the new si
 
 test("without browser storage the default layout is used", async ({ page, kbench }) => {
   await page.addInitScript(() => {
-    Object.defineProperty(window, "localStorage", {
+    Object.defineProperty(globalThis, "localStorage", {
       get() {
         throw new Error("storage unavailable");
       },

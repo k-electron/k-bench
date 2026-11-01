@@ -27,6 +27,14 @@ export class AppPage {
     return this.sidebar.getByRole("button", { name, exact: true });
   }
 
+  /** Opens a Session row's menu and picks `item` (for example "Rename" or "Delete"). */
+  async sessionMenu(sessionName: string, item: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Actions for ${sessionName}`, exact: true })
+      .click();
+    await this.page.getByRole("menuitem", { name: item, exact: true }).click();
+  }
+
   /** The terminal showing the named Session. */
   terminal(sessionName: string): Locator {
     return this.page.getByRole("region", {
@@ -80,10 +88,12 @@ export class AppPage {
 
   /** Opens a Session's row menu and picks "Open in other pane". */
   async openInOtherPane(sessionName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Menu for ${sessionName}`, exact: true })
-      .click();
-    await this.page.getByRole("menuitem", { name: "Open in other pane" }).click();
+    await this.sessionMenu(sessionName, "Open in other pane");
+  }
+
+  /** The running/Stopped indicator beside a Session in the sidebar. */
+  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
   }
 
   private sizeProbes = 0;
@@ -103,10 +113,32 @@ export class AppPage {
     return { cols: Number(cols), rows: Number(rows) };
   }
 
-  async createWorkspace(folder: string): Promise<void> {
+  async createWorkspace(folder: string, options: { name?: string } = {}): Promise<void> {
     await this.page.getByRole("button", { name: "New Workspace" }).click();
     await this.page.getByRole("textbox", { name: "Folder path" }).fill(folder);
+    if (options.name !== undefined) {
+      await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
+    }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
+  }
+
+  /**
+   * Creates a Workspace by browsing the Host's folders from the picker's root: opens each
+   * named folder in turn, then creates a Workspace on the last one.
+   */
+  async createWorkspaceByBrowsing(...path: string[]): Promise<void> {
+    await this.page.getByRole("button", { name: "New Workspace" }).click();
+    await this.page.getByRole("button", { name: "Browse folders" }).click();
+    const browser = this.page.getByRole("region", { name: "Folder browser" });
+    for (const folder of path) {
+      await browser.getByRole("button", { name: folder, exact: true }).click();
+    }
+    await this.page.getByRole("button", { name: "Create Workspace" }).click();
+  }
+
+  /** A Workspace's heading in the sidebar. */
+  workspace(name: string): Locator {
+    return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
   async createSession(workspaceName: string): Promise<void> {
