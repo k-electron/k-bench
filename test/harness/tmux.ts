@@ -39,6 +39,16 @@ export function typeIntoSession(socket: string, sessionId: string, text: string)
   tmux(socket, "send-keys", "-t", `=kb-${sessionId}:`, "Enter");
 }
 
+/**
+ * Detaches every client from every Session, as a browser tab vanishing would. The Sessions
+ * keep running, with nobody attached.
+ */
+export function detachAllClients(socket: string): void {
+  for (const client of tmux(socket, "list-clients", "-F", "#{client_name}").split("\n")) {
+    if (client) tmux(socket, "detach-client", "-t", client);
+  }
+}
+
 /** Names of the tmux sessions alive on the socket (empty when no tmux server runs). */
 export function tmuxSessionNames(socket: string): string[] {
   try {
