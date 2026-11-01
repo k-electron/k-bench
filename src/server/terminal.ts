@@ -55,7 +55,7 @@ export class TerminalSockets {
     ws.on("message", (raw: RawData) => {
       const message = decodeClientMessage(raw.toString());
       if (message?.type === "input") {
-        attachment.input(message.data, { automatic: message.automatic === true });
+        attachment.input(message.data, { automatic: message.automatic });
       } else if (message?.type === "resize") {
         // The attachment ignores anything that is not a valid size.
         attachment.resize(message.cols, message.rows);

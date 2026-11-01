@@ -143,8 +143,8 @@ function swipeScrolls(
 /**
  * xterm.js attached to one Session over the terminal WebSocket. It fits its container and
  * reports every size change to the server, speaking `src/shared/terminal-protocol.ts`.
- * When the connection drops it
- * reconnects by itself with backoff, and tmux redraws the screen on every attach.
+ * When the connection drops it reconnects by itself with backoff, and tmux redraws the
+ * screen on every attach.
  */
 export function TerminalView({
   sessionId,

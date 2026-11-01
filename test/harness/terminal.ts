@@ -1,7 +1,6 @@
 import { expect } from "vitest";
 import { WebSocket } from "ws";
 import {
-  CLOSE_SESSION_ENDED,
   type ClientMessage,
   encodeClientMessage,
   type TerminalSize,
@@ -110,14 +109,6 @@ export class TerminalClient {
     this.send({ type: "input", data: text });
   }
 
-  /**
-   * Sends `data` as a terminal does by itself, not because the owner typed: an answer to
-   * one of tmux's queries, say.
-   */
-  sendAutomatically(data: string): void {
-    this.send({ type: "input", data, automatic: true });
-  }
-
   /** Runs a command line: types it and presses Enter. */
   run(command: string): void {
     this.type(`${command}\r`);
@@ -150,9 +141,13 @@ export class TerminalClient {
     return pollUntil(() => this.closeCode, { description: "terminal socket to close" });
   }
 
-  /** Waits for the server to end this terminal: its Session was deleted, or its shell exited. */
+  /**
+   * Waits for the server to end this terminal: its Session was deleted, or its shell exited.
+   * The literal, not the protocol's constant, is the wire contract the README promises
+   * (4410 = ended), so changing the constant fails here.
+   */
   async waitForEnded(): Promise<void> {
-    expect(await this.waitForClose()).toBe(CLOSE_SESSION_ENDED);
+    expect(await this.waitForClose()).toBe(4410);
   }
 
   close(): void {
