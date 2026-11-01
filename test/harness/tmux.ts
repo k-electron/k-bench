@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 
 /**
  * Direct access to a test instance's tmux server, for what the API cannot do: simulating a
- * Host reboot, and planting or looking for tmux sessions the store knows nothing about.
+ * Host reboot, planting or looking for tmux sessions the store knows nothing about, and
+ * waiting until no terminal is viewing a Session.
  * Every function refuses a socket that is not a throwaway test socket, so none of them can
  * reach the Installed or Dev instance.
  */
@@ -43,14 +44,12 @@ export function typeIntoSession(socket: string, sessionId: string, text: string)
   tmux(socket, "send-keys", "-t", `=kb-${sessionId}:`, "Enter");
 }
 
-/**
- * Detaches every client from every Session, as a browser tab vanishing would. The Sessions
- * keep running, with nobody attached.
- */
-export function detachAllClients(socket: string): void {
-  for (const client of tmux(socket, "list-clients", "-F", "#{client_name}").split("\n")) {
-    if (client) tmux(socket, "detach-client", "-t", client);
-  }
+/** How many tmux clients are attached to the Session: how many terminals are viewing it. */
+export function attachedClientCount(socket: string, sessionId: string): number {
+  // One line per client; what the line says does not matter.
+  return tmux(socket, "list-clients", "-t", `=kb-${sessionId}`, "-F", "client")
+    .split("\n")
+    .filter(Boolean).length;
 }
 
 /** Names of the tmux sessions alive on the socket (empty when no tmux server runs). */

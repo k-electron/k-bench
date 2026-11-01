@@ -81,8 +81,6 @@ export const api = {
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
-  /** A Pane is showing the Session: clears its Bell. */
-  markSeen: (sessionId: string) => post<void>(`/api/sessions/${sessionId}/seen`, {}),
   restartSession: (sessionId: string) =>
     post<{ id: string; name: string }>(`/api/sessions/${sessionId}/restart`, {}),
 };

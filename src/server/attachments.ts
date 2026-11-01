@@ -36,8 +36,6 @@ export interface Attachment {
 export interface Sessions {
   /** Whether there is a shell to attach to: a known Session that is running. */
   hasRunningShell(sessionId: string): Promise<boolean>;
-  /** The owner has seen the Session: its Bell is cleared. */
-  markSeen(sessionId: string): Promise<void>;
 }
 
 /** A terminal dimension a pty can take: a whole number from 1 to 999. */
@@ -202,9 +200,6 @@ class Terminal implements Attachment {
       if (this.phase === "attached") this.end("session-ended");
       this.becomeGone();
     });
-    // Opening the terminal is viewing the Session. Cleared after attaching, so a bell that
-    // rings from here on finds a client attached and is not recorded as unseen.
-    void this.context.sessions.markSeen(this.sessionId).catch(() => undefined);
     for (const data of this.pendingInput.splice(0)) this.input(data);
   }
 

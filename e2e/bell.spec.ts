@@ -50,7 +50,22 @@ test("a collapsed Workspace shows a rolled-up hint while any of its Sessions has
   await expect(app.workspaceBellHint("project")).toHaveCount(0);
 });
 
-test("a Bell raised in a Session already showing in a Pane is cleared at once", async ({
+test("opening a Session with a Bell clears its badge on another device, without a reload", async ({
+  app,
+  otherDevice,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSessions("project", 2);
+  await kbench.ringBell("session 1");
+  await expect(otherDevice.bellBadge("session 1")).toBeVisible();
+
+  await app.session("session 1").click();
+
+  await expect(otherDevice.bellBadge("session 1")).toHaveCount(0);
+});
+
+test("a Bell rung while a showing Pane's terminal is reconnecting is cleared once it reconnects", async ({
   app,
   kbench,
 }) => {
@@ -58,15 +73,16 @@ test("a Bell raised in a Session already showing in a Pane is cleared at once", 
   await app.createSessions("project", 2);
   await app.session("session 1").click();
   await app.runMarker(app.terminal("session 1"), "kb-showing-7733");
-  // The Pane's terminal loses its tmux client (a dropped connection), so tmux records the
-  // next bell even though a Pane shows the Session.
-  kbench.detachClients();
 
+  // The connection drops, so nothing views session 1 while it rings.
+  await kbench.stopServer();
   await kbench.ringBell("session 1");
-  // session 2 is not on screen: its badge shows when the bells have been noticed.
+  // session 2 is not on screen: its badge shows once the bells have been noticed.
   await kbench.ringBell("session 2");
+  await kbench.startServer();
 
   await expect(app.bellBadge("session 2")).toBeVisible();
-  // session 1 is in a Pane, so the owner has seen its bell: no badge may stay.
+  // The Pane's terminal reconnected, so the owner is viewing session 1: no badge may stay.
   await expect(app.bellBadge("session 1")).toHaveCount(0);
+  await app.runMarker(app.terminal("session 1"), "kb-reconnected-7734");
 });

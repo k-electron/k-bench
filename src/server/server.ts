@@ -15,6 +15,11 @@ import { TmuxDriver } from "./tmux.ts";
 export interface ServerOptions {
   /** Folder holding the built front end to serve. Omit to serve the API only. */
   webDir?: string;
+  /**
+   * How often, in milliseconds, the state feed polls for changes that nothing announces
+   * (the feed's default when omitted). Tests make it long, to show that a change was pushed.
+   */
+  statePollMs?: number;
 }
 
 export interface RunningServer {
@@ -33,10 +38,15 @@ export async function startServer(
   const service = new Service(store, tmux);
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();
+  // A tmux server that outlived the previous k-bench gets this version's hooks.
+  await tmux.configure();
   const attachments = new Attachments(tmux, service);
   const terminals = new TerminalSockets(attachments);
-  const feed = new StateFeed(() => service.getState());
+  const feed = new StateFeed(() => service.getState(), {
+    intervalMs: options.statePollMs,
+  });
   const events = new EventSockets(feed);
+  const bells = tmux.watchBells(() => feed.notify());
 
   // The guard sits in front of everything the server answers, so no route or static file
   // (now or added later) can be reached without the allowed login.
@@ -84,6 +94,7 @@ export async function startServer(
   let stopping: Promise<void> | undefined;
   const stop = () => {
     stopping ??= (async () => {
+      await bells.stop();
       events.closeAll();
       // From here on no tmux client this server started is running or starting.
       await attachments.stop();

@@ -2,13 +2,19 @@ import { describe, expect, it } from "vitest";
 import { createTestInstance, type State } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { echoCommand } from "./harness/terminal.ts";
-import { typeIntoSession } from "./harness/tmux.ts";
+import { attachedClientCount, typeIntoSession } from "./harness/tmux.ts";
 
 const RING = "printf '\\a'";
 
+/**
+ * Long enough that the state feed's poll never runs during a test, so a snapshot that
+ * arrives was pushed when the Bell changed.
+ */
+const NO_POLL = { statePollMs: 600_000 };
+
 async function boot() {
   const instance = createTestInstance();
-  const server = await instance.start();
+  const server = await instance.start(NO_POLL);
   const workspace = await server.createWorkspace({
     folder: instance.makeFolder("project"),
   });
@@ -24,29 +30,18 @@ function bellOf(state: State, sessionId: string): boolean | undefined {
 }
 
 describe("Bell", () => {
-  it("is raised by a Session whose shell rings the bell with no terminal attached", async () => {
+  it("is raised by a Session that rings with nobody viewing it, and pushed at once", async () => {
     const { server, session, other, socket } = await boot();
-    expect(bellOf(await server.state(), session.id)).toBe(false);
-
-    typeIntoSession(socket, session.id, RING);
-
-    await pollUntil(async () => bellOf(await server.state(), session.id), {
-      description: "the Session's Bell to be raised",
-    });
-    expect(bellOf(await server.state(), other.id)).toBe(false);
-  });
-
-  it("is pushed on the events socket", async () => {
-    const { server, session, socket } = await boot();
     const events = await server.openEvents();
     await events.waitForSnapshot((state) => bellOf(state, session.id) === false);
 
     typeIntoSession(socket, session.id, RING);
 
-    await events.waitForSnapshot(
+    const raised = await events.waitForSnapshot(
       (state) => bellOf(state, session.id) === true,
       "a snapshot with the Bell raised",
     );
+    expect(bellOf(raised, other.id)).toBe(false);
   });
 
   it("survives a server restart", async () => {
@@ -60,7 +55,7 @@ describe("Bell", () => {
     expect(bellOf(await restarted.state(), session.id)).toBe(true);
   });
 
-  it("is cleared by the seen endpoint, which leaves other Sessions' Bells alone", async () => {
+  it("is cleared by viewing the Session, and the clear is pushed to every device at once", async () => {
     const { server, session, other, socket } = await boot();
     typeIntoSession(socket, session.id, RING);
     typeIntoSession(socket, other.id, RING);
@@ -68,57 +63,37 @@ describe("Bell", () => {
       const state = await server.state();
       return bellOf(state, session.id) && bellOf(state, other.id);
     });
-
-    const response = await server.post(`/api/sessions/${session.id}/seen`);
-
-    expect(response.status).toBe(204);
-    const state = await server.state();
-    expect(bellOf(state, session.id)).toBe(false);
-    expect(bellOf(state, other.id)).toBe(true);
-  });
-
-  it("is pushed as cleared on the events socket after seen", async () => {
-    const { server, session, socket } = await boot();
-    typeIntoSession(socket, session.id, RING);
-    await pollUntil(async () => bellOf(await server.state(), session.id));
+    // Another device, watching the sidebar. Its first snapshot has both Bells raised.
     const events = await server.openEvents();
     await events.waitForSnapshot((state) => bellOf(state, session.id) === true);
 
-    await server.post(`/api/sessions/${session.id}/seen`);
-
-    await events.waitForSnapshot((state) => bellOf(state, session.id) === false);
-  });
-
-  it("is raised again by a later bell after being cleared", async () => {
-    const { server, session, socket } = await boot();
-    typeIntoSession(socket, session.id, RING);
-    await pollUntil(async () => bellOf(await server.state(), session.id));
-    await server.post(`/api/sessions/${session.id}/seen`);
-    expect(bellOf(await server.state(), session.id)).toBe(false);
-
-    typeIntoSession(socket, session.id, RING);
-
-    await pollUntil(async () => bellOf(await server.state(), session.id), {
-      description: "the Bell to be raised again",
-    });
-  });
-
-  it("is cleared by opening the Session's terminal, and the attach leaves nothing stale", async () => {
-    const { server, session, socket } = await boot();
-    typeIntoSession(socket, session.id, RING);
-    await pollUntil(async () => bellOf(await server.state(), session.id));
-
     const terminal = await server.openTerminal(session.id);
-    terminal.run(echoCommand("attached-6e1f"));
-    await terminal.waitForOutput("attached-6e1f");
 
-    await pollUntil(
-      async () => (await bellOf(await server.state(), session.id)) === false,
-      {
-        description: "the Bell to be cleared by opening the terminal",
-      },
+    const cleared = await events.waitForSnapshot(
+      (state) => bellOf(state, session.id) === false,
+      "a snapshot with the viewed Session's Bell cleared",
     );
+    expect(bellOf(cleared, other.id)).toBe(true);
     terminal.close();
+  });
+
+  it("is raised again by a bell after its viewer has left", async () => {
+    const { server, session, socket } = await boot();
+    const terminal = await server.openTerminal(session.id);
+    terminal.run(echoCommand("viewing-5d0a"));
+    await terminal.waitForOutput("viewing-5d0a");
+    terminal.close();
+    await pollUntil(() => attachedClientCount(socket, session.id) === 0, {
+      description: "the viewer's tmux client to be gone",
+    });
+    const events = await server.openEvents();
+
+    typeIntoSession(socket, session.id, RING);
+
+    await events.waitForSnapshot(
+      (state) => bellOf(state, session.id) === true,
+      "a snapshot with the Bell raised",
+    );
   });
 
   it("does not linger when it rings in a Session someone is viewing", async () => {
@@ -134,11 +109,5 @@ describe("Bell", () => {
       description: "the sentinel Bell",
     });
     expect(bellOf(await server.state(), session.id)).toBe(false);
-  });
-
-  it("answers 404 for seen on an unknown Session", async () => {
-    const { server } = await boot();
-
-    expect((await server.post("/api/sessions/nope/seen")).status).toBe(404);
   });
 });

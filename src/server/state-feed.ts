@@ -5,10 +5,9 @@ export type SnapshotListener = (snapshot: string) => void;
  * Change detection for the events WebSocket. It reads the state, and whenever the result
  * differs from the last one sent, pushes the fresh snapshot to every subscriber.
  *
- * Two things trigger a read: `notify()`, which the HTTP layer calls after a mutation, and a
- * short-interval poll, which notices what no request announces (a shell exiting). Anything
- * that later joins the state read (a Bell, for example) is picked up by the same poll, so
- * it needs no wiring here. The poll only runs while someone is subscribed.
+ * Two things trigger a read: `notify()`, which the HTTP layer calls after a mutation and the
+ * Bell watch calls when a Bell changes, and a short-interval poll, which notices what nothing
+ * announces (a shell exiting). The poll only runs while someone is subscribed.
  */
 export class StateFeed {
   private readonly read: () => Promise<unknown>;
