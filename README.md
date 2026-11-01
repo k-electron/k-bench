@@ -6,14 +6,17 @@ A web app, reachable only on the owner's tailnet, that runs persistent terminal 
 
 - macOS, Node 26 or later, pnpm
 - tmux (`brew install tmux`)
+- Tailscale, to install it as a service (see below)
 
 ## Commands
 
 ```sh
 pnpm install     # also restores the execute bit on node-pty's spawn-helper
 pnpm dev         # Dev instance: server (watch mode) on port 7690 plus Vite on :5173, which proxies /api; data in ./.data, tmux socket "k-bench-dev"
+pnpm dev:serve   # publish the Dev instance on the tailnet at https port 8443
 pnpm build       # production front end into dist/web
 pnpm start       # the server alone; serves dist/web when it exists
+pnpm install-app # build and install the Installed instance (launchd + tailscale serve); --dry-run to preview
 pnpm lint        # Biome
 pnpm typecheck   # tsc, for the server/tests and for the front end (web/)
 pnpm test        # Vitest (Seam 1, the server)
@@ -26,8 +29,63 @@ Playwright needs its browser once: `pnpm exec playwright install chromium`.
 
 `K_BENCH_INSTANCE` (`dev` by default, or `installed`) selects an instance preset. `K_BENCH_DATA_DIR`, `K_BENCH_TMUX_SOCKET`, `K_BENCH_PORT`, `K_BENCH_ALLOWED_LOGIN` and `K_BENCH_PICKER_ROOT` each override one value.
 
+## Install, update and the Dev instance
+
+### Prerequisites
+
+- tmux: `brew install tmux`.
+- Tailscale, signed in, with HTTPS certificates enabled for the tailnet (admin console, DNS page). The CLI is found on PATH or inside `/Applications/Tailscale.app`.
+- Node 26 or later and pnpm, as above. Run `pnpm install` once in the checkout.
+
+### Install
+
+```sh
+pnpm install-app --dry-run   # prints every step and changes nothing
+pnpm install-app
+```
+
+This builds k-bench and installs it as the Installed instance:
+
+- the server, built assets and production dependencies (including node-pty, with its `spawn-helper` execute bit checked) go to `~/Library/Application Support/k-bench/app/`; the database lives beside it in `~/Library/Application Support/k-bench/`;
+- `~/Library/LaunchAgents/com.k-bench.server.plist` is written and (re)loaded: `RunAtLoad`, `KeepAlive`, `AbandonProcessGroup`, the absolute Node path, a PATH that includes `/opt/homebrew/bin` (tmux is found by name), and the installed instance's environment (`K_BENCH_INSTANCE=installed`, port 7680, tmux socket `k-bench`). Logs go to `~/Library/Logs/k-bench/k-bench.log`;
+- your tailnet login, read from `tailscale status --json`, is recorded in the plist as `K_BENCH_ALLOWED_LOGIN` (`--login you@example.com` skips the lookup);
+- `tailscale serve --bg --https=443 http://127.0.0.1:7680` publishes it at `https://<this machine>.<tailnet>.ts.net/`. This replaces whatever `tailscale serve` already publishes at port 443 of this machine.
+
+It never touches `./.data/` or the `k-bench-dev` tmux socket.
+
+### Update
+
+`git pull`, then `pnpm install-app` again. The app folder is replaced and the agent reloaded in place; Sessions live in tmux, which the agent abandons rather than kills, so every Session keeps running. Open browser tabs reconnect on their own.
+
+### The Dev instance on the tailnet
+
+To try the Dev instance (for example the phone layout) before installing:
+
+```sh
+pnpm build
+K_BENCH_ALLOWED_LOGIN=you@example.com pnpm dev
+pnpm dev:serve               # tailscale serve on https port 8443; --off stops it, --dry-run only prints
+```
+
+This publishes the Dev server itself (127.0.0.1:7690), not Vite, so the same `Tailscale-User-Login` check applies; it serves the last `pnpm build`. Open `https://<this machine>.<tailnet>.ts.net:8443/`.
+
+### Manual verification checklist
+
+The install changes the real system, so it is checked by hand, not by automated tests (only its pure parts are unit-tested in `test/install.test.ts`). Create a couple of Sessions first, then:
+
+1. After `pnpm install-app`, k-bench opens at the tailnet HTTPS URL from your phone.
+2. A request from another tailnet identity, or with no Tailscale identity, is refused with 403 (for example `curl http://127.0.0.1:7680/api/state` on the Host, which sends no identity).
+3. `launchctl kickstart -k gui/$(id -u)/com.k-bench.server` restarts k-bench and every Session is still running.
+4. Run `pnpm install-app` again: every Session is still running.
+5. Log out and in again (or reboot): the service is back. After a logout and login Sessions are running; after a reboot they show Stopped.
+6. `pnpm dev:serve` publishes the Dev instance on port 8443 and the same login check refuses other identities.
+7. Throughout, the Dev instance's `./.data/` and `k-bench-dev` socket are untouched by the install, and the Installed instance's data and `k-bench` socket are untouched by `pnpm dev` and `pnpm test`.
+
+To remove the install: `launchctl bootout gui/$(id -u)/com.k-bench.server`, delete the plist, `tailscale serve --https=443 off`, and delete `~/Library/Application Support/k-bench/app` (the database and tmux sessions stay).
+
 ## Layout
 
+- `scripts/`: `dev.mjs` (`pnpm dev`), `dev-serve.ts` (`pnpm dev:serve`), `install.ts` (`pnpm install-app`) with its pure, unit-tested parts in `install-lib.ts`, and `fix-node-pty.mjs`.
 - `src/server/`: `config.ts` (instance config), `access-guard.ts` (the `Tailscale-User-Login` check, ADR-0003), `store.ts` (SQLite and migrations), `tmux.ts` (tmux driver), `service.ts` (domain operations), `app.ts` (HTTP API), `static.ts` (serves the built front end), `terminal.ts` (terminal WebSocket), `server.ts` (`startServer`), `main.ts` (entry point).
 - `web/`: the front end (Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js). `src/App.tsx` is the shell, `src/components/` holds `Sidebar`, `NewWorkspaceDialog`, `Pane` (one slot in the main view) and `TerminalView` (xterm.js on the terminal WebSocket), `src/components/ui/` the shadcn/ui components, `src/api.ts` the API client, `src/layout.ts` the per-device layout kept in browser storage. `@/` aliases `web/src/`.
 - `test/`: outcome-based tests, see `docs/testing.md`.
