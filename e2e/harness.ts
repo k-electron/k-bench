@@ -1,3 +1,4 @@
+import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
@@ -202,22 +203,52 @@ export class AppPage {
   /**
    * Types a command into `terminal` and waits for its output. The output is built by the
    * shell (the marker never appears in the typed command), so seeing it proves the shell
-   * ran the command and not just that the keystrokes were echoed. Keystrokes typed before
-   * the terminal has connected are dropped, so a freshly opened terminal is retried.
+   * ran the command and not just that the keystrokes were echoed.
    */
   async runMarker(terminal: Locator, marker: string): Promise<void> {
+    await this.runCommand(terminal, echoCommand(marker), marker);
+  }
+
+  /**
+   * Types `command` into `terminal`, presses Enter and waits for `expectedOutput`.
+   * Keystrokes typed before the terminal has connected are dropped, so a freshly opened
+   * terminal is retried.
+   */
+  async runCommand(
+    terminal: Locator,
+    command: string,
+    expectedOutput: string,
+  ): Promise<void> {
     await expect(async () => {
       await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
-      await this.page.keyboard.type(echoCommand(marker));
+      await this.page.keyboard.type(command);
       await this.page.keyboard.press("Enter");
-      await expect(terminal).toContainText(marker, { timeout: 2_000 });
+      await expect(terminal).toContainText(expectedOutput, { timeout: 2_000 });
     }).toPass();
   }
 }
 
+/** A port nothing is listening on, so a stopped server can come back at the same address. */
+async function freePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+  const { port } = probe.address() as { port: number };
+  await new Promise((resolve) => probe.close(resolve));
+  return port;
+}
+
+interface Kbench {
+  instance: TestInstance;
+  url: string;
+  /** Stops the server like a crash or restart would; Sessions keep running in tmux. */
+  stopServer(): Promise<void>;
+  /** Starts the server again on the same address, data folder and tmux socket. */
+  startServer(): Promise<void>;
+}
+
 interface Fixtures {
   /** An isolated instance (temp data, unique tmux socket) with a server serving `dist/web`. */
-  kbench: { instance: TestInstance; url: string };
+  kbench: Kbench;
   /** The app, already open in the page. */
   app: AppPage;
   /** The app open in a second browser context: another device of the same owner. */
@@ -226,12 +257,19 @@ interface Fixtures {
 
 export const test = base.extend<Fixtures>({
   kbench: async ({ context }, use) => {
-    const instance = createTestInstance({ allowedLogin: LOGIN });
-    const server = await instance.start({ webDir: WEB_DIR });
+    const instance = createTestInstance({ allowedLogin: LOGIN, port: await freePort() });
+    let server = await instance.start({ webDir: WEB_DIR });
     // Stands in for `tailscale serve`, which adds this header in the real deployment.
     await context.setExtraHTTPHeaders({ "Tailscale-User-Login": LOGIN });
     try {
-      await use({ instance, url: server.baseUrl });
+      await use({
+        instance,
+        url: server.baseUrl,
+        stopServer: () => server.stop(),
+        startServer: async () => {
+          server = await instance.start({ webDir: WEB_DIR });
+        },
+      });
     } finally {
       await instance.dispose();
     }
