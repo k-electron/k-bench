@@ -67,4 +67,6 @@ export const api = {
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
+  restartSession: (sessionId: string) =>
+    post<{ id: string; name: string }>(`/api/sessions/${sessionId}/restart`, {}),
 };

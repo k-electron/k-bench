@@ -28,6 +28,8 @@ export async function startServer(
   const store = new Store(config.dataDir);
   const tmux = new TmuxDriver(config.tmuxSocket);
   const service = new Service(store, tmux);
+  // Anything on the socket that the store does not know is left over: clean it up first.
+  await service.reconcile();
   const terminals = new TerminalSockets(service, tmux);
 
   // The guard sits in front of everything the server answers, so no route or static file

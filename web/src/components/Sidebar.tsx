@@ -12,6 +12,9 @@ interface SidebarProps {
   onCreateSession: (workspaceId: string) => Promise<void>;
   onRenameSession: (sessionId: string, name: string) => Promise<void>;
   onDeleteSession: (sessionId: string) => Promise<void>;
+  onRestartSession: (sessionId: string) => Promise<void>;
+  /** Why the last action failed, if it did. */
+  error?: string;
 }
 
 /** The tree of Workspaces and their Sessions. */
@@ -23,6 +26,8 @@ export function Sidebar({
   onCreateSession,
   onRenameSession,
   onDeleteSession,
+  onRestartSession,
+  error,
 }: SidebarProps) {
   return (
     <nav
@@ -56,6 +61,7 @@ export function Sidebar({
                     onOpen={() => onOpen(session.id)}
                     onRename={(name) => onRenameSession(session.id, name)}
                     onDelete={() => onDeleteSession(session.id)}
+                    onRestart={() => onRestartSession(session.id)}
                   />
                 </li>
               ))}
@@ -63,6 +69,11 @@ export function Sidebar({
           </li>
         ))}
       </ul>
+      {error && (
+        <p role="alert" className="px-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </nav>
   );
 }

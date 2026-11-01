@@ -1,4 +1,10 @@
-import { MoreHorizontalIcon, PencilIcon, TerminalIcon, Trash2Icon } from "lucide-react";
+import {
+  MoreHorizontalIcon,
+  PencilIcon,
+  RotateCcwIcon,
+  TerminalIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useState } from "react";
 import type { SessionState } from "@/api";
 import { cn } from "@/lib/utils";
@@ -18,6 +24,7 @@ export interface SessionRowProps {
   onOpen: () => void;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
+  onRestart: () => Promise<void>;
 }
 
 /**
@@ -30,17 +37,28 @@ export function SessionRow({
   onOpen,
   onRename,
   onDelete,
+  onRestart,
 }: SessionRowProps) {
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   return (
     <div className="group flex items-center">
+      <span
+        role="img"
+        aria-label={`${session.name} ${session.status}`}
+        className={cn(
+          "ml-4 size-2 shrink-0 rounded-full",
+          session.status === "running"
+            ? "bg-emerald-500"
+            : "border border-muted-foreground",
+        )}
+      />
       <Button
         variant="ghost"
         size="sm"
         className={cn(
-          "min-w-0 flex-1 justify-start pl-6 font-normal",
+          "min-w-0 flex-1 justify-start font-normal",
           isOpen && "bg-accent",
           session.status === "stopped" && "text-muted-foreground",
         )}
@@ -62,6 +80,12 @@ export function SessionRow({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {session.status === "stopped" && (
+            <DropdownMenuItem onSelect={() => void onRestart()}>
+              <RotateCcwIcon />
+              Restart
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => setRenaming(true)}>
             <PencilIcon />
             Rename
