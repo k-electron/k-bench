@@ -100,6 +100,37 @@ test("Ctrl applies to the next key only, including keys typed on the keyboard", 
   await app.runMarker(terminal, "interrupted");
 });
 
+test("an armed Ctrl waits for the owner's next key through a reconnect", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+  await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+  await app.page.keyboard.type("sleep 300");
+  await app.page.keyboard.press("Enter");
+  const ctrl = app.extraKey("Ctrl");
+  await ctrl.tap();
+  await expect(ctrl).toHaveAttribute("aria-pressed", "true");
+
+  // On every attach tmux asks the terminal about itself, and the terminal answers on its
+  // own: the first thing the new socket sends is those answers, not anything the owner typed.
+  const reconnected = app.page.waitForEvent("websocket", (ws) =>
+    ws.url().includes("/terminal"),
+  );
+  await kbench.stopServer();
+  await kbench.startServer();
+  await (await reconnected).waitForEvent("framesent");
+
+  await expect(ctrl).toHaveAttribute("aria-pressed", "true");
+  await app.page.keyboard.type("c");
+  // The shell answers only once `sleep 300` has been interrupted.
+  await app.runMarker(terminal, "interrupted");
+});
+
 test("the phone's open Session survives a reload", async ({ app, kbench }) => {
   await app.openDrawer();
   await app.createWorkspace(kbench.instance.makeFolder("project"));

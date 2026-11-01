@@ -1,21 +1,59 @@
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { type IDisposable, type IEvent, Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
+import {
+  CLOSE_SESSION_ENDED,
+  type ClientMessage,
+  encodeClientMessage,
+  type TerminalSize,
+  terminalPath,
+} from "../../../src/shared/terminal-protocol.ts";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 
 const RETRY_FIRST_MS = 500;
 const RETRY_MAX_MS = 5000;
 
-/** The close code for an ended terminal (see `src/server/terminal.ts`); reconnecting is pointless after it. */
-const SESSION_ENDED = 4410;
-
 /** The terminal WebSocket URL for a Session at a given size. */
-function terminalUrl(sessionId: string, cols: number, rows: number): string {
-  const url = new URL(`/api/sessions/${sessionId}/terminal`, window.location.href);
+function terminalUrl(sessionId: string, size: TerminalSize): string {
+  const url = new URL(terminalPath(sessionId, size), window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.searchParams.set("cols", String(cols));
-  url.searchParams.set("rows", String(rows));
   return url.toString();
+}
+
+/**
+ * Calls `listener` with everything the terminal sends, and whether it sent it by itself
+ * (answers to tmux's queries) rather than for the owner's key, paste, click or extra key.
+ * xterm.js knows which, but says so only internally: its core fires `onUserInput` just
+ * before `onData` for the owner's input. Should an xterm.js upgrade move that, everything
+ * counts as the owner's (and the phone test of an armed Ctrl through a reconnect fails).
+ */
+function onTerminalInput(
+  terminal: Terminal,
+  listener: (data: string, automatic: boolean) => void,
+): IDisposable {
+  const internals = terminal as unknown as {
+    _core?: { coreService?: { onUserInput?: IEvent<void> } };
+  };
+  const onUserInput = internals._core?.coreService?.onUserInput;
+  if (!onUserInput) {
+    console.warn("xterm.js no longer reports user input; treating all input as typed");
+    return terminal.onData((data) => listener(data, false));
+  }
+  let fromOwner = false;
+  const owner = onUserInput(() => {
+    fromOwner = true;
+  });
+  const sent = terminal.onData((data) => {
+    const automatic = !fromOwner;
+    fromOwner = false;
+    listener(data, automatic);
+  });
+  return {
+    dispose: () => {
+      owner.dispose();
+      sent.dispose();
+    },
+  };
 }
 
 /** Decodes the payload of an OSC 52 clipboard write (`<targets>;<base64>`), or undefined. */
@@ -104,8 +142,8 @@ function swipeScrolls(
 
 /**
  * xterm.js attached to one Session over the terminal WebSocket. It fits its container and
- * reports every size change to the server. Output arrives as binary frames; input and
- * resizes go out as JSON (see `src/server/terminal.ts`). When the connection drops it
+ * reports every size change to the server, speaking `src/shared/terminal-protocol.ts`.
+ * When the connection drops it
  * reconnects by itself with backoff, and tmux redraws the screen on every attach.
  */
 export function TerminalView({
@@ -170,15 +208,17 @@ export function TerminalView({
     // Input typed while a socket is still connecting (a freshly opened Session) is kept,
     // not dropped, and sent once it opens.
     const queued: string[] = [];
-    const send = (message: object) => {
-      const text = JSON.stringify(message);
+    const send = (message: ClientMessage) => {
+      const text = encodeClientMessage(message);
       if (socket?.readyState === WebSocket.OPEN) socket.send(text);
       else if (socket?.readyState === WebSocket.CONNECTING) queued.push(text);
     };
 
     const connect = () => {
       clearTimeout(retry);
-      const ws = new WebSocket(terminalUrl(sessionId, terminal.cols, terminal.rows));
+      const ws = new WebSocket(
+        terminalUrl(sessionId, { cols: terminal.cols, rows: terminal.rows }),
+      );
       socket = ws;
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
@@ -192,7 +232,7 @@ export function TerminalView({
       };
       ws.onclose = (event) => {
         if (disposed || socket !== ws) return;
-        if (event.code === SESSION_ENDED) {
+        if (event.code === CLOSE_SESSION_ENDED) {
           ended.current?.();
           return;
         }
@@ -215,8 +255,13 @@ export function TerminalView({
     document.addEventListener("visibilitychange", retryNow);
     window.addEventListener("online", retryNow);
 
-    const input = terminal.onData((data) =>
-      send({ type: "input", data: applyArmedCtrl(data) }),
+    // An armed Ctrl is for the owner's next key, so the terminal's own answers pass it by.
+    const input = onTerminalInput(terminal, (data, automatic) =>
+      send(
+        automatic
+          ? { type: "input", data, automatic }
+          : { type: "input", data: applyArmedCtrl(data) },
+      ),
     );
     const resized = terminal.onResize(({ cols, rows }) =>
       send({ type: "resize", cols, rows }),

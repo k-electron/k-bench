@@ -78,12 +78,12 @@ export async function startServer(
         events.handleUpgrade(request, socket, head);
         return;
       }
-      const sessionId = TerminalSockets.match(request);
-      if (sessionId === undefined) {
+      const terminal = TerminalSockets.match(request);
+      if (terminal === undefined) {
         socket.destroy();
         return;
       }
-      terminals.handleUpgrade(request, socket, head, sessionId);
+      terminals.handleUpgrade(request, socket, head, terminal);
     }),
   );
   await new Promise<void>((resolve, reject) => {

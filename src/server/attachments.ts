@@ -19,10 +19,12 @@ export interface Viewer {
 /** One viewer's terminal on one Session. Every method is safe to call at any time. */
 export interface Attachment {
   /**
-   * Sends what the owner typed to the Session's shell, in order. Input sent before the tmux
-   * client is attached waits for it. After detach or the end it does nothing.
+   * Sends input to the Session's shell, in order. Input sent before the tmux client is
+   * attached waits for it. After detach or the end it does nothing.
+   * `automatic` input is what the viewer's terminal sent by itself (answers to tmux's
+   * queries), not what the owner typed, so it never takes the window's size.
    */
-  input(data: string): void;
+  input(data: string, options?: { automatic?: boolean }): void;
   /**
    * The viewer's size. Anything but whole numbers from 1 to 999 is ignored, so a caller can
    * pass on what a client sent without checking it.
@@ -49,13 +51,6 @@ const DEFAULT_SIZE: Size = { cols: 80, rows: 24 };
 const CLIENT_EXIT_TIMEOUT_MS = 3_000;
 /** How long a stop then waits for killed tmux clients to exit before giving up on them. */
 const CLIENT_KILL_TIMEOUT_MS = 1_000;
-
-/**
- * What a browser terminal sends by itself, not because the owner typed: answers to tmux's
- * device and cursor queries, and focus in/out.
- */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching terminal escape sequences
-const TERMINAL_REPORT = /^\x1b\[(?:[?>][\d;]*c|[IO]|\d+;\d+R)$/;
 
 /**
  * Where a terminal is in its life, and the one record of whether its tmux client is alive:
@@ -154,7 +149,7 @@ class Terminal implements Attachment {
   private size: Size;
   private client: TmuxClient | undefined;
   /** Input sent before the tmux client was attached, in order. */
-  private pendingInput: string[] = [];
+  private pendingInput: Array<{ data: string; automatic: boolean }> = [];
   /** Writes run one at a time, so waiting for tmux to resize never reorders input. */
   private writes: Promise<void> = Promise.resolve();
   private markGone!: () => void;
@@ -200,15 +195,20 @@ class Terminal implements Attachment {
       if (this.phase === "attached") this.end("session-ended");
       this.becomeGone();
     });
-    for (const data of this.pendingInput.splice(0)) this.input(data);
+    for (const { data, automatic } of this.pendingInput.splice(0)) {
+      this.input(data, { automatic });
+    }
   }
 
-  input(data: string): void {
+  input(data: string, { automatic = false }: { automatic?: boolean } = {}): void {
     if (data === "") return;
-    if (this.phase === "looking-up") this.pendingInput.push(data);
+    if (this.phase === "looking-up") this.pendingInput.push({ data, automatic });
     else if (this.phase === "attached") {
+      const write = automatic
+        ? () => this.write(data)
+        : () => this.writeSizedToTyper(data);
       // Nothing in a write throws; the catch keeps one that did from stopping all the rest.
-      this.writes = this.writes.then(() => this.writeSizedToTyper(data)).catch(() => {});
+      this.writes = this.writes.then(write).catch(() => {});
     }
   }
 
@@ -287,7 +287,7 @@ class Terminal implements Attachment {
    */
   private async writeSizedToTyper(data: string): Promise<void> {
     const { lastTyper, tmux } = this.context;
-    if (lastTyper.get(this.sessionId) === this || TERMINAL_REPORT.test(data)) {
+    if (lastTyper.get(this.sessionId) === this) {
       return this.write(data);
     }
     if (this.phase !== "attached") return;
