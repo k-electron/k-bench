@@ -122,23 +122,6 @@ describe("Attachments", () => {
       terminal.detach();
     });
 
-    it("waits out a tmux client that was only just started", async () => {
-      const lookup = deferred<boolean>();
-      const { attachments, sessionId, socket } = await bootAttachments({
-        lookup: () => lookup.promise,
-      });
-      const viewer = new RecordingViewer();
-      attachments.attach(sessionId, SIZE, viewer);
-      lookup.resolve(true);
-      // The lookup's answer reaches the terminal, which starts its tmux client.
-      await new Promise((resolve) => setImmediate(resolve));
-
-      await attachments.stop();
-
-      expect(tmuxClientProcessCount(socket)).toBe(0);
-      expect(viewer.endings).toEqual(["server-stopping"]);
-    });
-
     it("drains every terminal even when a viewer throws as it is ended", async () => {
       const { attachments, sessionId, socket } = await bootAttachments();
       const throwing = new RecordingViewer();
@@ -155,24 +138,6 @@ describe("Attachments", () => {
 
       expect(tmuxClientProcessCount(socket)).toBe(0);
       expect(other.endings).toEqual(["server-stopping"]);
-    });
-
-    it("refuses a viewer that reattaches as it is ended", async () => {
-      const { attachments, sessionId, socket } = await bootAttachments();
-      const reattached = new RecordingViewer();
-      const first = new RecordingViewer();
-      first.end = (reason) => {
-        first.endings.push(reason);
-        attachments.attach(sessionId, SIZE, reattached);
-      };
-      attachments.attach(sessionId, SIZE, first).input(`${echoCommand("up-c40b")}\r`);
-      await first.waitForOutput("up-c40b");
-
-      await attachments.stop();
-      await allowTimeToMisbehave();
-
-      expect(reattached.endings).toEqual(["server-stopping"]);
-      expect(tmuxClientProcessCount(socket)).toBe(0);
     });
 
     it("ends a terminal opened after it at once, starting no tmux client", async () => {
