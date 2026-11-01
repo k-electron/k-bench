@@ -40,9 +40,16 @@ export function App() {
           await refresh();
         }}
         onCreateSession={async (workspaceId) => {
-          const session = await api.createSession(workspaceId);
-          await refresh();
-          setOpenId(session.id);
+          setError(undefined);
+          try {
+            const session = await api.createSession(workspaceId);
+            await refresh();
+            setOpenId(session.id);
+          } catch (failure) {
+            if (!(failure instanceof ApiError)) throw failure;
+            setError(failure.message);
+            await refresh();
+          }
         }}
         onRenameSession={async (sessionId, name) => {
           await api.renameSession(sessionId, name);

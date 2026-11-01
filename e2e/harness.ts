@@ -93,6 +93,14 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
+  /** The notice on a Workspace that is Missing; absent when its folder exists. */
+  missingNotice(workspaceName: string): Locator {
+    return this.sidebar
+      .getByRole("listitem")
+      .filter({ has: this.page.getByRole("heading", { name: workspaceName, exact: true }) })
+      .getByRole("note");
+  }
+
   /** The Workspaces' names in sidebar order. */
   async workspaceNames(): Promise<string[]> {
     return this.sidebar.getByRole("heading").allTextContents();
