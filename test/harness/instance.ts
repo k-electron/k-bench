@@ -4,7 +4,11 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { InstanceConfig } from "../../src/server/config.ts";
-import { type RunningServer, startServer } from "../../src/server/server.ts";
+import {
+  type RunningServer,
+  type ServerOptions,
+  startServer,
+} from "../../src/server/server.ts";
 import { TerminalClient } from "./terminal.ts";
 
 export interface WorkspaceInfo {
@@ -109,8 +113,8 @@ export class TestInstance {
     };
   }
 
-  async start(): Promise<TestServer> {
-    const server = new TestServer(await startServer(this.config));
+  async start(options?: ServerOptions): Promise<TestServer> {
+    const server = new TestServer(await startServer(this.config, options));
     this.servers.push(server);
     return server;
   }

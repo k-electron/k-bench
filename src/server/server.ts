@@ -8,6 +8,11 @@ import { Store } from "./store.ts";
 import { TerminalSockets } from "./terminal.ts";
 import { TmuxDriver } from "./tmux.ts";
 
+export interface ServerOptions {
+  /** Folder holding the built front end to serve. Omit to serve the API only. */
+  webDir?: string;
+}
+
 export interface RunningServer {
   port: number;
   /** Stops listening and releases the database. tmux, and so every Session, is untouched. */
@@ -15,14 +20,17 @@ export interface RunningServer {
 }
 
 /** Boots a server for one instance config. Used by `main.ts` and by the test harness. */
-export async function startServer(config: InstanceConfig): Promise<RunningServer> {
+export async function startServer(
+  config: InstanceConfig,
+  options: ServerOptions = {},
+): Promise<RunningServer> {
   const store = new Store(config.dataDir);
   const tmux = new TmuxDriver(config.tmuxSocket);
   const service = new Service(store, tmux);
   const terminals = new TerminalSockets(service, tmux);
 
   const server = serve({
-    fetch: createApp(service).fetch,
+    fetch: createApp(service, { webDir: options.webDir }).fetch,
     port: config.port,
     hostname: "127.0.0.1",
   }) as Server;

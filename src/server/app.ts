@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { type Service, ServiceError } from "./service.ts";
+import { mountStatic } from "./static.ts";
 
 async function jsonBody(request: Request): Promise<Record<string, unknown>> {
   try {
@@ -15,7 +16,7 @@ function optionalString(value: unknown): string | undefined {
 }
 
 /** The JSON HTTP API. */
-export function createApp(service: Service): Hono {
+export function createApp(service: Service, options: { webDir?: string } = {}): Hono {
   const app = new Hono();
 
   app.onError((error, c) => {
@@ -48,6 +49,9 @@ export function createApp(service: Service): Hono {
     );
     return c.json(session, 201);
   });
+
+  // Last, so it only answers what the API did not.
+  if (options.webDir) mountStatic(app, options.webDir);
 
   return app;
 }
