@@ -54,6 +54,31 @@ describe("Terminal WebSocket", () => {
     await terminal.waitForOutput(/^31 97$/m);
   });
 
+  it("shrugs off nonsense resize messages and keeps serving everyone", async () => {
+    const { server, session } = await bootSession();
+    const bystander = await server.openTerminal(session.id);
+    const misbehaving = await server.openTerminal(session.id);
+
+    for (const [cols, rows] of [
+      [-1, 0],
+      [0, 0],
+      [-5, 24],
+      [1e9, 1e9],
+    ] as const) {
+      misbehaving.resize(cols, rows);
+    }
+    misbehaving.type("\r");
+    bystander.run(echoCommand("marker-b41e07"));
+
+    await bystander.waitForOutput("marker-b41e07");
+    // The server did not die: new connections still work, and so does the misbehaving one.
+    const fresh = await server.openTerminal(session.id);
+    fresh.run(echoCommand("marker-c92d18"));
+    await fresh.waitForOutput("marker-c92d18");
+    misbehaving.run(echoCommand("marker-d03a29"));
+    await misbehaving.waitForOutput("marker-d03a29");
+  });
+
   it("closes the socket with a distinct code for an unknown Session", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
