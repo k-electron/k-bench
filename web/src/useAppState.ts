@@ -19,6 +19,8 @@ const MAX_BACKOFF_MS = 10_000;
 export function useAppState(): {
   state: AppState | undefined;
   refresh: () => Promise<void>;
+  /** Shows the new Workspace order at once, then saves it (and re-reads the truth). */
+  reorderWorkspaces: (ids: string[]) => Promise<void>;
 } {
   const [state, setState] = useState<AppState>();
   // Bumped by every snapshot, so a slower HTTP fetch never overwrites a fresher snapshot.
@@ -29,6 +31,26 @@ export function useAppState(): {
     const fetched = await api.getState();
     if (snapshots.current === seen) setState(fetched);
   }, []);
+
+  const reorderWorkspaces = useCallback(
+    async (ids: string[]) => {
+      setState(
+        (current) =>
+          current && {
+            ...current,
+            workspaces: ids.flatMap(
+              (id) => current.workspaces.find((w) => w.id === id) ?? [],
+            ),
+          },
+      );
+      try {
+        await api.reorderWorkspaces(ids);
+      } finally {
+        await refresh();
+      }
+    },
+    [refresh],
+  );
 
   useEffect(() => {
     let socket: WebSocket | undefined;
@@ -69,5 +91,5 @@ export function useAppState(): {
     };
   }, [refresh]);
 
-  return { state, refresh };
+  return { state, refresh, reorderWorkspaces };
 }

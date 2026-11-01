@@ -71,6 +71,30 @@ export function createApp(
     return c.json(workspace, 201);
   });
 
+  // Declared before `/:id` routes so "order" is never taken for an id.
+  app.put("/api/workspaces/order", async (c) => {
+    const { ids } = await jsonBody(c.req.raw);
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "ids must be a list of Workspace ids");
+    }
+    service.reorderWorkspaces(ids);
+    return c.json({ ids });
+  });
+
+  app.patch("/api/workspaces/:id", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    const workspace = service.updateWorkspace(c.req.param("id"), {
+      name: optionalString(body.name),
+      folder: optionalString(body.folder),
+    });
+    return c.json(workspace);
+  });
+
+  app.delete("/api/workspaces/:id", async (c) => {
+    await service.deleteWorkspace(c.req.param("id"));
+    return c.body(null, 204);
+  });
+
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
     const session = await service.createSession(

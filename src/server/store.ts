@@ -89,6 +89,39 @@ export class Store {
     return { id, name: input.name, folder: input.folder, position: next.position };
   }
 
+  updateWorkspace(id: string, changes: { name?: string; folder?: string }): void {
+    if (changes.name !== undefined) {
+      this.db
+        .prepare("UPDATE workspaces SET name = ? WHERE id = ?")
+        .run(changes.name, id);
+    }
+    if (changes.folder !== undefined) {
+      this.db
+        .prepare("UPDATE workspaces SET folder = ? WHERE id = ?")
+        .run(changes.folder, id);
+    }
+  }
+
+  /** Sessions go with it (ON DELETE CASCADE). */
+  deleteWorkspace(id: string): void {
+    this.db.prepare("DELETE FROM workspaces WHERE id = ?").run(id);
+  }
+
+  /** Gives each Workspace the position of its index in `ids`, in one transaction. */
+  setWorkspaceOrder(ids: string[]): void {
+    const update = this.db.prepare("UPDATE workspaces SET position = ? WHERE id = ?");
+    this.db.exec("BEGIN");
+    try {
+      ids.forEach((id, index) => {
+        update.run(index, id);
+      });
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   listSessions(workspaceId: string): SessionRow[] {
     return this.db
       .prepare(

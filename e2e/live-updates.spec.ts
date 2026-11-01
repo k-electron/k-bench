@@ -51,9 +51,9 @@ test("deleting a Session on one device empties the Pane showing it on the other,
 
   await expect(otherDevice.terminal("session 2")).toBeHidden();
   await expect(otherDevice.session("session 2")).toBeHidden();
-  await expect(otherDevice.page.getByRole("status")).toContainText(
-    "This Session was deleted",
-  );
+  await expect(
+    otherDevice.page.getByRole("status", { name: "Pane notice" }),
+  ).toContainText("This Session was deleted");
   await expect(otherDevice.session("session 1")).toBeVisible();
 });
 

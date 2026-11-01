@@ -7,7 +7,7 @@ import { useAppState } from "./useAppState";
 
 /** The app shell: the sidebar beside the main view (a single Pane for now). */
 export function App() {
-  const { state, refresh } = useAppState();
+  const { state, refresh, reorderWorkspaces } = useAppState();
   const [openId, setOpenId] = useOpenSession();
 
   const [error, setError] = useState<string>();
@@ -36,6 +36,15 @@ export function App() {
         onOpen={setOpenId}
         onCreateWorkspace={async (input) => {
           await api.createWorkspace(input);
+          await refresh();
+        }}
+        onReorderWorkspaces={reorderWorkspaces}
+        onUpdateWorkspace={async (id, changes) => {
+          await api.updateWorkspace(id, changes);
+          await refresh();
+        }}
+        onDeleteWorkspace={async (id) => {
+          await api.deleteWorkspace(id);
           await refresh();
         }}
         onCreateSession={async (workspaceId) => {
@@ -73,7 +82,9 @@ export function App() {
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {notice ? (
-              <p role="status">{notice} Select another Session.</p>
+              <p role="status" aria-label="Pane notice">
+                {notice} Select another Session.
+              </p>
             ) : state?.workspaces.length === 0 ? (
               "Create a Workspace to get started."
             ) : (

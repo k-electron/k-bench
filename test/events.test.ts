@@ -142,6 +142,19 @@ describe("Terminal WebSocket close codes", () => {
     expect([await a.waitForClose(), await b.waitForClose()]).toEqual([4404, 4404]);
   });
 
+  it("closes an open terminal with the deleted code when its Workspace is deleted", async () => {
+    const { server, workspace, session } = await boot();
+    const terminal = await server.openTerminal(session.id);
+    await terminal.waitForOutput(/\S/);
+
+    const response = await server.request(`/api/workspaces/${workspace.id}`, {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(204);
+    expect(await terminal.waitForClose()).toBe(4404);
+  });
+
   it("closes an open terminal with the Stopped code when its shell exits", async () => {
     const { server, session } = await boot();
     const terminal = await server.openTerminal(session.id);
