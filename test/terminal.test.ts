@@ -79,6 +79,24 @@ describe("Terminal WebSocket", () => {
     await misbehaving.waitForOutput("marker-d03a29");
   });
 
+  it("sends nothing to the shell for an empty input message", async () => {
+    const { server, session } = await bootSession();
+    const first = await server.openTerminal(session.id, { cols: 120, rows: 30 });
+    const second = await server.openTerminal(session.id, { cols: 100, rows: 20 });
+    first.run(echoCommand("shell-up-6a1b"));
+    await first.waitForOutput("shell-up-6a1b");
+    // cat -v shows any control byte it receives, such as a stray NUL as ^@.
+    first.run("cat -v");
+    first.type("ready\r");
+    await first.waitForOutput(/^ready\r?\nready$/m);
+
+    second.type("");
+    second.type("after\r");
+
+    await second.waitForOutput(/^after$/m);
+    expect(second.output).not.toContain("^@");
+  });
+
   it("closes the socket with a distinct code for an unknown Session", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
