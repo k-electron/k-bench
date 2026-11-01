@@ -42,6 +42,7 @@ function isDirectory(path: string): boolean {
 export class Service {
   private readonly store: Store;
   private readonly tmux: TmuxDriver;
+  private sessionCreations: Promise<unknown> = Promise.resolve();
 
   constructor(store: Store, tmux: TmuxDriver) {
     this.store = store;
@@ -58,7 +59,19 @@ export class Service {
     return { id, name, folder };
   }
 
-  async createSession(workspaceId: string, requestedName?: string) {
+  /**
+   * One at a time: choosing the name and storing the Session are separated by starting
+   * the shell, so overlapping creations would otherwise pick the same default name.
+   */
+  createSession(workspaceId: string, requestedName?: string) {
+    const result = this.sessionCreations.then(() =>
+      this.createSessionNow(workspaceId, requestedName),
+    );
+    this.sessionCreations = result.catch(() => undefined);
+    return result;
+  }
+
+  private async createSessionNow(workspaceId: string, requestedName?: string) {
     const workspace = this.store.getWorkspace(workspaceId);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
     if (!isDirectory(workspace.folder)) {

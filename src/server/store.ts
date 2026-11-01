@@ -115,7 +115,7 @@ export class Store {
     this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
   }
 
-  addSession(input:{ id: string; workspaceId: string; name: string }): SessionRow {
+  addSession(input: { id: string; workspaceId: string; name: string }): SessionRow {
     this.db
       .prepare(
         "INSERT INTO sessions (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?)",

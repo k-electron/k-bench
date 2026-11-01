@@ -37,6 +37,25 @@ describe("Session names", () => {
     expect((await server.createSession(workspace.id)).name).toBe("session 1");
   });
 
+  it("gives Sessions created at the same moment different default names", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const workspace = await server.createWorkspace({
+      folder: instance.makeFolder("project"),
+    });
+
+    const sessions = await Promise.all(
+      [1, 2, 3, 4].map(() => server.createSession(workspace.id)),
+    );
+
+    expect(sessions.map((s) => s.name).sort()).toEqual([
+      "session 1",
+      "session 2",
+      "session 3",
+      "session 4",
+    ]);
+  });
+
   it("numbers Sessions per Workspace", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
