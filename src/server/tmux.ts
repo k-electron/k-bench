@@ -172,6 +172,11 @@ export class TmuxDriver {
       },
     );
     const typer = {};
+    let alive = true;
+    process.onExit(() => {
+      alive = false;
+      if (this.lastTyper.get(id) === typer) this.lastTyper.delete(id);
+    });
     let current = { ...size };
     let queue: Promise<void> = Promise.resolve();
     return {
@@ -189,7 +194,7 @@ export class TmuxDriver {
               id,
               typer,
               () => current,
-              (d) => process.write(d),
+              (d) => alive && process.write(d),
               data,
             ),
           )
@@ -197,11 +202,11 @@ export class TmuxDriver {
       },
       resize: (cols, rows) => {
         current = { cols, rows };
-        process.resize(cols, rows);
+        if (alive) process.resize(cols, rows);
       },
       detach: () => {
         if (this.lastTyper.get(id) === typer) this.lastTyper.delete(id);
-        process.kill();
+        if (alive) process.kill();
       },
     };
   }
