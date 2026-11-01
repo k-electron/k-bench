@@ -132,7 +132,7 @@ The events socket's 400ms poll runs `getState()` (one `tmux list-sessions`, a `s
 - `PUT /api/workspaces/order` `{ids}`: the full ordered list of Workspace ids (422 unless it is every Workspace exactly once).
 - `DELETE /api/workspaces/:id`: ends every Session's shell, then removes the Workspace (204). The folder on disk is never touched.
 - `PATCH /api/sessions/:id` `{name}` renames a Session (409 if the name is taken in its Workspace, 422 if empty); `DELETE /api/sessions/:id` ends its shell and removes it (204). Session names are unique per Workspace; created without a name, a Session gets "session N" with the next free N.
-- `GET /api/sessions/:id/terminal?cols=&rows=` (WebSocket): output arrives as binary frames; send JSON text frames `{"type":"input","data":"..."}` or `{"type":"resize","cols":120,"rows":30}`. Close code 4410 means the terminal has ended (the Session was deleted, or is Stopped); the client must not reconnect.
+- `GET /api/sessions/:id/terminal?cols=&rows=` (WebSocket): output arrives as binary frames; input and resizes go out as JSON text frames, and close code 4410 means the terminal has ended (the Session was deleted, or is Stopped), so the client must not reconnect. The protocol is defined once, in `src/shared/terminal-protocol.ts`, which the server, the browser and the tests all import. Input the terminal sends by itself (answers to tmux's queries) is marked `automatic`, so it never takes the window's size for its device.
 - `GET /api/events` (WebSocket): sends the full state (same shape as `GET /api/state`) as a JSON text frame on connect and again whenever it changes, whether from a request on any device or from something tmux-side such as a shell exiting. Clients send nothing.
 
 ## Access

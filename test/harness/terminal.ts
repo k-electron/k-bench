@@ -1,5 +1,11 @@
 import { expect } from "vitest";
 import { WebSocket } from "ws";
+import {
+  type ClientMessage,
+  encodeClientMessage,
+  type TerminalSize,
+  terminalPath,
+} from "../../src/shared/terminal-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
 const ANSI =
@@ -75,13 +81,12 @@ export class TerminalClient {
   static async open(
     baseUrl: string,
     sessionId: string,
-    size: { cols: number; rows: number } = { cols: 120, rows: 30 },
+    size: TerminalSize = { cols: 120, rows: 30 },
     headers: Record<string, string> = {},
   ): Promise<TerminalClient> {
-    const url = wsUrl(baseUrl, `/api/sessions/${sessionId}/terminal`);
-    url.searchParams.set("cols", String(size.cols));
-    url.searchParams.set("rows", String(size.rows));
-    const socket = new WebSocket(url, { headers });
+    const socket = new WebSocket(wsUrl(baseUrl, terminalPath(sessionId, size)), {
+      headers,
+    });
     const client = new TerminalClient(socket);
     await new Promise<void>((resolve, reject) => {
       socket.once("open", () => resolve());
@@ -101,7 +106,7 @@ export class TerminalClient {
 
   /** Types `text` into the terminal. Include "\r" to press Enter. */
   type(text: string): void {
-    this.socket.send(JSON.stringify({ type: "input", data: text }));
+    this.send({ type: "input", data: text });
   }
 
   /** Runs a command line: types it and presses Enter. */
@@ -110,7 +115,11 @@ export class TerminalClient {
   }
 
   resize(cols: number, rows: number): void {
-    this.socket.send(JSON.stringify({ type: "resize", cols, rows }));
+    this.send({ type: "resize", cols, rows });
+  }
+
+  private send(message: ClientMessage): void {
+    this.socket.send(encodeClientMessage(message));
   }
 
   /** Waits until the output contains `needle` (a string or a pattern). */
@@ -134,7 +143,8 @@ export class TerminalClient {
 
   /**
    * Waits for the server to end this terminal: its Session was deleted, or its shell exited.
-   * The literal is the wire contract the browser and the README depend on (4410 = ended).
+   * The literal, not the protocol's constant, is the wire contract the README promises
+   * (4410 = ended), so changing the constant fails here.
    */
   async waitForEnded(): Promise<void> {
     expect(await this.waitForClose()).toBe(4410);
