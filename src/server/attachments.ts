@@ -2,7 +2,7 @@ import type { Size, TmuxClient, TmuxDriver } from "./tmux.ts";
 
 /**
  * Why a terminal ended, told to its viewer:
- * - `session-ended`: the Session is unknown, not running, its shell exited, or it was deleted;
+ * - `session-ended`: the Session is unknown or Stopped, its shell exited, or it was deleted;
  * - `failed`: the tmux client could not be started;
  * - `server-stopping`: the server is stopping. The Session keeps running.
  */

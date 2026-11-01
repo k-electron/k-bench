@@ -71,6 +71,16 @@ export class TerminalSockets {
       }
     });
     ws.on("close", () => attachment.detach());
+    ws.on("error", () => ws.terminate());
+  }
+
+  /**
+   * Drops every terminal socket still open, including one that has ended and is waiting for
+   * its client to answer the close. Server stop calls it after `Attachments.stop`, so no
+   * socket outlives the server.
+   */
+  closeAll(): void {
+    for (const client of this.wss.clients) client.terminate();
   }
 }
 

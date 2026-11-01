@@ -87,6 +87,7 @@ export async function startServer(
       events.closeAll();
       // From here on no tmux client this server started is running or starting.
       await attachments.stop();
+      terminals.closeAll();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();

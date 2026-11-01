@@ -60,7 +60,7 @@ export interface TmuxClient {
   write(data: string): void;
   resize(cols: number, rows: number): void;
   /** Signals the client (SIGHUP by default, which detaches it). The Session keeps running. */
-  kill(signal?: string): void;
+  kill(signal?: NodeJS.Signals): void;
 }
 
 /**
