@@ -26,6 +26,13 @@ function serverConfiguration(): string[][] {
   ];
 }
 
+/**
+ * What a browser terminal sends by itself, not because the owner typed: answers to tmux's
+ * device and cursor queries, and focus in/out.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching terminal escape sequences
+const TERMINAL_REPORT = /^\x1b\[(?:[?>][\d;]*c|[IO]|\d+;\d+R)$/;
+
 export interface TerminalAttachment {
   /** Output bytes from the Session. */
   onData(listener: (data: Buffer) => void): void;
@@ -127,20 +134,24 @@ export class TmuxDriver {
     write: (data: string) => void,
     data: string,
   ): Promise<void> {
-    if (this.lastTyper.get(id) === typer) return write(data);
+    if (this.lastTyper.get(id) === typer || TERMINAL_REPORT.test(data))
+      return write(data);
     this.lastTyper.set(id, typer);
     const wanted = size();
     const same = (a: { cols: number; rows: number }) =>
       a.cols === wanted.cols && a.rows === wanted.rows;
     try {
       if (same(await this.windowSize(id))) return write(data);
-      const [first = "", ...rest] = data;
-      write(first);
+      // An escape sequence must not be cut, so it goes in whole.
+      const head = data.startsWith("\x1b")
+        ? data
+        : String.fromCodePoint(data.codePointAt(0) ?? 0);
+      write(head);
       for (let i = 0; i < 50; i++) {
         await new Promise((resolve) => setTimeout(resolve, 10));
         if (same(await this.windowSize(id))) break;
       }
-      if (rest.length > 0) write(rest.join(""));
+      if (data.length > head.length) write(data.slice(head.length));
     } catch {
       // The Session went away while we were waiting; the attachment's exit reports that.
       write(data);
@@ -174,7 +185,13 @@ export class TmuxDriver {
         // Serialised, so a wait for tmux to resize never reorders what the owner typed.
         queue = queue
           .then(() =>
-            this.writeSizedToTyper(id, typer, () => current, (d) => process.write(d), data),
+            this.writeSizedToTyper(
+              id,
+              typer,
+              () => current,
+              (d) => process.write(d),
+              data,
+            ),
           )
           .catch(() => {}); // the pty is gone; its exit is reported separately
       },
