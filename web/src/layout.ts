@@ -59,9 +59,9 @@ export function openInOtherPane(layout: Layout, id: string): Layout {
   return place({ ...layout, paneCount: 2 }, id, layout.focus === 0 ? 1 : 0);
 }
 
-/** Switches between one and two Panes. Going down to one keeps the Focused Pane's Session. */
-export function togglePaneCount(layout: Layout): Layout {
-  if (layout.paneCount === 1) return { ...layout, paneCount: 2 };
+/** Goes down to one Pane, keeping the Focused Pane's Session (the phone is always this). */
+export function onePane(layout: Layout): Layout {
+  if (layout.paneCount === 1) return layout;
   const [first, second] = layout.sessions;
   return {
     ...layout,
@@ -69,6 +69,12 @@ export function togglePaneCount(layout: Layout): Layout {
     focus: 0,
     sessions: layout.focus === 0 ? [first, second] : [second, first],
   };
+}
+
+/** Switches between one and two Panes. Going down to one keeps the Focused Pane's Session. */
+export function togglePaneCount(layout: Layout): Layout {
+  if (layout.paneCount === 1) return { ...layout, paneCount: 2 };
+  return onePane(layout);
 }
 
 /** Moves the focus to the other Pane (⌘\). With one Pane there is nothing to move to. */

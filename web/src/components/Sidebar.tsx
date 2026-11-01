@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { useState } from "react";
 import type { AppState, WorkspaceState } from "@/api";
+import { cn } from "@/lib/utils";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -40,6 +41,8 @@ interface SidebarProps {
   onRestartSession: (sessionId: string) => Promise<void>;
   /** Why the last action failed, if it did. */
   error?: string;
+  /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */
+  className?: string;
 }
 
 /** The tree of Workspaces and their Sessions. */
@@ -57,6 +60,7 @@ export function Sidebar({
   onDeleteSession,
   onRestartSession,
   error,
+  className,
 }: SidebarProps) {
   const [dialog, setDialog] = useState<{
     workspace: WorkspaceState;
@@ -82,7 +86,7 @@ export function Sidebar({
   return (
     <nav
       aria-label="Workspaces"
-      className="flex w-64 shrink-0 flex-col gap-2 border-r bg-card p-2"
+      className={cn("flex shrink-0 flex-col gap-2 border-r bg-card p-2", className)}
     >
       <NewWorkspaceDialog onCreate={onCreateWorkspace} />
       <DndContext

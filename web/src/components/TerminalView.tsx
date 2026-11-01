@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
+import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 
 /** Close codes the server uses (see `src/server/terminal.ts`). */
 const SESSION_DELETED = 4404;
@@ -42,6 +43,12 @@ export function TerminalView({
     if (focused) terminalRef.current?.focus();
   }, [focused]);
 
+  // The phone's extra keys go to the terminal in the Focused Pane, as if typed.
+  useEffect(() => {
+    if (!focused) return;
+    return registerTerminal((data) => terminalRef.current?.input(data, true));
+  }, [focused]);
+
   useEffect(() => {
     const element = container.current;
     if (!element) return;
@@ -59,8 +66,15 @@ export function TerminalView({
 
     const socket = new WebSocket(terminalUrl(sessionId, terminal.cols, terminal.rows));
     socket.binaryType = "arraybuffer";
+    // Input typed before the socket opens (a freshly opened Session) is kept, not dropped.
+    const queued: string[] = [];
     const send = (message: object) => {
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+      const text = JSON.stringify(message);
+      if (socket.readyState === WebSocket.OPEN) socket.send(text);
+      else if (socket.readyState === WebSocket.CONNECTING) queued.push(text);
+    };
+    socket.onopen = () => {
+      for (const text of queued.splice(0)) socket.send(text);
     };
     socket.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) terminal.write(new Uint8Array(event.data));
@@ -70,7 +84,9 @@ export function TerminalView({
         ended.current?.();
       }
     };
-    const input = terminal.onData((data) => send({ type: "input", data }));
+    const input = terminal.onData((data) =>
+      send({ type: "input", data: applyArmedCtrl(data) }),
+    );
     const resized = terminal.onResize(({ cols, rows }) =>
       send({ type: "resize", cols, rows }),
     );
