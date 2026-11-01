@@ -57,6 +57,8 @@ describe("Terminal WebSocket", () => {
   it("shrugs off nonsense resize messages and keeps serving everyone", async () => {
     const { server, session } = await bootSession();
     const bystander = await server.openTerminal(session.id);
+    bystander.run(echoCommand("marker-a17c52"));
+    await bystander.waitForOutput("marker-a17c52");
     const misbehaving = await server.openTerminal(session.id);
 
     for (const [cols, rows] of [

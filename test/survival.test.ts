@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTestInstance } from "./harness/instance.ts";
 import { echoCommand } from "./harness/terminal.ts";
 
@@ -29,5 +29,38 @@ describe("Survival across a server restart", () => {
     after.type("\x03");
     after.run(echoCommand("still-alive-5b7e"));
     await after.waitForOutput("still-alive-5b7e");
+  });
+});
+
+describe("Stopping the server", () => {
+  it("is quiet when requests and subscribers are still busy, so real errors stay visible", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const instance = createTestInstance();
+      const server = await instance.start();
+      const workspace = await server.createWorkspace({
+        folder: instance.makeFolder("project"),
+      });
+      await server.createSession(workspace.id);
+      const events = await server.openEvents();
+      await events.waitForSnapshot(() => true);
+
+      // Reads and mutations keep arriving, so some are mid-flight when the server stops.
+      const busy: Promise<unknown>[] = [];
+      const pump = setInterval(() => {
+        busy.push(server.request("/api/state").catch(() => undefined));
+        busy.push(server.createSession(workspace.id).catch(() => undefined));
+      }, 2);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await server.stop();
+      clearInterval(pump);
+      await Promise.all(busy);
+      // Give anything that outlived the stop (a poll tick, a late handler) time to log.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      expect(errors.mock.calls).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
