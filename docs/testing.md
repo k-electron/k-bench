@@ -2,7 +2,7 @@
 
 Tests here are outcome-based: they check what the owner, or a client of the server's API, can observe, rather than how the code produces it.
 
-- Go through the public seams: the server's HTTP/WebSocket API, or the UI in a real browser (Playwright). Use real tmux and real SQLite, isolated per test, rather than mocks of them.
+- Go through the public seams: the server's HTTP/WebSocket API, or the UI in a real browser (Playwright). The one exception is a terminal's life on a Session: races the WebSocket can't time, such as stopping while a terminal is still looking up its Session, are tested at the `Attachments` module's interface (`test/attachments.test.ts`), with real tmux and a Session lookup the test controls in place of the store. Use real tmux and real SQLite, isolated per test, rather than mocks of them.
 - Avoid change detectors. Asserting on SQL rows, tmux commands issued, internal function calls, component internals or markup snapshots ties a test to the implementation, not the behaviour.
 - Avoid tautologies. A test earns its place by being able to fail when the behaviour is wrong; one that recomputes the expected value with the code under test can't.
 - Wait for outcomes with the poll helper (`pollUntil`, or `waitForOutput` on a terminal), and find UI elements by role and accessible name (`getByRole`, `getByLabel`, `getByText`). Biome enforces both in `test/` and `e2e/`. When a sleep is genuinely the only option, such as proving that something does _not_ happen, put a `biome-ignore` comment on it giving the reason.
