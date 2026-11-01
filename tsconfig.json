@@ -14,5 +14,12 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "test", "vitest.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "e2e",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "vite.config.ts"
+  ]
 }
