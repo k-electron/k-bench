@@ -6,6 +6,7 @@
     "node": ">=26"
   },
   "scripts": {
+    "postinstall": "node scripts/fix-node-pty.mjs",
     "dev": "K_BENCH_INSTANCE=dev node --watch src/server/main.ts",
     "start": "node src/server/main.ts",
     "lint": "biome check .",

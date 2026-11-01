@@ -122,21 +122,35 @@ export class TestInstance {
     return folder;
   }
 
+  /** Kills this instance's tmux server and removes the socket file tmux leaves behind. */
+  private killTmux(): void {
+    const tmux = (...args: string[]) =>
+      execFileSync("tmux", ["-L", this.config.tmuxSocket, ...args], {
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .toString()
+        .trim();
+    try {
+      const socketPath = tmux("display-message", "-p", "#{socket_path}");
+      tmux("kill-server");
+      rmSync(socketPath, { force: true });
+    } catch {
+      // No tmux server on this socket: nothing to kill.
+    }
+  }
+
   /** Stops servers, kills this instance's tmux server and removes its data. */
   async dispose(): Promise<void> {
-    for (const server of this.servers) await server.stop();
     // Never touch the Installed or Dev instance's tmux server.
     if (!this.config.tmuxSocket.startsWith("kb-test-")) {
       throw new Error(`refusing to kill tmux socket ${this.config.tmuxSocket}`);
     }
     try {
-      execFileSync("tmux", ["-L", this.config.tmuxSocket, "kill-server"], {
-        stdio: "ignore",
-      });
-    } catch {
-      // No tmux server on this socket: nothing to kill.
+      for (const server of this.servers) await server.stop();
+    } finally {
+      this.killTmux();
+      rmSync(this.root, { recursive: true, force: true });
     }
-    rmSync(this.root, { recursive: true, force: true });
   }
 }
 

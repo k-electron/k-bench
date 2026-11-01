@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import type { Service } from "./service.ts";
-import type { TmuxDriver } from "./tmux.ts";
+import type { TerminalAttachment, TmuxDriver } from "./tmux.ts";
 
 /** Close codes the client uses to decide whether to reconnect. */
 export const CLOSE_SESSION_DELETED = 4404;
@@ -59,17 +59,9 @@ export class TerminalSockets {
     sessionId: string,
     size: { cols: number; rows: number },
   ): Promise<void> {
-    const target = await this.service.terminalTarget(sessionId);
-    if (target === "unknown") return ws.close(CLOSE_SESSION_DELETED, "Session deleted");
-    if (target === "stopped") return ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
-
-    const attachment = this.tmux.attach(sessionId, size);
-    attachment.onData((data) => {
-      if (ws.readyState === ws.OPEN) ws.send(data);
-    });
-    attachment.onExit(() => {
-      if (ws.readyState === ws.OPEN) ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
-    });
+    // Listeners go on before any await: a client may type the moment its socket opens,
+    // and those messages must wait for the attachment instead of being dropped.
+    const attached = this.attach(ws, sessionId, size);
     ws.on("message", (raw: RawData) => {
       let message: { type?: string; data?: unknown; cols?: unknown; rows?: unknown };
       try {
@@ -77,17 +69,46 @@ export class TerminalSockets {
       } catch {
         return;
       }
-      if (message.type === "input" && typeof message.data === "string") {
-        attachment.write(message.data);
-      } else if (
-        message.type === "resize" &&
-        Number.isInteger(message.cols) &&
-        Number.isInteger(message.rows)
-      ) {
-        attachment.resize(message.cols as number, message.rows as number);
-      }
+      void attached.then((attachment) => {
+        if (!attachment) return;
+        if (message.type === "input" && typeof message.data === "string") {
+          attachment.write(message.data);
+        } else if (
+          message.type === "resize" &&
+          Number.isInteger(message.cols) &&
+          Number.isInteger(message.rows)
+        ) {
+          attachment.resize(message.cols as number, message.rows as number);
+        }
+      });
     });
-    ws.on("close", () => attachment.detach());
+    ws.on("close", () => {
+      void attached.then((attachment) => attachment?.detach());
+    });
+  }
+
+  private async attach(
+    ws: WebSocket,
+    sessionId: string,
+    size: { cols: number; rows: number },
+  ): Promise<TerminalAttachment | undefined> {
+    const target = await this.service.terminalTarget(sessionId);
+    if (target === "unknown") {
+      ws.close(CLOSE_SESSION_DELETED, "Session deleted");
+      return undefined;
+    }
+    if (target === "stopped") {
+      ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
+      return undefined;
+    }
+    const attachment = this.tmux.attach(sessionId, size);
+    attachment.onData((data) => {
+      if (ws.readyState === ws.OPEN) ws.send(data);
+    });
+    attachment.onExit(() => {
+      if (ws.readyState === ws.OPEN) ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
+    });
+    return attachment;
   }
 
   /** Closes every open terminal; attached tmux clients detach and Sessions keep running. */

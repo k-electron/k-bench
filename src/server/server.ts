@@ -39,15 +39,18 @@ export async function startServer(config: InstanceConfig): Promise<RunningServer
     server.once("error", reject);
   });
 
-  return {
-    port: (server.address() as AddressInfo).port,
-    stop: async () => {
+  let stopping: Promise<void> | undefined;
+  const stop = () => {
+    stopping ??= (async () => {
       terminals.closeAll();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
       });
       store.close();
-    },
+    })();
+    return stopping;
   };
+
+  return { port: (server.address() as AddressInfo).port, stop };
 }
