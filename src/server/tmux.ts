@@ -45,28 +45,24 @@ function serverConfiguration(): string[][] {
   ];
 }
 
-/**
- * What a browser terminal sends by itself, not because the owner typed: answers to tmux's
- * device and cursor queries, and focus in/out.
- */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching terminal escape sequences
-const TERMINAL_REPORT = /^\x1b\[(?:[?>][\d;]*c|[IO]|\d+;\d+R)$/;
-
-export interface TerminalAttachment {
+/** A tmux client attached to one Session under a pty: a bare handle with no state. */
+export interface TmuxClient {
   /** Output bytes from the Session. */
   onData(listener: (data: Buffer) => void): void;
+  /** The client exited: it detached, or the Session's shell ended. */
   onExit(listener: () => void): void;
   write(data: string): void;
   resize(cols: number, rows: number): void;
-  /** Detaches this client. The Session itself keeps running. */
-  detach(): void;
+  /** Signals the client (SIGHUP by default, which detaches it). The Session keeps running. */
+  kill(signal?: string): void;
 }
 
-/** Hides every tmux command line behind Session-shaped operations. */
+/**
+ * Hides every tmux command line behind Session-shaped operations. It holds no state of its
+ * own: everything it knows about a Session it asks tmux (ADR-0002).
+ */
 export class TmuxDriver {
   private readonly socket: string;
-  /** Per Session, the attachment whose input tmux last sized the window for. */
-  private readonly lastTyper = new Map<string, object>();
 
   constructor(socket: string) {
     this.socket = socket;
@@ -144,7 +140,7 @@ export class TmuxDriver {
   }
 
   /** The size of the Session's window, which is what its shell sees. */
-  private async windowSize(id: string): Promise<{ cols: number; rows: number }> {
+  async windowSize(id: string): Promise<{ cols: number; rows: number }> {
     const out = await this.run([
       "display-message",
       "-p",
@@ -156,47 +152,9 @@ export class TmuxDriver {
     return { cols: cols ?? 0, rows: rows ?? 0 };
   }
 
-  /**
-   * With `window-size latest` tmux resizes the window to the client that last sent a key,
-   * but only after it has read that key, and the shell can read the same key first. So when
-   * a different client starts typing, its first character goes in alone and the rest waits
-   * until the window has taken that client's size.
-   */
-  private async writeSizedToTyper(
-    id: string,
-    typer: object,
-    size: () => { cols: number; rows: number },
-    write: (data: string) => void,
-    data: string,
-  ): Promise<void> {
-    if (data === "") return;
-    if (this.lastTyper.get(id) === typer || TERMINAL_REPORT.test(data))
-      return write(data);
-    this.lastTyper.set(id, typer);
-    const wanted = size();
-    const same = (a: { cols: number; rows: number }) =>
-      a.cols === wanted.cols && a.rows === wanted.rows;
-    try {
-      if (same(await this.windowSize(id))) return write(data);
-      // An escape sequence must not be cut, so it goes in whole.
-      const head = data.startsWith("\x1b")
-        ? data
-        : String.fromCodePoint(data.codePointAt(0) ?? 0);
-      write(head);
-      for (let i = 0; i < 50; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        if (same(await this.windowSize(id))) break;
-      }
-      if (data.length > head.length) write(data.slice(head.length));
-    } catch {
-      // The Session went away while we were waiting; the attachment's exit reports that.
-      write(data);
-    }
-  }
-
-  /** Attaches a pty client to the Session; tmux redraws the full current screen. */
-  attach(id: string, size: { cols: number; rows: number }): TerminalAttachment {
-    const process = pty.spawn(
+  /** Starts a tmux client attached to the Session under a pty; tmux redraws the full screen. */
+  spawnClient(id: string, size: { cols: number; rows: number }): TmuxClient {
+    const client = pty.spawn(
       "tmux",
       [...this.baseArgs(), "attach-session", "-t", `=${PREFIX}${id}`],
       {
@@ -207,44 +165,16 @@ export class TmuxDriver {
         encoding: null,
       },
     );
-    const typer = {};
-    let alive = true;
-    process.onExit(() => {
-      alive = false;
-      if (this.lastTyper.get(id) === typer) this.lastTyper.delete(id);
-    });
-    let current = { ...size };
-    let queue: Promise<void> = Promise.resolve();
     return {
       onData: (listener) => {
-        process.onData((data) => listener(Buffer.from(data as unknown as Uint8Array)));
+        client.onData((data) => listener(Buffer.from(data as unknown as Uint8Array)));
       },
       onExit: (listener) => {
-        process.onExit(() => listener());
+        client.onExit(() => listener());
       },
-      write: (data) => {
-        // Serialised, so a wait for tmux to resize never reorders what the owner typed.
-        queue = queue
-          .then(() =>
-            this.writeSizedToTyper(
-              id,
-              typer,
-              () => current,
-              (d) => alive && process.write(d),
-              data,
-            ),
-          )
-          .catch(() => {}); // the pty is gone; its exit is reported separately
-      },
-      resize: (cols, rows) => {
-        current = { cols, rows };
-        if (alive) process.resize(cols, rows);
-      },
-      detach: () => {
-        if (this.lastTyper.get(id) === typer) this.lastTyper.delete(id);
-        if (alive) process.kill();
-        alive = false;
-      },
+      write: (data) => client.write(data),
+      resize: (cols, rows) => client.resize(cols, rows),
+      kill: (signal) => client.kill(signal),
     };
   }
 }

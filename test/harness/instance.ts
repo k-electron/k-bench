@@ -192,7 +192,8 @@ export class TestServer {
 export class TestInstance {
   readonly config: InstanceConfig;
   readonly root: string;
-  private readonly servers: TestServer[] = [];
+  /** Servers and modules this instance stops when it is disposed. */
+  private readonly toStop: Array<{ stop(): Promise<void> }> = [];
 
   constructor(overrides: Partial<InstanceConfig> = {}) {
     this.root = realpathSync(mkdtempSync(join(tmpdir(), "kb-test-")));
@@ -211,8 +212,13 @@ export class TestInstance {
       await startServer(this.config, options),
       this.config.allowedLogin,
     );
-    this.servers.push(server);
+    this.toStop.push(server);
     return server;
+  }
+
+  /** Has `dispose` stop `module` too, for tests that drive a server module directly. */
+  stopOnDispose(module: { stop(): Promise<void> }): void {
+    this.toStop.push(module);
   }
 
   /** A fresh folder (real path) that Workspaces can point at. */
@@ -243,7 +249,7 @@ export class TestInstance {
       throw new Error(`refusing to kill tmux socket ${this.config.tmuxSocket}`);
     }
     try {
-      for (const server of this.servers) await server.stop();
+      for (const module of this.toStop) await module.stop();
     } finally {
       this.killTmux();
       rmSync(this.root, { recursive: true, force: true });

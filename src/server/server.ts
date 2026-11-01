@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { AccessGuard } from "./access-guard.ts";
 import { createApp } from "./app.ts";
+import { Attachments } from "./attachments.ts";
 import type { InstanceConfig } from "./config.ts";
 import { EventSockets } from "./events.ts";
 import { Service } from "./service.ts";
@@ -32,7 +33,8 @@ export async function startServer(
   const service = new Service(store, tmux);
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();
-  const terminals = new TerminalSockets(service, tmux);
+  const attachments = new Attachments(tmux, service);
+  const terminals = new TerminalSockets(attachments);
   const feed = new StateFeed(() => service.getState());
   const events = new EventSockets(feed);
 
@@ -83,7 +85,8 @@ export async function startServer(
   const stop = () => {
     stopping ??= (async () => {
       events.closeAll();
-      await terminals.closeAll();
+      // From here on no tmux client this server started is running or starting.
+      await attachments.stop();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();

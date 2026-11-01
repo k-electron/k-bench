@@ -59,3 +59,21 @@ export function tmuxSessionNames(socket: string): string[] {
     return [];
   }
 }
+
+/**
+ * How many tmux client processes for the socket are running, attached or still connecting.
+ * This counts a client tmux has already let go of but that has not exited yet, too.
+ */
+export function tmuxClientProcessCount(socket: string): number {
+  if (!socket.startsWith("kb-test-")) {
+    throw new Error(`refusing to look at tmux socket ${socket}`);
+  }
+  try {
+    return execFileSync("pgrep", ["-f", "--", `-L ${socket} attach-session`])
+      .toString()
+      .split("\n")
+      .filter(Boolean).length;
+  } catch {
+    return 0; // pgrep exits 1 when nothing matches
+  }
+}
