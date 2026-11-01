@@ -114,6 +114,12 @@ describe("Access guard", () => {
     expect((refused as UpgradeRefused).status).toBe(403);
   });
 
+  it("opens the events socket for the configured login", async () => {
+    const { server } = await bootSession();
+
+    expect(await server.upgradeStatus("/api/events")).toBe(101);
+  });
+
   it("refuses wrong or missing logins on any WebSocket upgrade path, such as the events socket", async () => {
     const { server } = await bootSession();
 

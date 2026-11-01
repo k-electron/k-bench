@@ -142,6 +142,16 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
+  /** The notice on a Workspace that is Missing; absent when its folder exists. */
+  missingNotice(workspaceName: string): Locator {
+    return this.sidebar
+      .getByRole("listitem")
+      .filter({
+        has: this.page.getByRole("heading", { name: workspaceName, exact: true }),
+      })
+      .getByRole("note");
+  }
+
   /** The Workspaces' names in sidebar order. */
   async workspaceNames(): Promise<string[]> {
     return this.sidebar.getByRole("heading").allTextContents();
@@ -241,6 +251,8 @@ interface Fixtures {
   kbench: Kbench;
   /** The app, already open in the page. */
   app: AppPage;
+  /** The app open in a second browser context: another device of the same owner. */
+  otherDevice: AppPage;
 }
 
 export const test = base.extend<Fixtures>({
@@ -265,6 +277,18 @@ export const test = base.extend<Fixtures>({
   app: async ({ page, kbench }, use) => {
     await page.goto(kbench.url);
     await use(new AppPage(page));
+  },
+  otherDevice: async ({ browser, kbench }, use) => {
+    const context = await browser.newContext({
+      extraHTTPHeaders: { "Tailscale-User-Login": LOGIN },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(kbench.url);
+      await use(new AppPage(page));
+    } finally {
+      await context.close();
+    }
   },
 });
 
