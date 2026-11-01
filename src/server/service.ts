@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { availableName } from "./naming.ts";
 import type { Store } from "./store.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
 /** A failure the HTTP layer maps to a status code. */
 export class ServiceError extends Error {
-  readonly kind: "not_found" | "invalid" | "conflict";
+  readonly kind: "not_found" | "conflict" | "invalid";
 
-  constructor(kind: "not_found" | "invalid" | "conflict", message: string) {
+  constructor(kind: "not_found" | "conflict" | "invalid", message: string) {
     super(message);
     this.kind = kind;
   }
@@ -54,9 +55,27 @@ export class Service {
     if (!isDirectory(folder)) {
       throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
     }
-    const name = input.name?.trim() || basename(folder);
+    const explicit = input.name?.trim();
+    if (explicit) this.assertWorkspaceNameFree(explicit);
+    const name = explicit || availableName(basename(folder), this.workspaceNames());
     const { id } = this.store.addWorkspace({ name, folder });
     return { id, name, folder };
+  }
+
+  private workspaceNames(exceptId?: string): Set<string> {
+    return new Set(
+      this.store
+        .listWorkspaces()
+        .filter((w) => w.id !== exceptId)
+        .map((w) => w.name),
+    );
+  }
+
+  /** Workspace names are unique. Renaming reuses this, passing the Workspace being renamed. */
+  private assertWorkspaceNameFree(name: string, exceptId?: string): void {
+    if (this.workspaceNames(exceptId).has(name)) {
+      throw new ServiceError("conflict", `A Workspace named "${name}" already exists`);
+    }
   }
 
   /**
