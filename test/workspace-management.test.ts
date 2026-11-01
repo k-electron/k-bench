@@ -215,7 +215,7 @@ describe("Deleting a Workspace", () => {
       { id: other.id, sessions: [{ id: otherSession.id, status: "running" }] },
     ]);
     const reopened = await server.openTerminal(session.id);
-    expect(await reopened.waitForClose()).toBe(4404);
+    await reopened.waitForEnded();
     expect(existsSync(join(folder, "keep-me.txt"))).toBe(true);
   });
 

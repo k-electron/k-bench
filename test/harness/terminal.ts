@@ -1,3 +1,4 @@
+import { expect } from "vitest";
 import { WebSocket } from "ws";
 import { pollUntil } from "./poll.ts";
 
@@ -129,6 +130,14 @@ export class TerminalClient {
 
   async waitForClose(): Promise<number> {
     return pollUntil(() => this.closeCode, { description: "terminal socket to close" });
+  }
+
+  /**
+   * Waits for the server to end this terminal: its Session was deleted, or its shell exited.
+   * The literal is the wire contract the browser and the README depend on (4410 = ended).
+   */
+  async waitForEnded(): Promise<void> {
+    expect(await this.waitForClose()).toBe(4410);
   }
 
   close(): void {
