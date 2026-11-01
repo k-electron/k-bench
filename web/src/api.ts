@@ -42,4 +42,6 @@ export const api = {
     post<{ id: string; name: string }>(`/api/workspaces/${workspaceId}/sessions`, {
       name,
     }),
+  restartSession: (sessionId: string) =>
+    post<{ id: string; name: string }>(`/api/sessions/${sessionId}/restart`, {}),
 };

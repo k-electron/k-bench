@@ -1,4 +1,4 @@
-import { FolderIcon, PlusIcon, TerminalIcon } from "lucide-react";
+import { FolderIcon, PlusIcon, RotateCcwIcon, TerminalIcon } from "lucide-react";
 import type { AppState } from "@/api";
 import { cn } from "@/lib/utils";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -10,6 +10,9 @@ interface SidebarProps {
   onOpen: (sessionId: string) => void;
   onCreateWorkspace: (folder: string) => Promise<void>;
   onCreateSession: (workspaceId: string) => Promise<void>;
+  onRestart: (sessionId: string) => Promise<void>;
+  /** Why the last action failed, if it did. */
+  error?: string;
 }
 
 /** The tree of Workspaces and their Sessions. */
@@ -19,6 +22,8 @@ export function Sidebar({
   onOpen,
   onCreateWorkspace,
   onCreateSession,
+  onRestart,
+  error,
 }: SidebarProps) {
   return (
     <nav
@@ -45,12 +50,22 @@ export function Sidebar({
             </div>
             <ul>
               {workspace.sessions.map((session) => (
-                <li key={session.id}>
+                <li key={session.id} className="flex items-center gap-1 pl-4">
+                  <span
+                    role="img"
+                    aria-label={`${session.name} ${session.status}`}
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      session.status === "running"
+                        ? "bg-emerald-500"
+                        : "border border-muted-foreground",
+                    )}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
                     className={cn(
-                      "w-full justify-start pl-6 font-normal",
+                      "min-w-0 flex-1 justify-start font-normal",
                       session.id === openId && "bg-accent",
                       session.status === "stopped" && "text-muted-foreground",
                     )}
@@ -58,14 +73,29 @@ export function Sidebar({
                     onClick={() => onOpen(session.id)}
                   >
                     <TerminalIcon />
-                    {session.name}
+                    <span className="truncate">{session.name}</span>
                   </Button>
+                  {session.status === "stopped" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Restart ${session.name}`}
+                      onClick={() => void onRestart(session.id)}
+                    >
+                      <RotateCcwIcon />
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
           </li>
         ))}
       </ul>
+      {error && (
+        <p role="alert" className="px-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </nav>
   );
 }

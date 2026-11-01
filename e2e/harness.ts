@@ -35,6 +35,18 @@ export class AppPage {
     });
   }
 
+  /** The running/Stopped indicator beside a Session in the sidebar. */
+  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+  }
+
+  /** Clicks Restart on a Stopped Session's row. */
+  async restartSession(name: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Restart ${name}`, exact: true })
+      .click();
+  }
+
   private sizeProbes = 0;
 
   /**

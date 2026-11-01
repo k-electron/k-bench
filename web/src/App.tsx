@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Pane } from "@/components/Pane";
 import { Sidebar } from "@/components/Sidebar";
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import { useOpenSession } from "./layout";
 import { useAppState } from "./useAppState";
 
@@ -9,6 +9,8 @@ import { useAppState } from "./useAppState";
 export function App() {
   const { state, refresh } = useAppState();
   const [openId, setOpenId] = useOpenSession();
+
+  const [error, setError] = useState<string>();
 
   const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
   const openSession = sessions.find((s) => s.id === openId);
@@ -33,10 +35,25 @@ export function App() {
           await refresh();
           setOpenId(session.id);
         }}
+        onRestart={async (sessionId) => {
+          setError(undefined);
+          try {
+            await api.restartSession(sessionId);
+          } catch (failure) {
+            if (!(failure instanceof ApiError)) throw failure;
+            setError(failure.message);
+          }
+          await refresh();
+        }}
+        error={error}
       />
       <main className="min-w-0 flex-1">
         {openSession ? (
-          <Pane key={openSession.id} session={openSession} />
+          <Pane
+            key={openSession.id}
+            session={openSession}
+            onEnded={() => void refresh()}
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {state?.workspaces.length === 0
