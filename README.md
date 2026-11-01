@@ -40,7 +40,8 @@ Playwright needs its browser once: `pnpm exec playwright install chromium`.
 ## API (so far)
 
 - `GET /api/state`: Workspaces with their Sessions (`running` or `stopped`).
-- `POST /api/workspaces` `{folder, name?}` and `POST /api/workspaces/:id/sessions` `{name?}`.
+- `GET /api/directories?path=`: the subfolders of `path` (default: the configured picker root) for the folder picker; 422 if the path is not an existing absolute folder.
+- `POST /api/workspaces` `{folder, name?}`: the name defaults to the folder name, with a "(2)"-style suffix when taken; an explicit name that is taken gets 409, a missing folder 422. And `POST /api/workspaces/:id/sessions` `{name?}`.
 - `GET /api/sessions/:id/terminal?cols=&rows=` (WebSocket): output arrives as binary frames; send JSON text frames `{"type":"input","data":"..."}` or `{"type":"resize","cols":120,"rows":30}`. Close code 4404 means the Session no longer exists, 4410 that it is Stopped.
 
 ## Access
