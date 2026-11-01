@@ -9,6 +9,8 @@ interface PaneAreaProps {
   sessions: SessionState[];
   /** Shown in an empty Pane. */
   emptyMessage: string;
+  /** Why a Pane is empty, when it is: for instance that its Session was deleted. */
+  notices: [string | null, string | null];
   onFocus: (pane: 0 | 1) => void;
   onResize: (ratio: number) => void;
   /** A Pane's terminal closed because its Session was deleted or its shell ended. */
@@ -20,6 +22,7 @@ export function PaneArea({
   layout,
   sessions,
   emptyMessage,
+  notices,
   onFocus,
   onResize,
   onEnded,
@@ -47,7 +50,13 @@ export function PaneArea({
           <Pane key={session.id} session={session} focused={focused} onEnded={onEnded} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {emptyMessage}
+            {notices[index] ? (
+              <p role="status" aria-label="Pane notice">
+                {notices[index]} {emptyMessage}
+              </p>
+            ) : (
+              emptyMessage
+            )}
           </div>
         )}
       </div>

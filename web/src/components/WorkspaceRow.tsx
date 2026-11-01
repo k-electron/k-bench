@@ -8,6 +8,7 @@ import {
   PencilIcon,
   PlusIcon,
   Trash2Icon,
+  TriangleAlertIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { WorkspaceState } from "@/api";
@@ -102,6 +103,18 @@ export function WorkspaceRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {workspace.missing && (
+        <p
+          role="note"
+          className="mx-2 mb-1 flex items-start gap-1.5 rounded bg-destructive/10 px-2 py-1 text-xs text-destructive"
+        >
+          <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Missing: its folder is gone from the Host, so Sessions can't start. Running
+            Sessions carry on. Change the folder to fix it.
+          </span>
+        </p>
+      )}
       {children}
     </li>
   );

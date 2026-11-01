@@ -26,6 +26,8 @@ export interface WorkspaceState {
   name: string;
   folder: string;
   position: number;
+  /** The folder no longer exists on the Host. */
+  missing: boolean;
   sessions: SessionState[];
 }
 export interface State {
@@ -47,6 +49,8 @@ export class Service {
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
+  /** Sessions being deleted: gone as far as terminals are concerned, before the row is. */
+  private readonly ending = new Set<string>();
 
   constructor(store: Store, tmux: TmuxDriver) {
     this.store = store;
@@ -106,10 +110,15 @@ export class Service {
   async deleteWorkspace(id: string): Promise<void> {
     if (!this.store.getWorkspace(id))
       throw new ServiceError("not_found", "Unknown Workspace");
-    for (const session of this.store.listSessions(id)) {
-      await this.tmux.killSession(session.id);
+    const ids = this.store.listSessions(id).map((session) => session.id);
+    // Killing the shells closes their terminals; they must see "deleted", not "Stopped".
+    for (const sessionId of ids) this.ending.add(sessionId);
+    try {
+      for (const sessionId of ids) await this.tmux.killSession(sessionId);
+      this.store.deleteWorkspace(id);
+    } finally {
+      for (const sessionId of ids) this.ending.delete(sessionId);
     }
-    this.store.deleteWorkspace(id);
   }
 
   private workspaceNames(exceptId?: string): Set<string> {
@@ -188,8 +197,14 @@ export class Service {
     if (!this.store.getSession(sessionId)) {
       throw new ServiceError("not_found", "Unknown Session");
     }
-    await this.tmux.killSession(sessionId);
-    this.store.deleteSession(sessionId);
+    // Killing the shell closes its terminals; they must see "deleted", not "Stopped".
+    this.ending.add(sessionId);
+    try {
+      await this.tmux.killSession(sessionId);
+      this.store.deleteSession(sessionId);
+    } finally {
+      this.ending.delete(sessionId);
+    }
   }
 
   async getState(): Promise<State> {
@@ -197,6 +212,7 @@ export class Service {
     return {
       workspaces: this.store.listWorkspaces().map((workspace) => ({
         ...workspace,
+        missing: !isDirectory(workspace.folder),
         sessions: this.store.listSessions(workspace.id).map((session) => ({
           id: session.id,
           name: session.name,
@@ -235,7 +251,7 @@ export class Service {
 
   /** What the terminal WebSocket needs to know before attaching. */
   async terminalTarget(sessionId: string): Promise<"unknown" | "stopped" | "running"> {
-    if (!this.store.getSession(sessionId)) return "unknown";
+    if (this.ending.has(sessionId) || !this.store.getSession(sessionId)) return "unknown";
     const live = await this.tmux.listSessions();
     return live.includes(sessionId) ? "running" : "stopped";
   }
