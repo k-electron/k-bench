@@ -35,6 +35,37 @@ export class AppPage {
     });
   }
 
+  /** One of the (at most two) side-by-side slots in the main view; `n` is 1 or 2. */
+  pane(n: 1 | 2): Locator {
+    return this.page.getByRole("group", { name: `Pane ${n}`, exact: true });
+  }
+
+  /** The toggle between one and two Panes. */
+  get panesToggle(): Locator {
+    return this.page.getByRole("button", { name: "Two panes", exact: true });
+  }
+
+  /** Switches the main view to two Panes if it is not already. */
+  async showTwoPanes(): Promise<void> {
+    if ((await this.panesToggle.getAttribute("aria-pressed")) !== "true") {
+      await this.panesToggle.click();
+    }
+    await expect(this.pane(2)).toBeVisible();
+  }
+
+  /** The draggable divider between the two Panes. */
+  get divider(): Locator {
+    return this.page.getByRole("separator", { name: "Resize panes" });
+  }
+
+  /** Opens a Session's row menu and picks "Open in other pane". */
+  async openInOtherPane(sessionName: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Menu for ${sessionName}`, exact: true })
+      .click();
+    await this.page.getByRole("menuitem", { name: "Open in other pane" }).click();
+  }
+
   private sizeProbes = 0;
 
   /**

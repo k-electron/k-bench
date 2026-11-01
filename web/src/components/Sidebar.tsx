@@ -1,13 +1,21 @@
-import { FolderIcon, PlusIcon, TerminalIcon } from "lucide-react";
+import { EllipsisIcon, FolderIcon, PlusIcon, TerminalIcon } from "lucide-react";
 import type { AppState } from "@/api";
 import { cn } from "@/lib/utils";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 interface SidebarProps {
   state: AppState | undefined;
+  /** The Session in the Focused Pane. */
   openId: string | undefined;
   onOpen: (sessionId: string) => void;
+  onOpenInOtherPane: (sessionId: string) => void;
   onCreateWorkspace: (folder: string) => Promise<void>;
   onCreateSession: (workspaceId: string) => Promise<void>;
 }
@@ -17,6 +25,7 @@ export function Sidebar({
   state,
   openId,
   onOpen,
+  onOpenInOtherPane,
   onCreateWorkspace,
   onCreateSession,
 }: SidebarProps) {
@@ -45,21 +54,40 @@ export function Sidebar({
             </div>
             <ul>
               {workspace.sessions.map((session) => (
-                <li key={session.id}>
+                <li key={session.id} className="flex items-center">
                   <Button
                     variant="ghost"
                     size="sm"
                     className={cn(
-                      "w-full justify-start pl-6 font-normal",
+                      "min-w-0 flex-1 justify-start pl-6 font-normal",
                       session.id === openId && "bg-accent",
                       session.status === "stopped" && "text-muted-foreground",
                     )}
                     aria-current={session.id === openId ? "true" : undefined}
-                    onClick={() => onOpen(session.id)}
+                    onClick={(event) =>
+                      // ⌘-click opens it in the other Pane.
+                      event.metaKey ? onOpenInOtherPane(session.id) : onOpen(session.id)
+                    }
                   >
                     <TerminalIcon />
                     {session.name}
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Menu for ${session.name}`}
+                      >
+                        <EllipsisIcon />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onSelect={() => onOpenInOtherPane(session.id)}>
+                        Open in other pane
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </li>
               ))}
             </ul>

@@ -16,8 +16,22 @@ function terminalUrl(sessionId: string, cols: number, rows: number): string {
  * reports every size change to the server. Output arrives as binary frames; input and
  * resizes go out as JSON (see `src/server/terminal.ts`).
  */
-export function TerminalView({ sessionId }: { sessionId: string }) {
+export function TerminalView({
+  sessionId,
+  focused,
+}: {
+  sessionId: string;
+  /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
+  focused: boolean;
+}) {
   const container = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<Terminal>(null);
+  const focusedRef = useRef(focused);
+  focusedRef.current = focused;
+
+  useEffect(() => {
+    if (focused) terminalRef.current?.focus();
+  }, [focused]);
 
   useEffect(() => {
     const element = container.current;
@@ -48,9 +62,11 @@ export function TerminalView({ sessionId }: { sessionId: string }) {
     );
     const observer = new ResizeObserver(() => fit.fit());
     observer.observe(element);
-    terminal.focus();
+    terminalRef.current = terminal;
+    if (focusedRef.current) terminal.focus();
 
     return () => {
+      terminalRef.current = null;
       observer.disconnect();
       input.dispose();
       resized.dispose();
