@@ -30,6 +30,15 @@ export function plantTmuxSession(socket: string, name: string): void {
   tmux(socket, "new-session", "-d", "-s", name);
 }
 
+/**
+ * Types `text` and Enter into a Session's shell with no terminal attached, as a program
+ * running in the background would. This is how a test rings a Bell nobody is watching.
+ */
+export function typeIntoSession(socket: string, sessionId: string, text: string): void {
+  tmux(socket, "send-keys", "-t", `=kb-${sessionId}:`, "-l", text);
+  tmux(socket, "send-keys", "-t", `=kb-${sessionId}:`, "Enter");
+}
+
 /** Names of the tmux sessions alive on the socket (empty when no tmux server runs). */
 export function tmuxSessionNames(socket: string): string[] {
   try {

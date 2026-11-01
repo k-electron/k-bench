@@ -8,6 +8,15 @@ const execFileAsync = promisify(execFile);
 /** Every Session is a tmux session named `kb-<session id>` on the instance's socket. */
 const PREFIX = "kb-";
 
+/** The Session-scoped tmux user option that holds a Session's Bell; set means rung. */
+const BELL_OPTION = "@kb-bell";
+
+/** A Session whose shell is alive, with its Bell. */
+export interface LiveSession {
+  id: string;
+  bell: boolean;
+}
+
 /** Applied to the instance's tmux server whenever a Session is created (idempotent). */
 function serverConfiguration(): string[][] {
   return [
@@ -23,6 +32,16 @@ function serverConfiguration(): string[][] {
     ["set", "-g", "window-size", "latest"],
     ["setw", "-g", "monitor-bell", "on"],
     ["set", "-g", "bell-action", "any"],
+    // The Bell (ADR-0002: it lives in tmux, so it survives a k-bench restart and is raised
+    // with no browser attached). tmux runs this hook for the Session that rang, even with no
+    // client attached; it records the bell in a Session-scoped user option. A Session with a
+    // client attached is being viewed, so its bell is not unseen and nothing is recorded.
+    [
+      "set-hook",
+      "-g",
+      "alert-bell",
+      `if-shell -F "#{==:#{session_attached},0}" "set-option ${BELL_OPTION} 1"`,
+    ],
   ];
 }
 
@@ -84,19 +103,35 @@ export class TmuxDriver {
     }
   }
 
-  /** IDs of the Sessions whose shell is currently alive on this socket. */
-  async listSessions(): Promise<string[]> {
+  /** Marks the Session's Bell as seen. */
+  async clearBell(id: string): Promise<void> {
+    try {
+      await this.run(["set-option", "-u", "-t", `=${PREFIX}${id}:`, BELL_OPTION]);
+    } catch (error) {
+      if (!isNoSuchSession(error)) throw error;
+    }
+  }
+
+  /** The Sessions whose shell is currently alive on this socket, with their Bells. */
+  async listSessions(): Promise<LiveSession[]> {
     let stdout: string;
     try {
-      stdout = await this.run(["list-sessions", "-F", "#{session_name}"]);
+      stdout = await this.run([
+        "list-sessions",
+        "-F",
+        `#{session_name} #{${BELL_OPTION}}`,
+      ]);
     } catch (error) {
       if (isNoServer(error)) return [];
       throw error;
     }
     return stdout
       .split("\n")
-      .filter((name) => name.startsWith(PREFIX))
-      .map((name) => name.slice(PREFIX.length));
+      .filter((line) => line.startsWith(PREFIX))
+      .map((line) => {
+        const [name = "", bell = ""] = line.split(" ");
+        return { id: name.slice(PREFIX.length), bell: bell !== "" };
+      });
   }
 
   /** Attaches a pty client to the Session; tmux redraws the full current screen. */
@@ -136,5 +171,9 @@ function isNoServer(error: unknown): boolean {
 }
 
 function isNoSuchSession(error: unknown): boolean {
-  return isNoServer(error) || stderrOf(error).includes("can't find session");
+  return (
+    isNoServer(error) ||
+    stderrOf(error).includes("can't find") ||
+    stderrOf(error).includes("no such session")
+  );
 }

@@ -20,6 +20,8 @@ export interface SessionState {
   id: string;
   name: string;
   status: "running" | "stopped";
+  /** The Session's shell rang the terminal bell and nobody has seen it since. */
+  bell: boolean;
 }
 export interface WorkspaceState {
   id: string;
@@ -217,6 +219,7 @@ export class Service {
           id: session.id,
           name: session.name,
           status: live.has(session.id) ? "running" : "stopped",
+          bell: live.get(session.id)?.bell ?? false,
         })),
       })),
     };
@@ -240,7 +243,7 @@ export class Service {
   }
 
   private async startStopped(session: { id: string; folder: string }): Promise<void> {
-    if ((await this.tmux.listSessions()).includes(session.id)) return;
+    if ((await this.tmux.listSessions()).some((live) => live.id === session.id)) return;
     if (!isDirectory(session.folder)) {
       throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
     }
@@ -253,6 +256,14 @@ export class Service {
   async terminalTarget(sessionId: string): Promise<"unknown" | "stopped" | "running"> {
     if (this.ending.has(sessionId) || !this.store.getSession(sessionId)) return "unknown";
     const live = await this.tmux.listSessions();
-    return live.includes(sessionId) ? "running" : "stopped";
+    return live.some((s) => s.id === sessionId) ? "running" : "stopped";
+  }
+
+  /** The owner has seen the Session (a Pane shows it): its Bell is cleared. */
+  async markSeen(sessionId: string): Promise<void> {
+    if (this.ending.has(sessionId) || !this.store.getSession(sessionId)) {
+      throw new ServiceError("not_found", "Unknown Session");
+    }
+    await this.tmux.clearBell(sessionId);
   }
 }

@@ -102,6 +102,9 @@ export class TerminalSockets {
       return undefined;
     }
     const attachment = this.tmux.attach(sessionId, size);
+    // Opening the terminal is viewing the Session. Cleared after attaching, so a bell that
+    // rings from here on finds a client attached and is not recorded as unseen.
+    void this.service.markSeen(sessionId).catch(() => undefined);
     attachment.onData((data) => {
       if (ws.readyState === ws.OPEN) ws.send(data);
     });

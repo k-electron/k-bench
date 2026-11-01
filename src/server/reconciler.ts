@@ -1,5 +1,5 @@
 import type { Store } from "./store.ts";
-import type { TmuxDriver } from "./tmux.ts";
+import type { LiveSession, TmuxDriver } from "./tmux.ts";
 
 /**
  * Compares the store with what is alive in tmux (ADR-0002). A Session in the store with no
@@ -31,10 +31,10 @@ export class Reconciler {
     }
   }
 
-  /** Kills orphans and returns the ids of the Sessions that are alive. */
-  async reconcile(): Promise<Set<string>> {
-    const live = new Set(await this.tmux.listSessions());
-    for (const id of live) {
+  /** Kills orphans and returns the Sessions that are alive, by id. */
+  async reconcile(): Promise<Map<string, LiveSession>> {
+    const live = new Map((await this.tmux.listSessions()).map((s) => [s.id, s]));
+    for (const id of [...live.keys()]) {
       // Order matters: a Session no longer starting already has its store row.
       if (this.starting.has(id) || this.store.getSession(id)) continue;
       live.delete(id);
