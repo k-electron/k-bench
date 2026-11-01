@@ -51,8 +51,6 @@ export class Service {
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
-  /** Sessions being deleted: gone as far as terminals are concerned, before the row is. */
-  private readonly ending = new Set<string>();
 
   constructor(store: Store, tmux: TmuxDriver) {
     this.store = store;
@@ -113,20 +111,14 @@ export class Service {
     if (!this.store.getWorkspace(id))
       throw new ServiceError("not_found", "Unknown Workspace");
     const ids = this.store.listSessions(id).map((session) => session.id);
-    // Killing the shells closes their terminals; they must see "deleted", not "Stopped".
-    for (const sessionId of ids) this.ending.add(sessionId);
-    try {
-      // Every shell gets its kill, even if one fails; a failure keeps the Workspace so the
-      // owner can retry (killing is idempotent), instead of leaving a half-killed one.
-      const kills = await Promise.allSettled(
-        ids.map((sessionId) => this.tmux.killSession(sessionId)),
-      );
-      const failed = kills.find((kill) => kill.status === "rejected");
-      if (failed) throw failed.reason;
-      this.store.deleteWorkspace(id);
-    } finally {
-      for (const sessionId of ids) this.ending.delete(sessionId);
-    }
+    // Every shell gets its kill, even if one fails; a failure keeps the Workspace so the
+    // owner can retry (killing is idempotent), instead of leaving a half-killed one.
+    const kills = await Promise.allSettled(
+      ids.map((sessionId) => this.tmux.killSession(sessionId)),
+    );
+    const failed = kills.find((kill) => kill.status === "rejected");
+    if (failed) throw failed.reason;
+    this.store.deleteWorkspace(id);
   }
 
   private workspaceNames(exceptId?: string): Set<string> {
@@ -205,14 +197,8 @@ export class Service {
     if (!this.store.getSession(sessionId)) {
       throw new ServiceError("not_found", "Unknown Session");
     }
-    // Killing the shell closes its terminals; they must see "deleted", not "Stopped".
-    this.ending.add(sessionId);
-    try {
-      await this.tmux.killSession(sessionId);
-      this.store.deleteSession(sessionId);
-    } finally {
-      this.ending.delete(sessionId);
-    }
+    await this.tmux.killSession(sessionId);
+    this.store.deleteSession(sessionId);
   }
 
   async getState(): Promise<State> {
@@ -258,16 +244,16 @@ export class Service {
     );
   }
 
-  /** What the terminal WebSocket needs to know before attaching. */
-  async terminalTarget(sessionId: string): Promise<"unknown" | "stopped" | "running"> {
-    if (this.ending.has(sessionId) || !this.store.getSession(sessionId)) return "unknown";
+  /** Whether the terminal WebSocket has a shell to attach to: a known Session that is running. */
+  async hasRunningShell(sessionId: string): Promise<boolean> {
+    if (!this.store.getSession(sessionId)) return false;
     const live = await this.tmux.listSessions();
-    return live.some((s) => s.id === sessionId) ? "running" : "stopped";
+    return live.some((s) => s.id === sessionId);
   }
 
   /** The owner has seen the Session (a Pane shows it): its Bell is cleared. */
   async markSeen(sessionId: string): Promise<void> {
-    if (this.ending.has(sessionId) || !this.store.getSession(sessionId)) {
+    if (!this.store.getSession(sessionId)) {
       throw new ServiceError("not_found", "Unknown Session");
     }
     await this.tmux.clearBell(sessionId);

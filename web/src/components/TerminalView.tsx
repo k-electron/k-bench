@@ -6,9 +6,8 @@ import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 const RETRY_FIRST_MS = 500;
 const RETRY_MAX_MS = 5000;
 
-/** Close codes the server uses (see `src/server/terminal.ts`); reconnecting is pointless after them. */
-const SESSION_DELETED = 4404;
-const SESSION_STOPPED = 4410;
+/** The close code for an ended terminal (see `src/server/terminal.ts`); reconnecting is pointless after it. */
+const SESSION_ENDED = 4410;
 
 /** The terminal WebSocket URL for a Session at a given size. */
 function terminalUrl(sessionId: string, cols: number, rows: number): string {
@@ -117,7 +116,7 @@ export function TerminalView({
   sessionId: string;
   /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
   focused: boolean;
-  /** The server closed the socket because the Session was deleted or is Stopped. */
+  /** The server ended the terminal: the Session was deleted or its shell exited. */
   onEnded?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -193,7 +192,7 @@ export function TerminalView({
       };
       ws.onclose = (event) => {
         if (disposed || socket !== ws) return;
-        if (event.code === SESSION_DELETED || event.code === SESSION_STOPPED) {
+        if (event.code === SESSION_ENDED) {
           ended.current?.();
           return;
         }

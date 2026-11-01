@@ -52,13 +52,13 @@ describe("Stopped Sessions", () => {
     expect(statuses).toEqual(["stopped", "stopped", "stopped"]);
   });
 
-  it("closes the terminal socket as Stopped when the shell exits", async () => {
+  it("ends the terminal when the shell exits", async () => {
     const { server, session } = await bootSession();
     const terminal = await server.openTerminal(session.id);
 
     terminal.run("exit");
 
-    expect(await terminal.waitForClose()).toBe(4410);
+    await terminal.waitForEnded();
   });
 });
 

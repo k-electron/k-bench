@@ -120,18 +120,18 @@ describe("Events WebSocket", () => {
   });
 });
 
-describe("Terminal WebSocket close codes", () => {
-  it("closes an open terminal with the deleted code when its Session is deleted", async () => {
+describe("Terminal endings", () => {
+  it("ends an open terminal when its Session is deleted", async () => {
     const { server, session } = await boot();
     const terminal = await server.openTerminal(session.id);
     await terminal.waitForOutput(/\S/);
 
     await server.deleteSession(session.id);
 
-    expect(await terminal.waitForClose()).toBe(4404);
+    await terminal.waitForEnded();
   });
 
-  it("closes every open terminal of a deleted Session", async () => {
+  it("ends every open terminal of a deleted Session", async () => {
     const { server, session } = await boot();
     const a = await server.openTerminal(session.id);
     const b = await server.openTerminal(session.id);
@@ -139,10 +139,10 @@ describe("Terminal WebSocket close codes", () => {
 
     await server.deleteSession(session.id);
 
-    expect([await a.waitForClose(), await b.waitForClose()]).toEqual([4404, 4404]);
+    await Promise.all([a.waitForEnded(), b.waitForEnded()]);
   });
 
-  it("closes an open terminal with the deleted code when its Workspace is deleted", async () => {
+  it("ends an open terminal when its Workspace is deleted", async () => {
     const { server, workspace, session } = await boot();
     const terminal = await server.openTerminal(session.id);
     await terminal.waitForOutput(/\S/);
@@ -152,15 +152,15 @@ describe("Terminal WebSocket close codes", () => {
     });
 
     expect(response.status).toBe(204);
-    expect(await terminal.waitForClose()).toBe(4404);
+    await terminal.waitForEnded();
   });
 
-  it("closes an open terminal with the Stopped code when its shell exits", async () => {
+  it("ends an open terminal when its shell exits", async () => {
     const { server, session } = await boot();
     const terminal = await server.openTerminal(session.id);
 
     terminal.run("exit");
 
-    expect(await terminal.waitForClose()).toBe(4410);
+    await terminal.waitForEnded();
   });
 });

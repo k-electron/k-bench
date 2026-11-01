@@ -99,13 +99,13 @@ describe("Terminal WebSocket", () => {
     expect(second.output).not.toContain("^@");
   });
 
-  it("closes the socket with a distinct code for an unknown Session", async () => {
+  it("ends the terminal of an unknown Session", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
 
     const terminal = await server.openTerminal("no-such-session");
 
-    expect(await terminal.waitForClose()).toBe(4404);
+    await terminal.waitForEnded();
   });
 
   describe("the same Session open on two devices", () => {

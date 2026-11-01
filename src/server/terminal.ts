@@ -3,9 +3,11 @@ import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import type { Service } from "./service.ts";
 import type { TerminalAttachment, TmuxDriver } from "./tmux.ts";
 
-/** Close codes the client uses to decide whether to reconnect. */
-export const CLOSE_SESSION_DELETED = 4404;
-export const CLOSE_SESSION_STOPPED = 4410;
+/**
+ * The terminal's Session was deleted, or its shell exited: reconnecting is pointless.
+ * What the owner sees about why comes from the state feed, not from this code.
+ */
+export const CLOSE_SESSION_ENDED = 4410;
 const CLOSE_INTERNAL_ERROR = 1011;
 
 const TERMINAL_PATH = /^\/api\/sessions\/([^/]+)\/terminal$/;
@@ -117,16 +119,12 @@ export class TerminalSockets {
     sessionId: string,
     size: { cols: number; rows: number },
   ): Promise<TerminalAttachment | undefined> {
-    const target = await this.service.terminalTarget(sessionId);
+    const running = await this.service.hasRunningShell(sessionId);
     // The client left, or the server is stopping, while the Session was being looked up:
     // starting a tmux client now would outlive the socket (and, on stop, the server).
     if (ws.readyState !== ws.OPEN) return undefined;
-    if (target === "unknown") {
-      ws.close(CLOSE_SESSION_DELETED, "Session deleted");
-      return undefined;
-    }
-    if (target === "stopped") {
-      ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
+    if (!running) {
+      ws.close(CLOSE_SESSION_ENDED, "Session ended");
       return undefined;
     }
     const attachment = this.tmux.attach(sessionId, size);
@@ -145,13 +143,9 @@ export class TerminalSockets {
     attachment.onData((data) => {
       if (ws.readyState === ws.OPEN) ws.send(data);
     });
-    // The shell ended, or the Session was deleted (which kills its shell): say which.
-    attachment.onExit(async () => {
-      if (ws.readyState !== ws.OPEN) return; // The client left; nothing to tell it.
-      const now = await this.service.terminalTarget(sessionId).catch(() => "stopped");
-      if (ws.readyState !== ws.OPEN) return;
-      if (now === "unknown") ws.close(CLOSE_SESSION_DELETED, "Session deleted");
-      else ws.close(CLOSE_SESSION_STOPPED, "Session stopped");
+    // The shell ended, or the Session was deleted (which kills its shell).
+    attachment.onExit(() => {
+      if (ws.readyState === ws.OPEN) ws.close(CLOSE_SESSION_ENDED, "Session ended");
     });
     return attachment;
   }
