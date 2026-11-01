@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
+import { detachAllClients, typeIntoSession } from "../test/harness/tmux.ts";
 
 const WEB_DIR = resolve("dist/web");
 const LOGIN = "owner@example.com";
@@ -160,6 +161,36 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
+  /** The Bell badge on a Session's row; present only while its Bell is raised. */
+  bellBadge(sessionName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${sessionName} rang the bell`,
+      exact: true,
+    });
+  }
+
+  /** The hint on a Workspace row saying some Session in it rang the bell. */
+  workspaceBellHint(workspaceName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${workspaceName} has a session that rang the bell`,
+      exact: true,
+    });
+  }
+
+  /** Collapses a Workspace's Sessions out of view. */
+  async collapseWorkspace(workspaceName: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Collapse ${workspaceName}`, exact: true })
+      .click();
+  }
+
+  /** Shows a collapsed Workspace's Sessions again. */
+  async expandWorkspace(workspaceName: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Expand ${workspaceName}`, exact: true })
+      .click();
+  }
+
   /** The notice on a Workspace that is Missing; absent when its folder exists. */
   missingNotice(workspaceName: string): Locator {
     return this.sidebar
@@ -262,6 +293,10 @@ interface Kbench {
   stopServer(): Promise<void>;
   /** Starts the server again on the same address, data folder and tmux socket. */
   startServer(): Promise<void>;
+  /** Rings the terminal bell in the named Session's shell, with no browser involved. */
+  ringBell(sessionName: string): Promise<void>;
+  /** Detaches every terminal client from tmux, so no Pane's terminal is attached. */
+  detachClients(): void;
 }
 
 interface Fixtures {
@@ -283,6 +318,15 @@ export const test = base.extend<Fixtures>({
       await use({
         instance,
         url: server.baseUrl,
+        ringBell: async (sessionName) => {
+          const state = await server.state();
+          const session = state.workspaces
+            .flatMap((w) => w.sessions)
+            .find((s) => s.name === sessionName);
+          if (!session) throw new Error(`No Session named ${sessionName}`);
+          typeIntoSession(instance.config.tmuxSocket, session.id, "printf '\\a'");
+        },
+        detachClients: () => detachAllClients(instance.config.tmuxSocket),
         stopServer: () => server.stop(),
         startServer: async () => {
           server = await instance.start({ webDir: WEB_DIR });

@@ -1,5 +1,5 @@
 import { Columns2Icon, MenuIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
 import { PaneArea } from "@/components/PaneArea";
 import { Sidebar } from "@/components/Sidebar";
@@ -70,6 +70,24 @@ export function App() {
     setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
     update((l) => forgetMissingSessions(l, existing));
   }, [state, layout.sessions, update]);
+
+  // A Session that a Pane shows is being viewed, so its Bell is seen: opening a Session
+  // clears it, and so does a Bell raised in a Session that is already showing (for instance
+  // while its terminal is between connections).
+  const clearing = useRef(new Set<string>());
+  useEffect(() => {
+    if (!state) return;
+    const shown = layout.sessions.slice(0, layout.paneCount);
+    for (const session of sessions) {
+      if (!session.bell || !shown.includes(session.id)) continue;
+      if (clearing.current.has(session.id)) continue;
+      clearing.current.add(session.id);
+      api
+        .markSeen(session.id)
+        .catch(() => undefined)
+        .finally(() => clearing.current.delete(session.id));
+    }
+  }, [state, sessions, layout.sessions, layout.paneCount]);
 
   // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
   useEffect(() => {

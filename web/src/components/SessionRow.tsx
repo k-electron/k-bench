@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import type { SessionState } from "@/api";
 import { cn } from "@/lib/utils";
+import { BellBadge } from "./BellBadge";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
 import { Button } from "./ui/button";
@@ -72,6 +73,7 @@ export function SessionRow({
         <TerminalIcon />
         <span className="truncate">{session.name}</span>
       </Button>
+      {session.bell && <BellBadge label={`${session.name} rang the bell`} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
