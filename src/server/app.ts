@@ -21,7 +21,8 @@ export function createApp(service: Service, options: { webDir?: string } = {}): 
 
   app.onError((error, c) => {
     if (error instanceof ServiceError) {
-      const status = error.kind === "not_found" ? 404 : 422;
+      const status =
+        error.kind === "not_found" ? 404 : error.kind === "conflict" ? 409 : 422;
       return c.json({ error: error.message }, status);
     }
     console.error(error);
@@ -48,6 +49,18 @@ export function createApp(service: Service, options: { webDir?: string } = {}): 
       optionalString(body.name),
     );
     return c.json(session, 201);
+  });
+
+  app.patch("/api/sessions/:id", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    return c.json(
+      service.renameSession(c.req.param("id"), optionalString(body.name) ?? ""),
+    );
+  });
+
+  app.delete("/api/sessions/:id", async (c) => {
+    await service.deleteSession(c.req.param("id"));
+    return c.body(null, 204);
   });
 
   // Last, so it only answers what the API did not.

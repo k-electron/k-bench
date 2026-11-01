@@ -6,9 +6,9 @@ import type { TmuxDriver } from "./tmux.ts";
 
 /** A failure the HTTP layer maps to a status code. */
 export class ServiceError extends Error {
-  readonly kind: "not_found" | "invalid";
+  readonly kind: "not_found" | "invalid" | "conflict";
 
-  constructor(kind: "not_found" | "invalid", message: string) {
+  constructor(kind: "not_found" | "invalid" | "conflict", message: string) {
     super(message);
     this.kind = kind;
   }
@@ -70,6 +70,8 @@ export class Service {
       let n = 1;
       while (taken.has(`session ${n}`)) n++;
       name = `session ${n}`;
+    } else if (taken.has(name)) {
+      throw new ServiceError("conflict", `A Session named "${name}" already exists`);
     }
     const id = randomUUID();
     await this.tmux.createSession(id, workspace.folder);
@@ -80,6 +82,30 @@ export class Service {
       throw error;
     }
     return { id, name };
+  }
+
+  renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    const name = requestedName.trim();
+    if (!name) throw new ServiceError("invalid", "name is required");
+    const clash = this.store
+      .listSessions(session.workspaceId)
+      .some((other) => other.id !== sessionId && other.name === name);
+    if (clash) {
+      throw new ServiceError("conflict", `A Session named "${name}" already exists`);
+    }
+    this.store.renameSession(sessionId, name);
+    return { id: sessionId, name };
+  }
+
+  /** Ends the Session's shell and everything in it, then forgets the Session. */
+  async deleteSession(sessionId: string): Promise<void> {
+    if (!this.store.getSession(sessionId)) {
+      throw new ServiceError("not_found", "Unknown Session");
+    }
+    await this.tmux.killSession(sessionId);
+    this.store.deleteSession(sessionId);
   }
 
   async getState(): Promise<State> {

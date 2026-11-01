@@ -107,7 +107,15 @@ export class Store {
       .get(id) as unknown as (SessionRow & { folder: string }) | undefined;
   }
 
-  addSession(input: { id: string; workspaceId: string; name: string }): SessionRow {
+  renameSession(id: string, name: string): void {
+    this.db.prepare("UPDATE sessions SET name = ? WHERE id = ?").run(name, id);
+  }
+
+  deleteSession(id: string): void {
+    this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+  }
+
+  addSession(input:{ id: string; workspaceId: string; name: string }): SessionRow {
     this.db
       .prepare(
         "INSERT INTO sessions (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?)",
