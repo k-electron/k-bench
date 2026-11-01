@@ -1,9 +1,11 @@
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { Store } from "../src/server/store.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
+import { pollUntil } from "../test/harness/poll.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
-import { detachAllClients, typeIntoSession } from "../test/harness/tmux.ts";
+import { attachedClientCount, typeIntoSession } from "../test/harness/tmux.ts";
 
 const WEB_DIR = resolve("dist/web");
 const LOGIN = "owner@example.com";
@@ -286,6 +288,21 @@ async function freePort(): Promise<number> {
   return port;
 }
 
+/** The id of the Session named `name`, read from the database whether or not a server runs. */
+function sessionIdNamed(instance: TestInstance, name: string): string {
+  const store = new Store(instance.config.dataDir);
+  try {
+    const session = store
+      .listWorkspaces()
+      .flatMap((workspace) => store.listSessions(workspace.id))
+      .find((s) => s.name === name);
+    if (!session) throw new Error(`No Session named ${name}`);
+    return session.id;
+  } finally {
+    store.close();
+  }
+}
+
 interface Kbench {
   instance: TestInstance;
   url: string;
@@ -293,10 +310,12 @@ interface Kbench {
   stopServer(): Promise<void>;
   /** Starts the server again on the same address, data folder and tmux socket. */
   startServer(): Promise<void>;
-  /** Rings the terminal bell in the named Session's shell, with no browser involved. */
+  /**
+   * Rings the terminal bell in the named Session's shell, with no browser involved, once no
+   * terminal is viewing it (one that just moved to another Session can take a moment to let
+   * go). Works while the server is stopped too.
+   */
   ringBell(sessionName: string): Promise<void>;
-  /** Detaches every terminal client from tmux, so no Pane's terminal is attached. */
-  detachClients(): void;
 }
 
 interface Fixtures {
@@ -319,14 +338,13 @@ export const test = base.extend<Fixtures>({
         instance,
         url: server.baseUrl,
         ringBell: async (sessionName) => {
-          const state = await server.state();
-          const session = state.workspaces
-            .flatMap((w) => w.sessions)
-            .find((s) => s.name === sessionName);
-          if (!session) throw new Error(`No Session named ${sessionName}`);
-          typeIntoSession(instance.config.tmuxSocket, session.id, "printf '\\a'");
+          const id = sessionIdNamed(instance, sessionName);
+          const socket = instance.config.tmuxSocket;
+          await pollUntil(() => attachedClientCount(socket, id) === 0, {
+            description: `no terminal to be viewing ${sessionName}`,
+          });
+          typeIntoSession(socket, id, "printf '\\a'");
         },
-        detachClients: () => detachAllClients(instance.config.tmuxSocket),
         stopServer: () => server.stop(),
         startServer: async () => {
           server = await instance.start({ webDir: WEB_DIR });

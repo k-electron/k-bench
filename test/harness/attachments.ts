@@ -25,7 +25,6 @@ export async function bootAttachments(
   const lookup = options.lookup ?? ((id: string) => id === sessionId);
   const sessions: Sessions = {
     hasRunningShell: async (id) => lookup(id),
-    markSeen: async () => {},
   };
   const attachments = new Attachments(tmux, sessions);
   instance.stopOnDispose(attachments);

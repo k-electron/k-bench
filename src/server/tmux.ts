@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
@@ -10,6 +10,10 @@ const PREFIX = "kb-";
 
 /** The Session-scoped tmux user option that holds a Session's Bell; set means rung. */
 const BELL_OPTION = "@kb-bell";
+/** The tmux `wait-for` channel signalled whenever a Bell may have been raised or cleared. */
+const BELL_CHANNEL = "kb-bell-changed";
+/** How long a Bell watch waits before trying again after tmux failed it unexpectedly. */
+const BELL_WATCH_RETRY_MS = 1_000;
 
 /** A Session whose shell is alive, with its Bell. */
 export interface LiveSession {
@@ -32,15 +36,24 @@ function serverConfiguration(): string[][] {
     ["set", "-g", "window-size", "latest"],
     ["setw", "-g", "monitor-bell", "on"],
     ["set", "-g", "bell-action", "any"],
-    // The Bell (ADR-0002: it lives in tmux, so it survives a k-bench restart and is raised
-    // with no browser attached). tmux runs this hook for the Session that rang, even with no
-    // client attached; it records the bell in a Session-scoped user option. A Session with a
-    // client attached is being viewed, so its bell is not unseen and nothing is recorded.
+    // The Bell, and the one place that decides what viewing a Session means for it: a tmux
+    // client attached to it, which is what a browser terminal is. It lives in tmux (ADR-0002),
+    // so it survives a k-bench restart and is raised with no browser attached. tmux runs
+    // these hooks in its own single thread, so no bell can slip between deciding and acting:
+    // - a bell is recorded only while no client is attached to the Session that rang;
+    // - a client attaching clears the Session's Bell, whenever it rang before.
+    // Both signal the Bell channel, so the server can announce the change (`watchBells`).
     [
       "set-hook",
       "-g",
       "alert-bell",
-      `if-shell -F "#{==:#{session_attached},0}" "set-option ${BELL_OPTION} 1"`,
+      `if-shell -F "#{==:#{session_attached},0}" { set-option ${BELL_OPTION} 1 ; wait-for -S ${BELL_CHANNEL} }`,
+    ],
+    [
+      "set-hook",
+      "-g",
+      "client-attached",
+      `set-option -u ${BELL_OPTION} ; wait-for -S ${BELL_CHANNEL}`,
     ],
   ];
 }
@@ -63,12 +76,20 @@ export interface TmuxClient {
   kill(signal?: NodeJS.Signals): void;
 }
 
+/** A running watch on the Bells (`TmuxDriver.watchBells`). */
+export interface BellWatch {
+  /** Stops watching; resolves once nothing is left waiting on tmux. Idempotent. */
+  stop(): Promise<void>;
+}
+
 /**
- * Hides every tmux command line behind Session-shaped operations. It holds no state of its
- * own: everything it knows about a Session it asks tmux (ADR-0002).
+ * Hides every tmux command line behind Session-shaped operations. It holds no state about
+ * Sessions: everything it knows about one it asks tmux (ADR-0002).
  */
 export class TmuxDriver {
   private readonly socket: string;
+  /** Bell watches, which a new tmux server must wake (see `watchBells`). */
+  private readonly bellWatches = new Set<BellWatcher>();
 
   constructor(socket: string) {
     this.socket = socket;
@@ -104,20 +125,44 @@ export class TmuxDriver {
       "-c",
       folder,
     ]);
+    // This may have started the tmux server, which a Bell watch idles without.
+    for (const watch of this.bellWatches) watch.serverStarted();
+  }
+
+  /**
+   * Applies the configuration to a tmux server that is already running, such as one a
+   * previous version of k-bench configured. Does nothing when no tmux server is running.
+   */
+  async configure(): Promise<void> {
+    try {
+      await this.run(...serverConfiguration());
+    } catch (error) {
+      if (!isNoServer(error)) throw error;
+    }
+  }
+
+  /**
+   * Calls `onChange` soon after any Session's Bell is raised or cleared (and now and then
+   * when nothing changed), until stopped. Changes are missed only while no tmux server runs,
+   * when there are no Bells to change.
+   */
+  watchBells(onChange: () => void): BellWatch {
+    const watch = new BellWatcher(
+      [...this.baseArgs(), "wait-for", BELL_CHANNEL],
+      this.env(),
+      {
+        onChange,
+        onStop: () => this.bellWatches.delete(watch),
+      },
+    );
+    this.bellWatches.add(watch);
+    watch.start();
+    return watch;
   }
 
   async killSession(id: string): Promise<void> {
     try {
       await this.run(["kill-session", "-t", `=${PREFIX}${id}`]);
-    } catch (error) {
-      if (!isNoSuchSession(error)) throw error;
-    }
-  }
-
-  /** Marks the Session's Bell as seen. */
-  async clearBell(id: string): Promise<void> {
-    try {
-      await this.run(["set-option", "-u", "-t", `=${PREFIX}${id}:`, BELL_OPTION]);
     } catch (error) {
       if (!isNoSuchSession(error)) throw error;
     }
@@ -185,12 +230,108 @@ export class TmuxDriver {
   }
 }
 
+/**
+ * Waits on the Bell channel with a `tmux wait-for` client, again and again. tmux keeps a
+ * signal sent while nobody is waiting for the next wait, so none is lost between two waits.
+ * With no tmux server to wait on, it idles until told one has started.
+ */
+class BellWatcher implements BellWatch {
+  private readonly args: string[];
+  private readonly env: NodeJS.ProcessEnv;
+  private readonly onChange: () => void;
+  private readonly onStop: () => void;
+  private waiting: { exited: Promise<void>; kill(): void } | undefined;
+  private retry: ReturnType<typeof setTimeout> | undefined;
+  /** No tmux server was running at the last wait: nothing is waiting, until one starts. */
+  private idle = false;
+  /** Bumped whenever a tmux server may have started, so a wait that found none retries. */
+  private serverGeneration = 0;
+  private stopping: Promise<void> | undefined;
+
+  constructor(
+    args: string[],
+    env: NodeJS.ProcessEnv,
+    handlers: { onChange: () => void; onStop: () => void },
+  ) {
+    this.args = args;
+    this.env = env;
+    this.onChange = handlers.onChange;
+    this.onStop = handlers.onStop;
+  }
+
+  serverStarted(): void {
+    this.serverGeneration++;
+    if (this.idle || this.retry) this.start();
+  }
+
+  start(): void {
+    clearTimeout(this.retry);
+    this.retry = undefined;
+    this.idle = false;
+    if (this.stopping || this.waiting) return;
+    const generation = this.serverGeneration;
+    const child = spawn("tmux", this.args, {
+      env: this.env,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+    // A failure to spawn is reported by its own event, then as an exit like any other.
+    child.on("error", () => undefined);
+    const exited = new Promise<void>((resolve) => {
+      child.on("close", (code) => {
+        this.waiting = undefined;
+        resolve();
+        this.waitEnded(code === 0, stderr, generation);
+      });
+    });
+    this.waiting = { exited, kill: () => child.kill() };
+  }
+
+  private waitEnded(signalled: boolean, stderr: string, generation: number): void {
+    if (this.stopping) return;
+    if (signalled) {
+      this.start();
+      this.onChange();
+      return;
+    }
+    // A tmux server started while this wait was looking for one.
+    if (generation !== this.serverGeneration) {
+      this.start();
+      return;
+    }
+    if (isNoServerMessage(stderr)) {
+      this.idle = true;
+    } else {
+      // tmux failed the wait some other way, such as its server being killed under it.
+      this.retry = setTimeout(() => this.start(), BELL_WATCH_RETRY_MS);
+      this.retry.unref();
+    }
+  }
+
+  stop(): Promise<void> {
+    this.stopping ??= (async () => {
+      clearTimeout(this.retry);
+      this.onStop();
+      const waiting = this.waiting;
+      waiting?.kill();
+      await waiting?.exited;
+    })();
+    return this.stopping;
+  }
+}
+
 function stderrOf(error: unknown): string {
   return String((error as { stderr?: unknown }).stderr ?? "");
 }
 
 function isNoServer(error: unknown): boolean {
-  const stderr = stderrOf(error);
+  return isNoServerMessage(stderrOf(error));
+}
+
+function isNoServerMessage(stderr: string): boolean {
   return stderr.includes("no server running") || stderr.includes("error connecting to");
 }
 

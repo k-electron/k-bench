@@ -250,12 +250,4 @@ export class Service {
     const live = await this.tmux.listSessions();
     return live.some((s) => s.id === sessionId);
   }
-
-  /** The owner has seen the Session (a Pane shows it): its Bell is cleared. */
-  async markSeen(sessionId: string): Promise<void> {
-    if (!this.store.getSession(sessionId)) {
-      throw new ServiceError("not_found", "Unknown Session");
-    }
-    await this.tmux.clearBell(sessionId);
-  }
 }
