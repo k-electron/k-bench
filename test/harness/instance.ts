@@ -121,6 +121,20 @@ export class TestServer {
     return (await response.json()) as SessionInfo;
   }
 
+  /** Renames a Session. Returns the raw response so tests can check the status. */
+  renameSession(sessionId: string, name: string): Promise<Response> {
+    return this.request(`/api/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  /** Deletes a Session. Returns the raw response so tests can check the status. */
+  deleteSession(sessionId: string): Promise<Response> {
+    return this.request(`/api/sessions/${sessionId}`, { method: "DELETE" });
+  }
+
   async state(): Promise<State> {
     const response = await this.request("/api/state");
     return (await response.json()) as State;

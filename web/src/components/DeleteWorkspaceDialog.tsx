@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { Button } from "./ui/button";
+import { Button, buttonVariants } from "./ui/button";
 
 /** Asks before deleting a Workspace; confirming ends all its Sessions. */
 export function DeleteWorkspaceDialog({
@@ -42,7 +42,9 @@ export function DeleteWorkspaceDialog({
           </p>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel className={buttonVariants({ variant: "ghost" })}>
+            Cancel
+          </AlertDialogCancel>
           <Button
             variant="destructive"
             onClick={() => {

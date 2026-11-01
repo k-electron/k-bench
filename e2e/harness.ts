@@ -27,12 +27,25 @@ export class AppPage {
     return this.sidebar.getByRole("button", { name, exact: true });
   }
 
+  /** Opens a Session row's menu and picks `item` (for example "Rename" or "Delete"). */
+  async sessionMenu(sessionName: string, item: string): Promise<void> {
+    await this.sidebar
+      .getByRole("button", { name: `Actions for ${sessionName}`, exact: true })
+      .click();
+    await this.page.getByRole("menuitem", { name: item, exact: true }).click();
+  }
+
   /** The terminal showing the named Session. */
   terminal(sessionName: string): Locator {
     return this.page.getByRole("region", {
       name: `Terminal ${sessionName}`,
       exact: true,
     });
+  }
+
+  /** The running/Stopped indicator beside a Session in the sidebar. */
+  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
   }
 
   private sizeProbes = 0;

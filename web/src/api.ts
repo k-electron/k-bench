@@ -40,10 +40,14 @@ function post<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-function send(method: string, path: string, body?: unknown): Promise<unknown> {
-  return call(path, {
+function send<T>(
+  method: "PATCH" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  return call<T>(path, {
     method,
-    headers: { "content-type": "application/json" },
+    headers: body === undefined ? undefined : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
@@ -60,14 +64,19 @@ export const api = {
   createWorkspace: (input: { folder: string; name?: string }) =>
     post<{ id: string; name: string; folder: string }>("/api/workspaces", input),
   updateWorkspace: (id: string, changes: { name?: string; folder?: string }) =>
-    send("PATCH", `/api/workspaces/${id}`, changes).then(() => undefined),
+    send<void>("PATCH", `/api/workspaces/${id}`, changes),
   /** `ids` is every Workspace, in the order wanted. */
   reorderWorkspaces: (ids: string[]) =>
-    send("PUT", "/api/workspaces/order", { ids }).then(() => undefined),
-  deleteWorkspace: (id: string) =>
-    send("DELETE", `/api/workspaces/${id}`).then(() => undefined),
+    send<void>("PUT", "/api/workspaces/order", { ids }),
+  deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   createSession: (workspaceId: string, name?: string) =>
     post<{ id: string; name: string }>(`/api/workspaces/${workspaceId}/sessions`, {
       name,
     }),
+  renameSession: (sessionId: string, name: string) =>
+    send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
+  deleteSession: (sessionId: string) =>
+    send<void>("DELETE", `/api/sessions/${sessionId}`),
+  restartSession: (sessionId: string) =>
+    post<{ id: string; name: string }>(`/api/sessions/${sessionId}/restart`, {}),
 };

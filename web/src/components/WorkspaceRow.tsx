@@ -1,6 +1,14 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FolderIcon, GripVerticalIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import {
+  FolderIcon,
+  FolderInputIcon,
+  GripVerticalIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import type { WorkspaceState } from "@/api";
 import { cn } from "@/lib/utils";
@@ -80,12 +88,15 @@ export function WorkspaceRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => onAction("rename")}>
+              <PencilIcon />
               Rename
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onAction("folder")}>
+              <FolderInputIcon />
               Change folder
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAction("delete")}>
+            <DropdownMenuItem variant="destructive" onSelect={() => onAction("delete")}>
+              <Trash2Icon />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>

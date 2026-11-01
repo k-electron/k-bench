@@ -8,8 +8,10 @@
   "scripts": {
     "postinstall": "node scripts/fix-node-pty.mjs",
     "dev": "node scripts/dev.mjs",
+    "dev:serve": "node scripts/dev-serve.ts",
     "build": "vite build",
     "start": "node src/server/main.ts",
+    "install-app": "node scripts/install.ts",
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web",
