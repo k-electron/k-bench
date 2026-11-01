@@ -114,7 +114,9 @@ describe("Terminal WebSocket", () => {
       const phone = await server.openTerminal(session.id, { cols: 50, rows: 20 });
       const laptop = await server.openTerminal(session.id, { cols: 120, rows: 30 });
 
-      phone.run(echoCommand("from-the-phone-1a2b"));
+      // A narrow client sees only the part of a wider window around the cursor, so a long
+      // prompt (a CI runner's hostname) would put the output outside the phone's view.
+      phone.run(`PS1='$ '; ${echoCommand("from-the-phone-1a2b")}`);
       await phone.waitForOutput("from-the-phone-1a2b");
       await laptop.waitForOutput("from-the-phone-1a2b");
 
