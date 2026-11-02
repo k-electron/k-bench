@@ -47,6 +47,21 @@ export function resolveTailscaleCli(options: {
   return isExecutableFile(app) ? app : undefined;
 }
 
+/**
+ * What to tell the owner when the running Node is older than the package's `engines.node`
+ * (a `>=<major>` range), which npm only warns about. Undefined when it is new enough.
+ */
+export function nodeVersionProblem(
+  running: string,
+  engines?: string,
+): string | undefined {
+  const required = Number(/\d+/.exec(engines ?? "")?.[0]);
+  if (!Number.isInteger(required) || Number(running.split(".")[0]) >= required) {
+    return undefined;
+  }
+  return `Node ${running} is too old: k-bench needs Node ${required} or later. Install a current Node (for example \`brew install node\`), then run \`k-bench install\` again.`;
+}
+
 export interface TailscaleIdentity {
   /** The tailnet login of the user this node belongs to. */
   login: string;

@@ -5,17 +5,23 @@
 // and a reinstall restores everything. `--purge` also deletes the data folder and the logs
 // and ends the tmux server, which ends every Session. `--dry-run` prints every step and
 // changes nothing. Each step says so when there is nothing for it to remove.
-import { spawnSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { resolveConfig } from "../src/server/config.ts";
+import {
+  appDirIn,
+  LAUNCH_AGENT_LABEL,
+  launchAgentLoaded,
+  launchAgentPlistPath,
+  launchdDomain,
+  logPath,
+  pathDirs as pathDirsOf,
+  reporter,
+  succeeds,
+} from "./command-lib.ts";
 import { findExecutable, resolveTailscaleCli } from "./install-lib.ts";
-import { findOwnEntry, readServeConfig, serveOffArgs } from "./tailscale-serve.ts";
-
-// The same label and paths the installer writes (scripts/install.ts).
-const LABEL = "com.k-bench.server";
+import { findOwnEntries, readServeConfig, serveOffArgs } from "./tailscale-serve.ts";
 
 export async function uninstall(argv: string[]): Promise<void> {
   const { values: flags } = parseArgs({
@@ -30,24 +36,14 @@ export async function uninstall(argv: string[]): Promise<void> {
 
   // Explicit env, as in the install: never a K_BENCH_* override from the shell.
   const config = resolveConfig({ K_BENCH_INSTANCE: "installed" });
-  const appDir = join(config.dataDir, "app");
-  const logDir = join(homedir(), "Library", "Logs", "k-bench");
-  const plistPath = join(homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
-  const domain = `gui/${process.getuid?.() ?? 501}`;
-  const pathDirs = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+  const appDir = appDirIn(config.dataDir);
+  const logDir = dirname(logPath());
+  const plistPath = launchAgentPlistPath();
+  const domain = launchdDomain();
+  const pathDirs = pathDirsOf();
 
   let failed = false;
-  const say = (line: string) => console.log(line);
-
-  /** Announces a step, and does it unless this is a dry run. */
-  function step(description: string, action: () => void): void {
-    say(`${dryRun ? "would: " : ""}${description}`);
-    if (!dryRun) action();
-  }
-
-  function run(command: string, args: string[]): boolean {
-    return spawnSync(command, args, { stdio: "ignore" }).status === 0;
-  }
+  const { say, step } = reporter(dryRun);
 
   say(
     dryRun
@@ -64,20 +60,23 @@ export async function uninstall(argv: string[]): Promise<void> {
 
   // 1. The service. launchctl bootout stops the server; it leaves tmux, and so every
   // Session, running (AbandonProcessGroup, ADR-0001).
-  const loaded = run("launchctl", ["print", `${domain}/${LABEL}`]);
-  if (loaded) {
-    step(`stop the LaunchAgent (launchctl bootout ${domain}/${LABEL})`, () => {
-      if (!run("launchctl", ["bootout", `${domain}/${LABEL}`])) {
-        console.error("k-bench uninstall: launchctl could not stop the LaunchAgent.");
-        process.exit(1);
-      }
-    });
+  if (launchAgentLoaded()) {
+    await step(
+      `stop the LaunchAgent (launchctl bootout ${domain}/${LAUNCH_AGENT_LABEL})`,
+      () => {
+        if (!succeeds("launchctl", ["bootout", `${domain}/${LAUNCH_AGENT_LABEL}`])) {
+          console.error("k-bench uninstall: launchctl could not stop the LaunchAgent.");
+          process.exit(1);
+        }
+      },
+    );
   } else {
     say("no LaunchAgent is loaded: nothing to stop");
   }
   if (existsSync(plistPath)) {
-    step(`delete the LaunchAgent ${plistPath} (k-bench stops starting at login)`, () =>
-      rmSync(plistPath, { force: true }),
+    await step(
+      `delete the LaunchAgent ${plistPath} (k-bench stops starting at login)`,
+      () => rmSync(plistPath, { force: true }),
     );
   } else {
     say(`no LaunchAgent file at ${plistPath}: nothing to delete`);
@@ -93,21 +92,25 @@ export async function uninstall(argv: string[]): Promise<void> {
   } else {
     try {
       const serveConfig = readServeConfig(tailscale);
-      const own = findOwnEntry(serveConfig, config.port);
-      if (own) {
-        const offArgs = serveOffArgs(own);
-        step(
-          `remove k-bench's tailscale serve entry on port ${own.port}: ${tailscale} ${offArgs.join(" ")}`,
-          () => {
-            if (!run(tailscale, offArgs)) {
-              failed = true;
-              console.error(
-                `k-bench uninstall: could not remove the entry on port ${own.port}. Remove it yourself with \`tailscale serve ${offArgs.slice(1).join(" ")}\`.`,
-              );
-            }
-          },
-        );
-        const others = serveConfig.entries.filter((entry) => entry !== own);
+      // Every port k-bench is published on (a reinstall on another --https-port leaves the
+      // earlier entry behind), and nothing else.
+      const own = findOwnEntries(serveConfig, config.port);
+      if (own.length > 0) {
+        for (const entry of own) {
+          const offArgs = serveOffArgs(entry);
+          await step(
+            `remove k-bench's tailscale serve entry on port ${entry.port}: ${tailscale} ${offArgs.join(" ")}`,
+            () => {
+              if (!succeeds(tailscale, offArgs)) {
+                failed = true;
+                console.error(
+                  `k-bench uninstall: could not remove the entry on port ${entry.port}. Remove it yourself with \`tailscale serve ${offArgs.slice(1).join(" ")}\`.`,
+                );
+              }
+            },
+          );
+        }
+        const others = serveConfig.entries.filter((entry) => !own.includes(entry));
         if (others.length > 0) {
           say(
             `leaving ${others.length === 1 ? "the other tailscale serve entry" : `the ${others.length} other tailscale serve entries`} alone (port ${others.map((entry) => entry.port).join(", ")})`,
@@ -131,7 +134,7 @@ export async function uninstall(argv: string[]): Promise<void> {
     existsSync(dir),
   );
   if (appFolders.length > 0) {
-    step(`delete the app folder ${appFolders.join(", ")}`, () => {
+    await step(`delete the app folder ${appFolders.join(", ")}`, () => {
       for (const dir of appFolders) rmSync(dir, { recursive: true, force: true });
     });
   } else {
@@ -142,18 +145,18 @@ export async function uninstall(argv: string[]): Promise<void> {
   if (purge) {
     const tmux = findExecutable("tmux", pathDirs);
     const tmuxArgs = ["-L", config.tmuxSocket];
-    if (tmux && run(tmux, [...tmuxArgs, "list-sessions"])) {
-      step(
+    if (tmux && succeeds(tmux, [...tmuxArgs, "list-sessions"])) {
+      await step(
         `end the "${config.tmuxSocket}" tmux server: this ends every Session (tmux -L ${config.tmuxSocket} kill-server)`,
         () => {
-          run(tmux, [...tmuxArgs, "kill-server"]);
+          succeeds(tmux, [...tmuxArgs, "kill-server"]);
         },
       );
     } else {
       say(`no "${config.tmuxSocket}" tmux server is running: no Sessions to end`);
     }
     if (existsSync(config.dataDir)) {
-      step(
+      await step(
         `delete the data folder ${config.dataDir}, including the database: every Workspace and Session is lost`,
         () => rmSync(config.dataDir, { recursive: true, force: true }),
       );
@@ -161,7 +164,7 @@ export async function uninstall(argv: string[]): Promise<void> {
       say(`no data folder at ${config.dataDir}: nothing to delete`);
     }
     if (existsSync(logDir)) {
-      step(`delete the logs ${logDir}`, () =>
+      await step(`delete the logs ${logDir}`, () =>
         rmSync(logDir, { recursive: true, force: true }),
       );
     } else {

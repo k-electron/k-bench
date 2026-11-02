@@ -1,11 +1,19 @@
 // `k-bench status`: a one-command health check of the Installed instance. Each check prints
 // as ok or FAIL, a failure with a one-line fix, and the exit status is non-zero when any
 // check failed. It only looks: it never changes the machine, the tailnet or the app.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { resolveConfig } from "../src/server/config.ts";
+import {
+  appDirIn,
+  BUILD_INFO_FILE,
+  LAUNCH_AGENT_LABEL,
+  LOG_HINT,
+  launchAgentLoaded,
+  pathDirs as pathDirsOf,
+} from "./command-lib.ts";
 import {
   findExecutable,
   parseTailscaleStatus,
@@ -13,9 +21,6 @@ import {
 } from "./install-lib.ts";
 import { findOwnEntry, readServeConfig, serveUrl } from "./tailscale-serve.ts";
 
-/** The LaunchAgent's label, as `k-bench install` loads it. */
-const LABEL = "com.k-bench.server";
-const LOG_HINT = "~/Library/Logs/k-bench/k-bench.log";
 /** The header `tailscale serve` adds to every request it proxies; the server's login check. */
 const LOGIN_HEADER = "Tailscale-User-Login";
 
@@ -112,7 +117,7 @@ async function checkServer(port: number, login: string | undefined): Promise<Che
 /** The version `k-bench install` recorded in the installed app, e.g. `0.1.0`. */
 function installedVersion(appDir: string): string | undefined {
   try {
-    const info = JSON.parse(readFileSync(join(appDir, "build-info.json"), "utf8")) as {
+    const info = JSON.parse(readFileSync(join(appDir, BUILD_INFO_FILE), "utf8")) as {
       version?: string;
       commit?: string;
       dirty?: boolean;
@@ -136,8 +141,8 @@ export async function status(argv: string[]): Promise<void> {
   const config = resolveConfig({ K_BENCH_INSTANCE: "installed" });
   const override = process.env.K_BENCH_STATUS_PORT;
   const port = override && /^\d+$/.test(override) ? Number(override) : config.port;
-  const appDir = join(config.dataDir, "app");
-  const pathDirs = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+  const appDir = appDirIn(config.dataDir);
+  const pathDirs = pathDirsOf();
 
   const checks: Check[] = [];
 
@@ -198,16 +203,12 @@ export async function status(argv: string[]): Promise<void> {
     }
   }
 
-  const uid = process.getuid?.() ?? 501;
-  const loaded =
-    spawnSync("launchctl", ["print", `gui/${uid}/${LABEL}`], { stdio: "ignore" })
-      .status === 0;
   checks.push(
-    loaded
-      ? ok("the LaunchAgent is loaded", LABEL)
+    launchAgentLoaded()
+      ? ok("the LaunchAgent is loaded", LAUNCH_AGENT_LABEL)
       : fail(
           "the LaunchAgent is loaded",
-          `${LABEL} is not loaded in launchd`,
+          `${LAUNCH_AGENT_LABEL} is not loaded in launchd`,
           "run `k-bench install` to install and load it",
         ),
   );

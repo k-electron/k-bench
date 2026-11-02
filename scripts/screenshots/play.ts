@@ -40,6 +40,8 @@ let previous = 0;
 for (const [at, text] of recording.events) {
   const gap = Math.min(at - previous, MAX_GAP_MS);
   previous = at;
+  // The sleep is the job here: this replays a recording at its own pace, there is no
+  // outcome to wait for.
   if (gap > 0) await new Promise((resolve) => setTimeout(resolve, gap));
   await write(text);
 }

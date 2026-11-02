@@ -14,6 +14,9 @@
 // Nothing configured prints `{}`.
 import { execFileSync } from "node:child_process";
 
+/** The HTTPS port k-bench is published on unless `--https-port` says otherwise. */
+export const DEFAULT_HTTPS_PORT = 443;
+
 /** One thing `tailscale serve` publishes on one port. */
 export interface ServeEntry {
   /** The tailnet port it listens on. */
@@ -115,22 +118,30 @@ function isKBenchProxy(proxy: string | undefined, localPort: number): boolean {
 }
 
 /**
- * k-bench's own entry, on whichever port: a web entry whose only handler is `/` proxying to
+ * Whether an entry is k-bench's own: a web entry whose only handler is `/` proxying to
  * k-bench's local address (`localPort`, 7680 for the Installed instance). An entry that also
- * serves other paths is somebody else's setup that k-bench shares a port with, so it isn't
- * k-bench's own. Undefined when k-bench isn't published.
+ * serves other paths is somebody else's setup that k-bench shares a port with.
  */
+function isOwnEntry(entry: ServeEntry, localPort: number): boolean {
+  return (
+    entry.kind === "web" &&
+    entry.targets.length === 1 &&
+    entry.targets[0]?.path === "/" &&
+    isKBenchProxy(entry.targets[0].proxy, localPort)
+  );
+}
+
+/** Every one of k-bench's own entries, one per port it is published on. */
+export function findOwnEntries(config: ServeConfig, localPort: number): ServeEntry[] {
+  return config.entries.filter((entry) => isOwnEntry(entry, localPort));
+}
+
+/** The first of k-bench's own entries, on whichever port; undefined when not published. */
 export function findOwnEntry(
   config: ServeConfig,
   localPort: number,
 ): ServeEntry | undefined {
-  return config.entries.find(
-    (entry) =>
-      entry.kind === "web" &&
-      entry.targets.length === 1 &&
-      entry.targets[0]?.path === "/" &&
-      isKBenchProxy(entry.targets[0].proxy, localPort),
-  );
+  return findOwnEntries(config, localPort)[0];
 }
 
 /** What is published on `port`: nothing, k-bench's own entry, or something else. */
@@ -143,13 +154,13 @@ export function portUse(config: ServeConfig, port: number, localPort: number): P
   const onPort = config.entries.filter((entry) => entry.port === port);
   const [first] = onPort;
   if (!first) return { kind: "free" };
-  const foreign = onPort.find((entry) => entry !== findOwnEntry(config, localPort));
+  const foreign = onPort.find((entry) => !isOwnEntry(entry, localPort));
   return foreign ? { kind: "other", entry: foreign } : { kind: "own", entry: first };
 }
 
-/** The URL a device on the tailnet opens: the port is left out when it is the default, 443. */
+/** The URL a device on the tailnet opens: the port is left out when it is the default. */
 export function serveUrl(dnsName: string, port: number): string {
-  return `https://${dnsName.replace(/\.$/, "")}${port === 443 ? "" : `:${port}`}/`;
+  return `https://${dnsName.replace(/\.$/, "")}${port === DEFAULT_HTTPS_PORT ? "" : `:${port}`}/`;
 }
 
 /**

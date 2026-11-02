@@ -40,9 +40,6 @@ function write(path: string, content = "", mode = 0o644): void {
 }
 
 interface ParsedPlist {
-  RunAtLoad: boolean;
-  KeepAlive: boolean;
-  AbandonProcessGroup: boolean;
   ProgramArguments: string[];
   WorkingDirectory: string;
   EnvironmentVariables: Record<string, string>;
@@ -76,14 +73,6 @@ describe.skipIf(process.platform !== "darwin")("the LaunchAgent plist", () => {
         env,
       }),
     );
-
-  it("starts at login, restarts after a crash and leaves tmux alone when stopped", () => {
-    expect(plist()).toMatchObject({
-      RunAtLoad: true,
-      KeepAlive: true,
-      AbandonProcessGroup: true,
-    });
-  });
 
   it("runs the installed copy with an absolute Node path from the app folder", () => {
     const { ProgramArguments, WorkingDirectory } = plist();

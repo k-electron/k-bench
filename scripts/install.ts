@@ -5,7 +5,7 @@
 // reading it from Tailscale. It publishes on HTTPS port 443, or `--https-port <n>`, and
 // refuses (before changing anything) when that port already serves something other than
 // k-bench, unless `--force`.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -18,20 +18,35 @@ import { delimiter, dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { resolveConfig } from "../src/server/config.ts";
 import {
+  appDirIn,
+  BUILD_INFO_FILE,
+  LAUNCH_AGENT_LABEL,
+  launchAgentPlistPath,
+  launchdDomain,
+  logPath,
+  pathDirs as pathDirsOf,
+  reporter,
+  succeeds,
+} from "./command-lib.ts";
+import {
   appManifest,
   buildLaunchAgentPlist,
   findExecutable,
   findPackageRoot,
   nodePtyProblems,
+  nodeVersionProblem,
   parseTailscaleStatus,
   resolveTailscaleCli,
   stageApp,
   swapInStagedApp,
 } from "./install-lib.ts";
-import { portUse, readServeConfig, serveOffArgs, serveUrl } from "./tailscale-serve.ts";
-
-const LABEL = "com.k-bench.server";
-const DEFAULT_HTTPS_PORT = 443;
+import {
+  DEFAULT_HTTPS_PORT,
+  portUse,
+  readServeConfig,
+  serveOffArgs,
+  serveUrl,
+} from "./tailscale-serve.ts";
 
 export async function install(argv: string[]): Promise<void> {
   const { values: flags } = parseArgs({
@@ -52,39 +67,32 @@ export async function install(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // The npm package, or the checkout: where the files to install come from. Its `engines`
+  // are checked before anything else, in a dry run too, because npm only warns about them.
+  const packageDir = findPackageRoot(import.meta.dirname);
+  const pkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
+  const nodeProblem = nodeVersionProblem(process.versions.node, pkg.engines?.node);
+  if (nodeProblem) fail(nodeProblem);
+
   if (!/^\d+$/.test(httpsPortText) || httpsPort < 1 || httpsPort > 65535) {
     fail(`--https-port needs a port number from 1 to 65535, not "${httpsPortText}".`);
   }
 
-  function say(line: string): void {
-    console.log(line);
-  }
-
-  /** Announces a step, and does it unless this is a dry run. */
-  async function step(
-    description: string,
-    action: () => void | Promise<void>,
-  ): Promise<void> {
-    say(`${dryRun ? "would: " : ""}${description}`);
-    if (!dryRun) await action();
-  }
+  const { say, step } = reporter(dryRun);
 
   // Explicit env: the install must never pick up a K_BENCH_* override from the shell.
   const config = resolveConfig({ K_BENCH_INSTANCE: "installed" });
-  // The npm package, or the checkout: where the files to install come from.
-  const packageDir = findPackageRoot(import.meta.dirname);
-  const pkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
   // A checkout has the TypeScript source (the package ships only compiled JavaScript), and
   // so can be built and asked for its git commit.
   const fromCheckout = existsSync(join(packageDir, "src/server/main.ts"));
-  const appDir = join(config.dataDir, "app");
+  const appDir = appDirIn(config.dataDir);
   const stagingDir = join(config.dataDir, "app.staging");
-  const logPath = join(homedir(), "Library", "Logs", "k-bench", "k-bench.log");
-  const plistPath = join(homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
-  const domain = `gui/${process.getuid?.() ?? 501}`;
+  const logFile = logPath();
+  const plistPath = launchAgentPlistPath();
+  const domain = launchdDomain();
 
   // Prerequisites. These are read-only checks, so they run in a dry run too.
-  const pathDirs = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+  const pathDirs = pathDirsOf();
   const tmux = findExecutable("tmux", pathDirs);
   if (!tmux) fail("tmux not found. Install it with `brew install tmux`.");
   const tailscale = resolveTailscaleCli({ pathDirs });
@@ -136,9 +144,7 @@ export async function install(argv: string[]): Promise<void> {
     return [...new Set(dirs)].join(delimiter);
   }
 
-  function launchctl(args: string[]): boolean {
-    return spawnSync("launchctl", args, { stdio: "ignore" }).status === 0;
-  }
+  const launchctl = (args: string[]) => succeeds("launchctl", args);
 
   async function waitFor(
     what: string,
@@ -163,7 +169,7 @@ export async function install(argv: string[]): Promise<void> {
     `  data       ${config.dataDir} (tmux socket "${config.tmuxSocket}", port ${config.port})`,
   );
   say(`  agent      ${plistPath}`);
-  say(`  log        ${logPath}\n`);
+  say(`  log        ${logFile}\n`);
 
   // The login the server admits, and the name the URL is built from. A dry run only looks,
   // so it carries on with placeholders when Tailscale can't say.
@@ -193,8 +199,8 @@ export async function install(argv: string[]): Promise<void> {
 
   await step(
     fromCheckout
-      ? "record the installed version and commit in build-info.json"
-      : "record the installed version in build-info.json",
+      ? `record the installed version and commit in ${BUILD_INFO_FILE}`
+      : `record the installed version in ${BUILD_INFO_FILE}`,
     () => {
       const git = (args: string[]) =>
         execFileSync("git", args, { cwd: packageDir, encoding: "utf8" }).trim();
@@ -208,7 +214,7 @@ export async function install(argv: string[]): Promise<void> {
         installedAt: new Date().toISOString(),
       };
       writeFileSync(
-        join(stagingDir, "build-info.json"),
+        join(stagingDir, BUILD_INFO_FILE),
         `${JSON.stringify(buildInfo, null, 2)}\n`,
       );
     },
@@ -240,11 +246,11 @@ export async function install(argv: string[]): Promise<void> {
   await step(
     `stop the running LaunchAgent (launchctl bootout, ${domain}), if loaded`,
     async () => {
-      if (launchctl(["print", `${domain}/${LABEL}`])) {
-        launchctl(["bootout", `${domain}/${LABEL}`]);
+      if (launchctl(["print", `${domain}/${LAUNCH_AGENT_LABEL}`])) {
+        launchctl(["bootout", `${domain}/${LAUNCH_AGENT_LABEL}`]);
         await waitFor(
           "launchd to unload the old agent",
-          () => !launchctl(["print", `${domain}/${LABEL}`]),
+          () => !launchctl(["print", `${domain}/${LAUNCH_AGENT_LABEL}`]),
         );
       }
     },
@@ -256,14 +262,14 @@ export async function install(argv: string[]): Promise<void> {
 
   await step(`write the LaunchAgent ${plistPath}`, () => {
     mkdirSync(dirname(plistPath), { recursive: true });
-    mkdirSync(dirname(logPath), { recursive: true });
+    mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(
       plistPath,
       buildLaunchAgentPlist({
-        label: LABEL,
+        label: LAUNCH_AGENT_LABEL,
         nodePath,
         appDir,
-        logPath,
+        logPath: logFile,
         env: {
           K_BENCH_INSTANCE: "installed",
           K_BENCH_ALLOWED_LOGIN: identity.login,

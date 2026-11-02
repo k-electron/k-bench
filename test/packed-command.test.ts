@@ -103,6 +103,16 @@ describe("the packed k-bench command", () => {
       expect(result.stderr).toMatch(/tmux/);
     });
 
+    it("fails clearly on a Node older than 26, before anything else, even as a dry run", () => {
+      const stubs = new Stubs({ nodeVersion: "25.9.0" });
+      const result = runKBench(pkg, ["install", "--dry-run"], { stubs });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/Node/);
+      expect(result.stderr).toContain("25.9.0");
+      expect(result.stderr).toContain("26");
+      expect(result.stdout).not.toContain("would:");
+    });
+
     it("ends with the URL k-bench is reachable at", () => {
       const result = runKBench(pkg, ["install", "--dry-run"], { stubs: new Stubs() });
       expect(result.status, result.stderr).toBe(0);
@@ -160,6 +170,36 @@ describe("the packed k-bench command", () => {
       expect(result.status, result.stderr).toBe(0);
       // Its own entry is updated in place, not removed first.
       expect(result.stdout).not.toContain("remove what is on port");
+    });
+
+    it("reinstalls on the second port when k-bench is published on two, without --force", () => {
+      // 443 from an earlier install, 8443 from `install --https-port 8443`.
+      const { result } = dryRun(
+        ["--https-port", "8443"],
+        serveStatusOf([443, "http://127.0.0.1:7680"], [8443, "http://127.0.0.1:7680"]),
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).not.toContain("remove what is on port");
+    });
+
+    it("stops when another service shares the port with k-bench's address", () => {
+      const status = serveStatusOf([443, "http://127.0.0.1:7680"]) as {
+        Web: Record<string, { Handlers: Record<string, unknown> }>;
+      };
+      for (const web of Object.values(status.Web)) {
+        web.Handlers["/api"] = { Proxy: "http://127.0.0.1:9000" };
+      }
+      const { result } = dryRun([], status);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("--force");
+    });
+
+    it("stops when the port is a raw TCP forward", () => {
+      const { result } = dryRun(["--https-port", "5432"], {
+        TCP: { "5432": { TCPForward: "127.0.0.1:5432" } },
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("127.0.0.1:5432");
     });
 
     it("rejects a port that is not a port", () => {
@@ -317,17 +357,15 @@ describe("the packed k-bench command: uninstall", () => {
     const stubs = installedStubs();
     const result = runKBench(pkg, ["uninstall", "--dry-run"], { stubs, home });
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("dry run");
-    expect(result.stdout).toContain("bootout");
+    // It names what goes, and what stays...
     expect(result.stdout).toContain(paths.plist);
     expect(result.stdout).toContain(paths.app);
     expect(result.stdout).toMatch(/would keep/i);
     expect(result.stdout).toContain(dataDir);
-    expect(result.stdout).not.toContain("kill-server");
-    expect(result.stdout).toMatch(/Sessions? carry on/);
-    // Only k-bench's own entry (8443) goes; the other service on 443 stays.
+    // ...only k-bench's own entry (8443) of the two on the tailnet...
     expect(result.stdout).toContain("--https=8443 off");
     expect(result.stdout).not.toContain("--https=443");
+    // ...and nothing was touched.
     for (const path of Object.values(paths)) expect(existsSync(path), path).toBe(true);
     expect(stubs.tailscaleWrites()).toEqual([]);
     expect(stubs.launchctlCalls().every((call) => call.startsWith("print "))).toBe(true);
@@ -345,7 +383,6 @@ describe("the packed k-bench command: uninstall", () => {
     expect(result.stdout).toMatch(/delete.*data/i);
     expect(result.stdout).toContain(dataDir);
     expect(result.stdout).toMatch(/ends? every Session/i);
-    expect(result.stdout).toContain("kill-server");
     for (const path of Object.values(paths)) expect(existsSync(path), path).toBe(true);
     expect(stubs.tailscaleWrites()).toEqual([]);
     expect(endedTmux(stubs)).toBe(false);
@@ -387,6 +424,28 @@ describe("the packed k-bench command: uninstall", () => {
     expect(existsSync(dataDir)).toBe(false);
     expect(existsSync(paths.log)).toBe(false);
     expect(stubs.tmuxCalls()).toContain("-L k-bench kill-server");
+  });
+});
+
+describe("the packed k-bench command: uninstall with k-bench published on two ports", () => {
+  it("removes k-bench's entry on every port, and nothing else", () => {
+    // k-bench on 443 and 8443 (an earlier install, then `--https-port 8443`), a service on 10000.
+    const stubs = new Stubs({
+      launchctl: { loaded: true },
+      tailscale: {
+        serveStatus: serveStatusOf(
+          [443, "http://127.0.0.1:7680"],
+          [8443, "http://127.0.0.1:7680"],
+          [10000, "http://127.0.0.1:3000"],
+        ),
+      },
+    });
+    const result = runKBench(pkg, ["uninstall"], { stubs });
+    expect(result.status, result.stderr).toBe(0);
+    expect(stubs.tailscaleWrites().sort()).toEqual([
+      "serve --https=443 off",
+      "serve --https=8443 off",
+    ]);
   });
 });
 

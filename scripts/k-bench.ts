@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { install } from "./install.ts";
 import { findPackageRoot } from "./install-lib.ts";
 import { status } from "./status.ts";
+import { DEFAULT_HTTPS_PORT } from "./tailscale-serve.ts";
 import { uninstall } from "./uninstall.ts";
 
 const USAGE = `Usage: k-bench <command> [options]
@@ -13,7 +14,7 @@ const USAGE = `Usage: k-bench <command> [options]
 Commands:
   install [--dry-run] [--login <login>] [--https-port <n>] [--force]
                   install or update k-bench as a background service, published on
-                  HTTPS port 443 unless --https-port says otherwise; --force replaces
+                  HTTPS port ${DEFAULT_HTTPS_PORT} unless --https-port says otherwise; --force replaces
                   whatever else is on that port
   uninstall [--dry-run] [--purge]
                   stop and remove the service, its tailscale serve entry and the app

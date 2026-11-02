@@ -100,6 +100,8 @@ export const test = base.extend<{ demo: Demo }>({
         await settled(terminal);
       },
       assertNothingPrivate: async () => {
+        // The whole page's text is the point: nothing private may appear anywhere, so no
+        // role or label could stand in for the body here.
         const text = `${await page.title()}\n${await page.locator("body").textContent()}`;
         const findings = findPrivate(text);
         expect(findings, describeFindings(findings)).toEqual([]);
@@ -154,6 +156,8 @@ export async function fitTerminal(
   const stableSize = async () => {
     for (let i = 0; i < 10; i++) {
       const first = await app.terminalSize(terminal);
+      // A fixed pause on purpose: the check is that the size does *not* change over time,
+      // which no outcome can be polled for (the same reason as a sleep in docs/testing.md).
       await new Promise((resolve) => setTimeout(resolve, 600));
       const second = await app.terminalSize(terminal);
       if (first.cols === second.cols && first.rows === second.rows) return second;
