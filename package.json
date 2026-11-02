@@ -51,6 +51,9 @@
     "test:e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "smoke": "node scripts/smoke.ts",
+    "screenshots": "playwright test --config playwright.screenshots.config.ts",
+    "screenshots:record": "node scripts/record-hero.ts",
+    "screenshots:scrub": "node scripts/scrub-recording.ts",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
