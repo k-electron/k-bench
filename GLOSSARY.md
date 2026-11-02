@@ -4,6 +4,10 @@ A browser interface, reachable only on the owner's tailnet, to persistent termin
 
 ## Language
 
+**Owner**:
+The one person a k-bench install belongs to. It runs on their Host, and only their tailnet login can reach it.
+_Avoid_: user, admin, account
+
 **Host**:
 The owner's Mac that runs k-bench and every Session.
 _Avoid_: server, box, machine
@@ -21,7 +25,7 @@ A named, persistent shell belonging to one Workspace, started in that Workspace'
 _Avoid_: terminal, tab, tmux session
 
 **Stopped**:
-The state of a Session whose shell no longer exists, because it exited or the Host rebooted. A Stopped Session can be restarted as a fresh shell in the same folder.
+The state of a Session whose shell no longer exists, because it exited, or the owner logged out of the Host or restarted it. A Stopped Session can be restarted as a fresh shell in the same folder.
 _Avoid_: dead, closed, killed
 
 **Bell**:
