@@ -37,6 +37,7 @@ pnpm build:web   # just the front end (Vite)
 pnpm build:server # just the compiled server and command (tsc -p tsconfig.build.json)
 pnpm start       # the server alone, run from the TypeScript source; serves dist/web when it exists
 pnpm install-app # build and install the Installed instance (launchd + tailscale serve); the same as `k-bench install`; --dry-run to preview
+pnpm release <version> # maintainers: open a release PR (bumps the version, moves the changelog notes); --dry-run to preview. See Releasing below
 pnpm smoke       # build, then probe the production server on a throwaway instance and clean up; --hold keeps it up for manual requests
 pnpm lint        # Biome (warnings fail it too)
 pnpm typecheck   # tsc, for the server/tests and for the front end (web/)
@@ -99,7 +100,7 @@ It never touches `./.data/` or the `k-bench-dev` tmux socket.
 
 ### Packaging
 
-The npm package ships compiled JavaScript (`dist/js`) and the built front end (`dist/web`), because Node does not strip TypeScript types under `node_modules`. `package.json` carries the package name, the `k-bench` command, the `files` allow-list and `engines`. Its version stays `0.0.0` until a release bumps it, and only the release workflow publishes: never run `npm publish` yourself. `npm pack --dry-run` lists what would ship. To try the package without touching your real npm prefix, run `npm pack`, then `npm install --global --prefix <tmp> ./k-electron-k-bench-<version>.tgz`, and run `<tmp>/bin/k-bench install --dry-run`. [Packaging](docs/internals/packaging.md) explains the build and the install in full.
+The npm package ships compiled JavaScript (`dist/js`) and the built front end (`dist/web`), because Node does not strip TypeScript types under `node_modules`. `package.json` carries the package name, the `k-bench` command, the `files` allow-list and `engines`. Its version stays `0.0.0` until a release bumps it, and only the release workflow publishes: never run `npm publish` yourself (the owner's one-off placeholder publish, in [Releasing](docs/internals/releasing.md), is the single exception). `npm pack --dry-run` lists what would ship. To try the package without touching your real npm prefix, run `npm pack`, then `npm install --global --prefix <tmp> ./k-electron-k-bench-<version>.tgz`, and run `<tmp>/bin/k-bench install --dry-run`. [Packaging](docs/internals/packaging.md) explains the build and the install in full.
 
 ### The Dev instance on the tailnet
 
@@ -116,6 +117,16 @@ This publishes the Dev server itself (127.0.0.1:7690), not Vite, so the same `Ta
 ### Verifying and removing an install
 
 The install changes the real system, so it is checked by hand: automated tests cover only its pure parts and the packed command's dry run (Seam 3). The checklist, which includes installing from the packed package, and how to remove the install are in [Install verification](docs/internals/install-verification.md).
+
+## Changelog
+
+User-visible changes get a line under Unreleased in [CHANGELOG.md](CHANGELOG.md), in the style of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Deprecated, Removed, Fixed, Security). Use the glossary's terms. Do not edit released sections or the version number: `pnpm release` does that.
+
+## Releasing
+
+Maintainers release with `pnpm release <version>` from a clean, up-to-date `main`. It opens a pull request that bumps the version and moves the changelog's Unreleased notes under it; merging that PR runs `.github/workflows/release.yml`, which runs the checks, publishes to npm through trusted publishing with provenance (no npm token), tags `v<version>` and creates the GitHub Release. Pushes to `main` that do not change the version publish nothing, and the workflow also refuses to publish `0.0.0` or while the package does not exist on npm yet. A manual run of the workflow with `dry_run` ticked does everything except publish, tag and release, and prints what it would do.
+
+The process in full, and the one-off npm setup the owner does before the first release (the `k-electron` scope, a `0.0.0` placeholder, and a trusted publisher for the repository `k-electron/k-bench` and the workflow file `release.yml`), is in [Releasing](docs/internals/releasing.md).
 
 ## Pull requests
 

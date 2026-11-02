@@ -1,0 +1,130 @@
+# Publishes a release when a merge to main bumps the package version (see
+# docs/internals/releasing.md). The file name is part of the npm trusted-publisher setup:
+# do not rename it without updating the package's settings on npmjs.com.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Do everything except publish, tag and create the release, and show what would happen
+        type: boolean
+        default: true
+
+# id-token: npm trusted publishing (OIDC) and provenance. contents: push the tag, create the release.
+permissions:
+  id-token: write
+  contents: write
+
+# Never two releases at once, and never cancel one half way through.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+jobs:
+  release:
+    # macOS, like the CI job: the e2e tests need the same tmux and node-pty as the Host.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      # No registry-url: setup-node would write an .npmrc that expects an NODE_AUTH_TOKEN.
+      # Publishing uses trusted publishing only; there is no npm token anywhere.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      # Decides whether this run would publish: only a real version (not 0.0.0) of a package that
+      # exists on npm, and that npm does not have yet. A missing package is a clear "no".
+      - name: Plan the release
+        id: plan
+        run: node scripts/release-plan.ts --notes "$RUNNER_TEMP/release-notes.md" --github-output
+
+      # Real runs publish only from main, only when the plan says so, and never as a dry run.
+      - name: Decide whether to publish for real
+        id: mode
+        env:
+          PLAN_PUBLISH: ${{ steps.plan.outputs.publish }}
+        run: |
+          if [ "$PLAN_PUBLISH" = true ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$DRY_RUN" != true ]; then
+            echo "real=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "real=false" >> "$GITHUB_OUTPUT"
+            if [ "$DRY_RUN" = true ]; then
+              echo "Dry run: nothing will be published, tagged or released."
+            elif [ "$PLAN_PUBLISH" != true ]; then
+              echo "Nothing to release: see the Publish line of the plan above."
+            else
+              echo "Not publishing: $GITHUB_REF is not refs/heads/main."
+            fi
+          fi
+
+      - name: Install, check and run the e2e tests
+        if: steps.plan.outputs.publish == 'true' || env.DRY_RUN == 'true'
+        run: |
+          brew install tmux
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm exec playwright install chromium
+          pnpm test:e2e
+
+      - name: Check that npm supports trusted publishing
+        if: steps.mode.outputs.real == 'true'
+        run: node scripts/check-npm.ts
+
+      - name: Publish to npm
+        if: steps.mode.outputs.real == 'true'
+        env:
+          NPM_TAG: ${{ steps.plan.outputs.npm_tag }}
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
+
+      - name: Tag the release
+        if: steps.mode.outputs.real == 'true'
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
+      - name: Create the GitHub Release
+        if: steps.mode.outputs.real == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          PRERELEASE: ${{ steps.plan.outputs.prerelease }}
+        run: |
+          if [ "$PRERELEASE" = true ]; then
+            gh release create "$TAG" --verify-tag --prerelease --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+
+      - name: Dry run summary
+        if: env.DRY_RUN == 'true'
+        env:
+          PLAN_PUBLISH: ${{ steps.plan.outputs.publish }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          NPM_TAG: ${{ steps.plan.outputs.npm_tag }}
+        run: |
+          echo "DRY RUN: the checks and tests passed. Nothing was published, tagged or released."
+          echo "Version: $VERSION"
+          echo "Tag:     $TAG"
+          if [ "$PLAN_PUBLISH" = true ]; then
+            echo "Would run: npm publish --provenance --access public --tag $NPM_TAG"
+            echo "Would run: git tag $TAG $GITHUB_SHA, then git push origin refs/tags/$TAG"
+            echo "Would run: gh release create $TAG --verify-tag --title $TAG, with the notes below"
+          else
+            echo "A real run on this commit would publish nothing (see the Publish line of the plan above)."
+          fi
+          echo "Release notes:"
+          echo "-----"
+          cat "$RUNNER_TEMP/release-notes.md"
+          echo "-----"

@@ -7,6 +7,7 @@
 - `k-bench.ts`: the `k-bench` command (the package's `bin`); `pnpm install-app` runs `k-bench install`.
 - `install.ts`: `k-bench install`, with its pure, unit-tested parts in `install-lib.ts`.
 - `smoke.ts`: `pnpm smoke`.
+- `release.ts`: `pnpm release <version>`. `release-plan.ts` and `check-npm.ts` are steps of the release workflow; `release-lib.ts` holds the pure parts they share. See [Releasing](releasing.md).
 - `fix-node-pty.mjs`: restores the execute bit on node-pty's `spawn-helper`.
 
 The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsconfig.build.json`) for the npm package: see [Packaging](packaging.md).

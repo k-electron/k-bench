@@ -51,6 +51,7 @@
     "test:e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "smoke": "node scripts/smoke.ts",
+    "release": "node scripts/release.ts",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
