@@ -123,16 +123,27 @@ export class AppPage {
   /**
    * Asks the shell how big its terminal is (`tput`), so the answer is what the Session
    * really sees, not what the browser believes.
+   *
+   * An answer can be drawn over before it is read: tmux hands a burst of resizes (a divider
+   * drag) to the shell at most every quarter second or so, and a shell that redraws its
+   * prompt when the last one lands can draw it over the line it just printed. So a probe
+   * that goes unanswered is asked again, with a fresh tag.
    */
   async terminalSize(terminal: Locator): Promise<{ cols: number; rows: number }> {
-    const tag = `size${++this.sizeProbes}`;
-    await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
-    await this.page.keyboard.type(`echo "${tag}=$(tput cols)x$(tput lines)"`);
-    await this.page.keyboard.press("Enter");
-    await expect(terminal).toContainText(new RegExp(`${tag}=\\d+x\\d+`));
-    const text = (await terminal.textContent()) ?? "";
-    const [, cols, rows] = new RegExp(`${tag}=(\\d+)x(\\d+)`).exec(text) ?? [];
-    return { cols: Number(cols), rows: Number(rows) };
+    let size = { cols: 0, rows: 0 };
+    await expect(async () => {
+      const tag = `size${++this.sizeProbes}`;
+      await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+      await this.page.keyboard.type(`echo "${tag}=$(tput cols)x$(tput lines)"`);
+      await this.page.keyboard.press("Enter");
+      await expect(terminal).toContainText(new RegExp(`${tag}=\\d+x\\d+`), {
+        timeout: 2_000,
+      });
+      const text = (await terminal.textContent()) ?? "";
+      const [, cols, rows] = new RegExp(`${tag}=(\\d+)x(\\d+)`).exec(text) ?? [];
+      size = { cols: Number(cols), rows: Number(rows) };
+    }).toPass({ timeout: 10_000 });
+    return size;
   }
 
   async createWorkspace(folder: string, options: { name?: string } = {}): Promise<void> {
