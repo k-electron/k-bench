@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { install } from "./install.ts";
 import { findPackageRoot } from "./install-lib.ts";
+import { status } from "./status.ts";
 
 const USAGE = `Usage: k-bench <command> [options]
 
@@ -13,6 +14,8 @@ Commands:
                   install or update k-bench as a background service, published on
                   HTTPS port 443 unless --https-port says otherwise; --force replaces
                   whatever else is on that port
+  status          check that k-bench is set up and healthy: each check passes or
+                  fails with a fix, and the exit status is non-zero when one fails
 
 Options:
   --help, -h      show this help
@@ -31,6 +34,8 @@ if (command === "--version" || command === "-v") {
   process.exit(1);
 } else if (command === "install") {
   await install(rest);
+} else if (command === "status") {
+  await status(rest);
 } else {
   console.error(`k-bench: unknown command "${command}"\n\n${USAGE}`);
   process.exit(1);

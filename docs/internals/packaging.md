@@ -15,13 +15,13 @@ k-bench is published to npm as `@k-electron/k-bench`. An owner runs `npm i -g @k
 Node does not strip TypeScript types from files under `node_modules`, so the package ships compiled JavaScript.
 
 - `pnpm build` is `pnpm build:web` (Vite, into `dist/web`) then `pnpm build:server` (`tsc -p tsconfig.build.json`, into `dist/js`, after deleting the old `dist/js`).
-- `tsconfig.build.json` extends `tsconfig.json` with emit turned on. It compiles `src/server`, `src/shared` and the command (`scripts/k-bench.ts`, `scripts/install.ts`, `scripts/install-lib.ts`, `scripts/tailscale-serve.ts`). The root `tsconfig.json` has `rewriteRelativeImportExtensions`, so `./x.ts` imports are emitted as `./x.js`. Because the root is `.`, the output mirrors the source: `dist/js/src/server/main.js`, `dist/js/scripts/k-bench.js`.
+- `tsconfig.build.json` extends `tsconfig.json` with emit turned on. It compiles `src/server`, `src/shared` and the command (`scripts/k-bench.ts`, `scripts/install.ts`, `scripts/install-lib.ts`, `scripts/status.ts`, `scripts/tailscale-serve.ts`). The root `tsconfig.json` has `rewriteRelativeImportExtensions`, so `./x.ts` imports are emitted as `./x.js`. Because the root is `.`, the output mirrors the source: `dist/js/src/server/main.js`, `dist/js/scripts/k-bench.js`.
 - `prepack` runs `pnpm build`, so `npm pack` and `npm publish` cannot ship a stale or missing build.
 - `dist/` is gitignored, and so are the `*.tgz` files `npm pack` writes.
 
 ## `k-bench install`
 
-`scripts/k-bench.ts` is the command (`install`, `--help`, `--version`); `scripts/install.ts` is the installer and `scripts/install-lib.ts` holds its pure, unit-tested parts. From a checkout, `pnpm install-app` runs `node scripts/k-bench.ts install`.
+`scripts/k-bench.ts` is the command (`install`, `status`, `--help`, `--version`); `scripts/install.ts` is the installer and `scripts/install-lib.ts` holds its pure, unit-tested parts. From a checkout, `pnpm install-app` runs `node scripts/k-bench.ts install`.
 
 The installer looks for its files in the package folder (the nearest folder with a `package.json` above the script). It is running from a checkout, not the npm package, when `src/server/main.ts` exists there; the package ships only compiled JavaScript. In order:
 
@@ -33,9 +33,18 @@ The installer looks for its files in the package folder (the nearest folder with
 
 Before any of that, right after the tmux and Tailscale checks, the installer reads the serve configuration (below). If the chosen port serves anything other than k-bench's own entry and there is no `--force`, it exits with an error that names `--https-port` and `--force`, having changed nothing; a dry run checks too. The install ends by printing the URL, `https://<host>/` or `https://<host>:<port>/` (a dry run says where k-bench would be reachable).
 
+## `k-bench status`
+
+`scripts/status.ts` is a read-only health check of the Installed instance: it never changes the machine, the tailnet or the app. It prints each check as `ok`, `skip` (needs a check that failed before it) or `FAIL` with a one-line `fix:`, then the installed version and the URL, and exits non-zero when any check failed.
+
+- Checks, in order: tmux is on PATH; the Tailscale CLI is found (PATH, else inside Tailscale.app); Tailscale is logged in (`tailscale status --json` has `BackendState: "Running"`); HTTPS certificates are available (`CertDomains` is not empty); the LaunchAgent `com.k-bench.server` is loaded (`launchctl print` succeeds); the server answers its health check.
+- The health check is `GET /api/health` on `127.0.0.1:7680`, which answers `{"status":"ok"}`. It sits behind the access guard like the rest of the API (ADR 0003 is unchanged: no unauthenticated route was added), so status sends the logged-in Tailscale user's login in `Tailscale-User-Login`, as `tailscale serve` would. A server that is up but refuses that login is therefore a failure with its own fix: the allowed login is out of date, and `k-bench install` sets it again.
+- The version is `version` (and `commit`, from a checkout) from the installed app's `app/build-info.json`; it is "not installed" when there is none. The URL is `serveUrl` for the port of `findOwnEntry` in the serve configuration (see below), or "not published" with a fix when k-bench has no entry. These two lines are information, not checks.
+- Like the installer, status ignores `K_BENCH_*` variables from the shell and describes the Installed instance. The one exception, `K_BENCH_STATUS_PORT`, exists for the packed-command tests: it points the health check and the lookup of k-bench's own serve entry at a throwaway server instead of port 7680.
+
 ## The tailscale serve configuration
 
-`scripts/tailscale-serve.ts` reads `tailscale serve status --json` and is shared by the `k-bench` commands: `install` uses it to protect other setups, and `uninstall` and `status` build on it. Its parsing is pure and unit-tested (`test/tailscale-serve.test.ts`); `readServeConfig(tailscale)` is the only call that runs the CLI.
+`scripts/tailscale-serve.ts` reads `tailscale serve status --json` and is shared by the `k-bench` commands: `install` uses it to protect other setups, and `uninstall` and `status` build on it (`status` uses `findOwnEntry` and `serveUrl`). Its parsing is pure and unit-tested (`test/tailscale-serve.test.ts`); `readServeConfig(tailscale)` is the only call that runs the CLI.
 
 - The JSON is a `Web` map keyed `<host>:<port>` (each with `Handlers` by URL path: `Proxy`, `Path`, `Text` or `Redirect`) and a `TCP` map by port (`{ "HTTPS": true }` for a web listener, `{ "TCPForward": "host:port" }` for a raw forward). `{}` means nothing is served.
 - `parseServeConfig` turns that into entries, one per port. `findOwnEntry(config, localPort)` finds k-bench's own entry on whichever port: a web entry whose only handler is `/` proxying to `http://127.0.0.1:<localPort>` (7680 for the Installed instance; the Dev instance's `pnpm dev:serve` entry, proxying to 7690, is therefore not k-bench's own). An entry that shares its port with other paths is not. `portUse(config, port, localPort)` says whether a port is free, k-bench's own or something else, and `serveUrl(dnsName, port)` builds the URL (no `:port` for 443).

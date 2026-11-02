@@ -65,6 +65,10 @@ export function createApp(
     if (revision !== undefined) c.res.headers.set("State-Revision", String(revision));
   });
 
+  // `k-bench status` asks this. It is behind the access guard like everything else, so the
+  // caller must send the owner's login.
+  app.get("/api/health", (c) => c.json({ status: "ok" }));
+
   app.get("/api/state", async (c) => c.json(await service.getState()));
 
   // The folder picker. Defaults to the configured root.
