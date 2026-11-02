@@ -6,6 +6,7 @@
 - `dev-serve.ts`: `pnpm dev:serve`.
 - `k-bench.ts`: the `k-bench` command (the package's `bin`); `pnpm install-app` runs `k-bench install`.
 - `install.ts`: `k-bench install`, with its pure, unit-tested parts in `install-lib.ts`.
+- `tailscale-serve.ts`: reads the `tailscale serve` configuration (pure parsing plus one thin call to the CLI); shared by the `k-bench` commands: see [Packaging](packaging.md#the-tailscale-serve-configuration).
 - `smoke.ts`: `pnpm smoke`.
 - `fix-node-pty.mjs`: restores the execute bit on node-pty's `spawn-helper`.
 

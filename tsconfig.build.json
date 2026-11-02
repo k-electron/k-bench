@@ -10,6 +10,7 @@
     "src/shared",
     "scripts/k-bench.ts",
     "scripts/install.ts",
-    "scripts/install-lib.ts"
+    "scripts/install-lib.ts",
+    "scripts/tailscale-serve.ts"
   ]
 }

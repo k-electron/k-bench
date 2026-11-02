@@ -2,7 +2,9 @@
 // the npm package or, as `pnpm install-app`, from a checkout. Safe to re-run: it updates the
 // app in place, and running Sessions live in tmux, outside this server's process group, so
 // they carry on. `--dry-run` prints the plan and changes nothing; `--login <login>` skips
-// reading it from Tailscale.
+// reading it from Tailscale. It publishes on HTTPS port 443, or `--https-port <n>`, and
+// refuses (before changing anything) when that port already serves something other than
+// k-bench, unless `--force`.
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -26,9 +28,10 @@ import {
   stageApp,
   swapInStagedApp,
 } from "./install-lib.ts";
+import { portUse, readServeConfig, serveOffArgs, serveUrl } from "./tailscale-serve.ts";
 
 const LABEL = "com.k-bench.server";
-const HTTPS_PORT = 443;
+const DEFAULT_HTTPS_PORT = 443;
 
 export async function install(argv: string[]): Promise<void> {
   const { values: flags } = parseArgs({
@@ -36,13 +39,21 @@ export async function install(argv: string[]): Promise<void> {
     options: {
       "dry-run": { type: "boolean", default: false },
       login: { type: "string" },
+      "https-port": { type: "string", default: String(DEFAULT_HTTPS_PORT) },
+      force: { type: "boolean", default: false },
     },
   });
   const dryRun = flags["dry-run"];
+  const httpsPortText = flags["https-port"];
+  const httpsPort = Number(httpsPortText);
 
   function fail(message: string): never {
     console.error(`k-bench install: ${message}`);
     process.exit(1);
+  }
+
+  if (!/^\d+$/.test(httpsPortText) || httpsPort < 1 || httpsPort > 65535) {
+    fail(`--https-port needs a port number from 1 to 65535, not "${httpsPortText}".`);
   }
 
   function say(line: string): void {
@@ -80,6 +91,24 @@ export async function install(argv: string[]): Promise<void> {
   if (!tailscale) {
     fail(
       "the Tailscale CLI was not found on PATH or inside /Applications/Tailscale.app.",
+    );
+  }
+
+  // Read before anything is done: if the port is taken by someone else's setup, the install
+  // stops here, having changed nothing.
+  let serveConfig: ReturnType<typeof readServeConfig>;
+  try {
+    serveConfig = readServeConfig(tailscale);
+  } catch (error) {
+    fail((error as Error).message);
+  }
+  const occupant = portUse(serveConfig, httpsPort, config.port);
+  if (occupant.kind === "other" && !flags.force) {
+    const what = occupant.entry.targets.map((target) => `  ${target.description}`);
+    fail(
+      `HTTPS port ${httpsPort} already serves something other than k-bench:\n${what.join("\n")}\n` +
+        "Nothing was changed. Publish k-bench on another port with `--https-port <n>` " +
+        `(for example \`--https-port 8443\`), or replace what is on port ${httpsPort} with \`--force\`.`,
     );
   }
 
@@ -136,14 +165,19 @@ export async function install(argv: string[]): Promise<void> {
   say(`  agent      ${plistPath}`);
   say(`  log        ${logPath}\n`);
 
-  let identity = { login: flags.login ?? "", dnsName: "<this machine's tailnet name>" };
-  if (flags.login || dryRun) {
-    if (!flags.login)
-      identity.login = "<your login, read from `tailscale status --json`>";
-  } else {
-    identity = parseTailscaleStatus(
+  // The login the server admits, and the name the URL is built from. A dry run only looks,
+  // so it carries on with placeholders when Tailscale can't say.
+  let identity = {
+    login: flags.login ?? "<your login, read from `tailscale status --json`>",
+    dnsName: "<this machine's tailnet name>",
+  };
+  try {
+    const status = parseTailscaleStatus(
       execFileSync(tailscale, ["status", "--json"], { encoding: "utf8" }),
     );
+    identity = { login: flags.login ?? status.login, dnsName: status.dnsName };
+  } catch (error) {
+    if (!dryRun) fail((error as Error).message);
   }
   say(`allowed login: ${identity.login}\n`);
 
@@ -257,19 +291,29 @@ export async function install(argv: string[]): Promise<void> {
     },
   );
 
+  if (occupant.kind === "other") {
+    const offArgs = serveOffArgs(occupant.entry);
+    await step(
+      `remove what is on port ${httpsPort} (--force): ${tailscale} ${offArgs.join(" ")}`,
+      () => {
+        execFileSync(tailscale, offArgs, { stdio: "inherit" });
+      },
+    );
+  }
   const serveArgs = [
     "serve",
     "--bg",
-    `--https=${HTTPS_PORT}`,
+    `--https=${httpsPort}`,
     `http://127.0.0.1:${config.port}`,
   ];
   await step(`publish on the tailnet: ${tailscale} ${serveArgs.join(" ")}`, () => {
     execFileSync(tailscale, serveArgs, { stdio: "inherit" });
   });
 
+  const url = serveUrl(identity.dnsName, httpsPort);
   say(
     dryRun
-      ? "\nDry run finished: nothing was changed."
-      : `\nInstalled. Open https://${identity.dnsName}/ from a device on your tailnet.`,
+      ? `\nDry run finished: nothing was changed. k-bench would be reachable at ${url}`
+      : `\nInstalled. Open ${url} from a device on your tailnet.`,
   );
 }

@@ -10,7 +10,9 @@ import {
   packedPackage,
   packedTempDir,
   runKBench,
+  STUB_DNS_NAME,
   Stubs,
+  serveStatusOf,
 } from "./harness/packed.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { testSocketName } from "./harness/socket-leaks.ts";
@@ -97,6 +99,71 @@ describe("the packed k-bench command", () => {
       });
       expect(result.status).not.toBe(0);
       expect(result.stderr).toMatch(/tmux/);
+    });
+
+    it("ends with the URL k-bench is reachable at", () => {
+      const result = runKBench(pkg, ["install", "--dry-run"], { stubs: new Stubs() });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain(`https://${STUB_DNS_NAME}/`);
+    });
+  });
+
+  describe("install when the HTTPS port is already in use", () => {
+    const elsewhere = serveStatusOf([443, "http://127.0.0.1:3000"]);
+    const dryRun = (args: string[], serveStatus: unknown) => {
+      const stubs = new Stubs({ tailscale: { serveStatus } });
+      return {
+        stubs,
+        result: runKBench(pkg, ["install", "--dry-run", ...args], { stubs }),
+      };
+    };
+
+    it("stops, names both ways out and changes nothing", () => {
+      const { stubs, result } = dryRun([], elsewhere);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("http://127.0.0.1:3000");
+      expect(result.stderr).toContain("--https-port");
+      expect(result.stderr).toContain("--force");
+      expect(result.stdout).not.toContain("would:");
+      expect(readdirSync(result.home)).toEqual([]);
+      expect(stubs.tailscaleWrites()).toEqual([]);
+      expect(stubs.launchctlCalls()).toEqual([]);
+    });
+
+    it("goes ahead with --force", () => {
+      const { result } = dryRun(["--force"], elsewhere);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain("--https=443");
+      expect(result.stdout).toContain(`https://${STUB_DNS_NAME}/`);
+    });
+
+    it("goes ahead on another port with --https-port, and says where it is", () => {
+      const { result } = dryRun(["--https-port", "8443"], elsewhere);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain("--https=8443");
+      expect(result.stdout).toContain(`https://${STUB_DNS_NAME}:8443/`);
+    });
+
+    it("stops on the chosen port too, when that one is taken", () => {
+      const { result } = dryRun(
+        ["--https-port", "8443"],
+        serveStatusOf([8443, "http://127.0.0.1:7690"]),
+      );
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("http://127.0.0.1:7690");
+    });
+
+    it("reinstalls over k-bench's own entry without --force", () => {
+      const { result } = dryRun([], serveStatusOf([443, "http://127.0.0.1:7680"]));
+      expect(result.status, result.stderr).toBe(0);
+      // Its own entry is updated in place, not removed first.
+      expect(result.stdout).not.toContain("remove what is on port");
+    });
+
+    it("rejects a port that is not a port", () => {
+      const { result } = dryRun(["--https-port", "https"], {});
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("--https-port");
     });
   });
 });

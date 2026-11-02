@@ -9,7 +9,10 @@ import { findPackageRoot } from "./install-lib.ts";
 const USAGE = `Usage: k-bench <command> [options]
 
 Commands:
-  install [--dry-run] [--login <login>]   install or update k-bench as a background service
+  install [--dry-run] [--login <login>] [--https-port <n>] [--force]
+                  install or update k-bench as a background service, published on
+                  HTTPS port 443 unless --https-port says otherwise; --force replaces
+                  whatever else is on that port
 
 Options:
   --help, -h      show this help
