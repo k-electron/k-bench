@@ -6,8 +6,10 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   realpathSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
@@ -16,6 +18,8 @@ import { basename, dirname, join } from "node:path";
 export const HOME_ENV = "K_BENCH_SHOTS_HOME";
 
 export const FAKE_USER = "alex";
+
+const FILE_DATE = new Date("2026-10-02T11:05:00");
 
 /** The folder name every run's fake home is created under, so a leak can be looked for. */
 export const HOME_PREFIX = "kb-shots-";
@@ -30,6 +34,7 @@ export function createDemoHome(): string {
   seedAcmeApi(home);
   seedWebsite(home);
   seedDotfiles(home);
+  fixDates(join(home, "code"));
   return home;
 }
 
@@ -41,6 +46,20 @@ function write(path: string, content: string, mode?: number): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
   if (mode) chmodSync(path, mode);
+}
+
+/**
+ * Gives every file a fixed date, so a listing in a screenshot does not change from one run
+ * to the next. Done last: version control would take a rewritten file of the same size and
+ * date as unchanged.
+ */
+function fixDates(dir: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === ".git") continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) fixDates(path);
+    utimesSync(path, FILE_DATE, FILE_DATE);
+  }
 }
 
 /** A prompt with only the folder in it: never `%n` or `%m`, which are the real login and host. */
