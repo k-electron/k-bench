@@ -29,7 +29,7 @@ A check shows `skip` when it depends on an earlier check that failed. Fix the fi
 | the LaunchAgent is loaded           | Run `k-bench install`.                                                                                                                                                                                 |
 | the server answers its health check | Look in [the log](#where-the-logs-are), then run `k-bench install`. If the message says the server refused your login, see "A 403" below. If it says something else answered, see "The port is taken". |
 
-If you report a problem, the output of `k-bench status` helps a lot. It contains your tailnet login, your machine's tailnet name and your URL, so replace those with placeholders such as `you@example.com` and `<your-host>.<tailnet>.ts.net` before you paste it anywhere public.
+If you report a problem, the output of `k-bench status` helps a lot. It contains your tailnet login, your Mac's tailnet name and your URL, so replace those with placeholders such as `you@example.com` and `<your-host>.<tailnet>.ts.net` before you paste it anywhere public.
 
 ## A 403
 

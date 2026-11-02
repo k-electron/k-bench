@@ -23,7 +23,7 @@ Add this to `~/.claude/settings.json` on the Host (merging it with any settings 
 }
 ```
 
-The setting is called `preferredNotifChannel`, and `"terminal_bell"` makes Claude Code ring the bell character in any terminal. You can also set it from inside Claude Code: run `/config` and change **Local notifications**. With the default (`"auto"`), Claude Code sends a desktop notification in iTerm2, Ghostty and Kitty and does nothing in most other terminals, so set it explicitly for k-bench.
+The setting is called `preferredNotifChannel`, and `"terminal_bell"` makes Claude Code ring the bell character in any terminal. You can also set it from inside Claude Code: run `/config` and change **Local notifications**. With the default (`"auto"`), Claude Code sends a desktop notification in a few terminals and does nothing in most others, so set it explicitly for k-bench.
 
 Sources, from Claude Code's current documentation:
 
@@ -56,7 +56,7 @@ On a phone, the [extra keys](using-k-bench.md#the-phone-layout) cover the keys C
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Esc**                    | Interrupts Claude mid-response so you can redirect it, closes a dialog, and declines a permission prompt. Tap it twice, quickly, to clear your draft or, with an empty prompt, open the rewind menu. |
 | **⇧Tab**                   | Cycles Claude Code's permission modes.                                                                                                                                                               |
-| **Ctrl**, then `c`         | Interrupts a running operation (Ctrl is one-shot: tap it, then press `c`).                                                                                                                           |
-| **Tab** and the arrow keys | Complete and move through menus and your prompt history.                                                                                                                                             |
+| **Ctrl**, then `c`         | Interrupts a running operation (Ctrl is one-shot: tap it, then press `c`). With nothing running, the first press clears your prompt and a second one exits Claude Code, so don't repeat it by habit. |
+| **Tab** and the arrow keys | Tab accepts an autocomplete suggestion. The arrow keys move through menus and your prompt history.                                                                                                   |
 
 Next: [Troubleshooting](troubleshooting.md).

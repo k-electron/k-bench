@@ -22,7 +22,7 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
   - `k-bench uninstall` stops the service and removes its login item and its own `tailscale serve` entry, keeping your Workspaces, Sessions and data. `--purge` also deletes the data and the logs and ends every Session. `--dry-run` shows what it would remove.
   - `k-bench status` checks tmux, Tailscale (running, logged in, HTTPS certificates), the service and the installed version, prints the URL, and exits non-zero when something is wrong.
 - Updating is two commands: upgrade the npm package, then run `k-bench install` again. Running Sessions keep running through an update.
-- A README and a [user guide](docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
+- A README and a [user guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
 - Requirements: macOS, Node 26 or later, tmux and Tailscale with HTTPS certificates enabled.
 
 [Unreleased]: https://github.com/k-electron/k-bench/commits/main

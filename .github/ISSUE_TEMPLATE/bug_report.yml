@@ -41,7 +41,7 @@ body:
     id: status
     attributes:
       label: Output of `k-bench status`
-      description: Run `k-bench status` in a terminal on the Mac and paste its output. It contains your tailnet login, your machine's tailnet name and your URL, so replace those with placeholders such as `you@example.com` and `<your-host>.<tailnet>.ts.net` first. If the command itself fails, say so.
+      description: Run `k-bench status` in a terminal on the Mac and paste its output. It contains your tailnet login, your Mac's tailnet name and your URL, so replace those with placeholders such as `you@example.com` and `<your-host>.<tailnet>.ts.net` first. If the command itself fails, say so.
       render: text
   - type: textarea
     id: logs
