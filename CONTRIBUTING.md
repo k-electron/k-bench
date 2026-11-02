@@ -39,6 +39,7 @@ pnpm start       # the server alone, run from the TypeScript source; serves dist
 pnpm install-app # build and install the Installed instance (launchd + tailscale serve); the same as `k-bench install`; --dry-run to preview
 pnpm release <version> # maintainers: open a release PR (bumps the version, moves the changelog notes); --dry-run to preview. See Releasing below
 pnpm smoke       # build, then probe the production server on a throwaway instance and clean up; --hold keeps it up for manual requests
+pnpm screenshots # regenerate the images in docs/images on a throwaway instance with a made-up home (not part of any test run); screenshots:record and screenshots:scrub make the hero's Claude Code recording, see scripts/screenshots/hero.shots.ts
 pnpm lint        # Biome (warnings fail it too)
 pnpm typecheck   # tsc, for the server/tests and for the front end (web/)
 pnpm test        # Vitest (Seam 1, the server; Seam 3, the packed `k-bench` command, which builds and packs the package and needs the network)
