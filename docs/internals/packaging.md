@@ -5,7 +5,7 @@ k-bench is published to npm as `@k-electron/k-bench`. An owner runs `npm i -g @k
 ## What the package is
 
 - `package.json` has the scoped name, the MIT license, repository and homepage links, `os: darwin`, `engines.node >= 26`, and `bin.k-bench` pointing at `dist/js/scripts/k-bench.js`.
-- The version in the checkout stays at `0.0.0` until a release bumps it. Only the release workflow publishes; never run `npm publish` by hand.
+- The version in the checkout stays at `0.0.0` until a release bumps it. Only the release workflow publishes; never run `npm publish` by hand (see [Releasing](releasing.md), which also covers the owner's one-off placeholder publish).
 - `files` is an allow-list: `dist/js` (the compiled command and server), `dist/web` (the built front end) and `scripts/fix-node-pty.mjs`. Nothing else ships: not the TypeScript source, tests, docs or the lockfile.
 - `dependencies` holds only what the server runs on (`hono`, `@hono/node-server`, `ws`, `node-pty`). The front end is bundled by Vite, so its libraries (React, xterm.js, Radix and so on) are `devDependencies`: they are not installed on the Host.
 - node-pty ships prebuilt darwin binaries, so installing needs no compiler or Xcode. `scripts/fix-node-pty.mjs` restores its `spawn-helper` execute bit (pnpm drops it); the package's `postinstall` runs it, and the installer runs it again and checks the bit (`nodePtyProblems`).

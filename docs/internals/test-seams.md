@@ -37,6 +37,10 @@ Specs live in `e2e/`.
 - To add a case, add a test to `test/packed-command.test.ts`, build the `Stubs` it needs and assert on the exit status, stdout, stderr, the files left in `result.home` and the recorded calls. If a command needs a new stub behaviour, add an option to `Stubs` rather than writing a one-off script in the test.
 - Covered: the packed package runs at all (`--version`, so compiled JavaScript with nothing missing), its server starts from the installed package and serves the built front end with the version in the startup line, `install --dry-run` describes the install, ends with the URL and changes nothing, a missing tmux fails clearly, and an HTTPS port already serving something else stops the install (naming `--https-port` and `--force`) unless `--force`, another `--https-port` or k-bench's own entry says otherwise. The real install, which loads a LaunchAgent and publishes on the tailnet, is not run: see the [manual checklist](install-verification.md).
 
+## The release tooling
+
+`test/release.test.ts` runs `scripts/release.ts` as a process against throwaway repositories (a bare "origin" on disk, so no network, and a stub `gh` first on PATH that records its arguments), and `scripts/release-plan.ts`, the release workflow's decision step, against a stub npm registry on localhost. The workflow file itself is proved by its manual dry run: see [Releasing](releasing.md).
+
 ## The installer and a built server
 
 The install changes the real system, so only its pure parts are unit-tested (`test/install.test.ts`), plus the packed command's dry run (Seam 3); the rest is the [manual checklist](install-verification.md). To try a production build by hand without installing it, run `pnpm smoke` (add `--hold` to keep it up for manual requests); everything it starts is cleaned up when it exits. See [Packaging](packaging.md) for how the package is built.
