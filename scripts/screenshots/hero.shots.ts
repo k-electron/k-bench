@@ -1,8 +1,8 @@
 // The hero image: real Claude Code running in a Pane, played back from a recording.
 //
-// STATUS: PENDING OWNER RECORDING. Until docs/recordings/claude-hero.json exists this test
-// is skipped and no hero.png is made. The recording must be of a real Claude Code run, so
-// it is made by the owner, on the owner's account, once. To make or redo it:
+// STATUS: recorded. docs/recordings/claude-hero.json is one real Claude Code run, made in a
+// made-up demo project on the owner's account and scrubbed. If it is absent this test is
+// skipped and no hero.png is made. To make or redo it:
 //
 //   1. Make a demo project: a folder named acme-api (any small, made-up code) and `cd` there.
 //   2. Record it, in a terminal at least 110 columns by 32 rows. Claude Code starts in the
