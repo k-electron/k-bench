@@ -22,4 +22,6 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 The repo holds only product: source, config and docs. Machine-local files (runtime data, logs, `.env*`, build output, editor and agent state) stay out of git, so when a change introduces a new kind of one, update `.gitignore` in the same change.
 
+Never put real hostnames, tailnet names, logins, emails or personal paths in issues, PRs, commits, docs or screenshots. Use placeholders such as `<your-host>.<tailnet>.ts.net` and `you@example.com`.
+
 When writing tests, see `docs/testing.md`.
