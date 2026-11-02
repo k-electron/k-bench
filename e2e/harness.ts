@@ -142,7 +142,7 @@ export class AppPage {
       const text = (await terminal.textContent()) ?? "";
       const [, cols, rows] = new RegExp(`${tag}=(\\d+)x(\\d+)`).exec(text) ?? [];
       size = { cols: Number(cols), rows: Number(rows) };
-    }).toPass();
+    }).toPass({ timeout: 10_000 });
     return size;
   }
 
