@@ -2,6 +2,7 @@
 
 The API so far. Every request needs the login described in [Access](access.md).
 
+- `GET /api/health`: `{ "status": "ok" }`. What `k-bench status` asks; guarded like every other route (it needs the owner's login).
 - `GET /api/state`: Workspaces with their Sessions (`running` or `stopped`, and `bell`).
 - `POST /api/sessions/:id/restart`: starts a fresh shell for a Stopped Session in its Workspace folder, same id and name (a running Session is left alone; 422 when the folder is gone).
 - `GET /api/directories?path=`: the subfolders of `path` (default: the configured picker root) for the folder picker; 422 if the path is not an existing absolute folder.

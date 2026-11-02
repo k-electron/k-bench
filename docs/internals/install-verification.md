@@ -14,6 +14,7 @@ Create a couple of Sessions first, then:
 6. `pnpm dev:serve` publishes the Dev instance on port 8443 and the same login check refuses other identities.
 7. Throughout, the Dev instance's `./.data/` and `k-bench-dev` socket are untouched by the install, and the Installed instance's data and `k-bench` socket are untouched by `pnpm dev` and `pnpm test`.
 8. Every install ends by printing the URL, and opening it works. On port 443 the URL has no port; after `--https-port 8443` it ends `:8443/`.
+9. `k-bench status` after an install: every check shows `ok`, the exit status is 0, and it prints the installed version (the one in `app/build-info.json`) and the same URL the install printed. Then break one thing at a time and check that the matching line shows `FAIL` with a fix and the exit status is non-zero: `launchctl bootout gui/$(id -u)/com.k-bench.server` (LaunchAgent not loaded, server not answering; `k-bench install` brings it back), and a tmux missing from PATH (`PATH=/usr/bin:/bin k-bench status`, if tmux lives elsewhere). The Tailscale checks can only be seen failing with Tailscale logged out or turned off, so do that on a Host where you can afford it.
 
 ### Port conflicts
 

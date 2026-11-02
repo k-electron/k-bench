@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { install } from "./install.ts";
 import { findPackageRoot } from "./install-lib.ts";
+import { status } from "./status.ts";
 import { uninstall } from "./uninstall.ts";
 
 const USAGE = `Usage: k-bench <command> [options]
@@ -18,6 +19,8 @@ Commands:
                   stop and remove the service, its tailscale serve entry and the app
                   folder, keeping your data and running Sessions; --purge also deletes
                   the data and ends every Session
+  status          check that k-bench is set up and healthy: each check passes or
+                  fails with a fix, and the exit status is non-zero when one fails
 
 Options:
   --help, -h      show this help
@@ -38,6 +41,8 @@ if (command === "--version" || command === "-v") {
   await install(rest);
 } else if (command === "uninstall") {
   await uninstall(rest);
+} else if (command === "status") {
+  await status(rest);
 } else {
   console.error(`k-bench: unknown command "${command}"\n\n${USAGE}`);
   process.exit(1);
