@@ -5,7 +5,7 @@
 - `dev.mjs`: `pnpm dev`.
 - `dev-serve.ts`: `pnpm dev:serve`.
 - `k-bench.ts`: the `k-bench` command (the package's `bin`); `pnpm install-app` runs `k-bench install`.
-- `install.ts`: `k-bench install`, with its pure, unit-tested parts in `install-lib.ts`.
+- `install.ts`: `k-bench install`, with its pure, unit-tested parts in `install-lib.ts`. `uninstall.ts` is `k-bench uninstall` and `status.ts` is `k-bench status`; `command-lib.ts` holds what the three share (the LaunchAgent label, the log, plist and `build-info.json` locations, the `launchctl` and PATH helpers, and the `say`/`step` reporting).
 - `tailscale-serve.ts`: reads the `tailscale serve` configuration (pure parsing plus one thin call to the CLI); shared by the `k-bench` commands: see [Packaging](packaging.md#the-tailscale-serve-configuration).
 - `smoke.ts`: `pnpm smoke`.
 - `release.ts`: `pnpm release <version>`. `release-plan.ts` and `check-npm.ts` are steps of the release workflow; `release-lib.ts` holds the pure parts they share. See [Releasing](releasing.md).

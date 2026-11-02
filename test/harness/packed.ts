@@ -128,6 +128,8 @@ export function serveStatusOf(...services: [port: number, proxy: string][]): unk
 }
 
 export interface StubOptions {
+  /** The Node version the stub `node` reports (`process.versions.node`). Default: the real one. */
+  nodeVersion?: string;
   /** `false` leaves tmux off PATH. Default: present. */
   tmux?: boolean;
   /** `false` leaves tailscale off PATH. Default: present, logged in, serving nothing. */
@@ -154,15 +156,28 @@ function asText(value: unknown): string {
  *   tailnet, and is recorded: `tailscaleWrites()`.
  * - `tmux` records every call (`tmuxCalls()`) and answers none of them; `launchctl` records
  *   every call (`launchctlCalls()`).
- * - `node` is a link to the running Node, so `#!/usr/bin/env node` works with a PATH
- *   that holds nothing else (in particular, no real tmux or tailscale).
+ * - `node` is a link to the running Node (or, with `nodeVersion`, the running Node reporting
+ *   that version), so `#!/usr/bin/env node` works with a PATH that holds nothing else (in
+ *   particular, no real tmux or tailscale).
  */
 export class Stubs {
   readonly dir = packedTempDir();
 
   constructor(options: StubOptions = {}) {
     const state = this.dir;
-    symlinkSync(process.execPath, join(state, "node"));
+    if (options.nodeVersion === undefined) {
+      symlinkSync(process.execPath, join(state, "node"));
+    } else {
+      // The real Node, told to report another version before anything else runs.
+      writeFileSync(
+        join(state, "node-version.mjs"),
+        `Object.defineProperty(process.versions, "node", { value: "${options.nodeVersion}" });\n`,
+      );
+      this.script(
+        "node",
+        `exec '${process.execPath}' --import '${state}/node-version.mjs' "$@"`,
+      );
+    }
     if (options.tmux !== false) {
       this.script("tmux", `echo "$*" >> '${state}/tmux.log'`);
     }

@@ -11,6 +11,8 @@
     "scripts/k-bench.ts",
     "scripts/install.ts",
     "scripts/install-lib.ts",
+    "scripts/command-lib.ts",
+    "scripts/uninstall.ts",
     "scripts/status.ts",
     "scripts/tailscale-serve.ts"
   ]

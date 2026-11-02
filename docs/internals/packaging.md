@@ -15,15 +15,15 @@ k-bench is published to npm as `@k-electron/k-bench`. An owner runs `npm i -g @k
 Node does not strip TypeScript types from files under `node_modules`, so the package ships compiled JavaScript.
 
 - `pnpm build` is `pnpm build:web` (Vite, into `dist/web`) then `pnpm build:server` (`tsc -p tsconfig.build.json`, into `dist/js`, after deleting the old `dist/js`).
-- `tsconfig.build.json` extends `tsconfig.json` with emit turned on. It compiles `src/server`, `src/shared` and the command (`scripts/k-bench.ts`, `scripts/install.ts`, `scripts/install-lib.ts`, `scripts/status.ts`, `scripts/tailscale-serve.ts`). The root `tsconfig.json` has `rewriteRelativeImportExtensions`, so `./x.ts` imports are emitted as `./x.js`. Because the root is `.`, the output mirrors the source: `dist/js/src/server/main.js`, `dist/js/scripts/k-bench.js`.
+- `tsconfig.build.json` extends `tsconfig.json` with emit turned on. It compiles `src/server`, `src/shared` and the command (`scripts/k-bench.ts`, `scripts/install.ts`, `scripts/install-lib.ts`, `scripts/command-lib.ts`, `scripts/uninstall.ts`, `scripts/status.ts`, `scripts/tailscale-serve.ts`). The root `tsconfig.json` has `rewriteRelativeImportExtensions`, so `./x.ts` imports are emitted as `./x.js`. Because the root is `.`, the output mirrors the source: `dist/js/src/server/main.js`, `dist/js/scripts/k-bench.js`.
 - `prepack` runs `pnpm build`, so `npm pack` and `npm publish` cannot ship a stale or missing build.
 - `dist/` is gitignored, and so are the `*.tgz` files `npm pack` writes.
 
 ## `k-bench install`
 
-`scripts/k-bench.ts` is the command (`install`, `status`, `--help`, `--version`); `scripts/install.ts` is the installer and `scripts/install-lib.ts` holds its pure, unit-tested parts. From a checkout, `pnpm install-app` runs `node scripts/k-bench.ts install`.
+`scripts/k-bench.ts` is the command (`install`, `uninstall`, `status`, `--help`, `--version`); `scripts/install.ts` is the installer and `scripts/install-lib.ts` holds its pure, unit-tested parts. `scripts/command-lib.ts` is what `install`, `uninstall` and `status` share: the LaunchAgent label, where the plist, log and `build-info.json` live, the PATH and `launchctl` helpers and the `say`/`step` reporting. From a checkout, `pnpm install-app` runs `node scripts/k-bench.ts install`.
 
-The installer looks for its files in the package folder (the nearest folder with a `package.json` above the script). It is running from a checkout, not the npm package, when `src/server/main.ts` exists there; the package ships only compiled JavaScript. In order:
+The installer looks for its files in the package folder (the nearest folder with a `package.json` above the script). It is running from a checkout, not the npm package, when `src/server/main.ts` exists there; the package ships only compiled JavaScript. Before anything else, a dry run too, it fails clearly when the running Node is older than the package's `engines.node` (npm only warns about that). In order:
 
 1. Checkout only: `pnpm build`.
 2. Copy `dist/js/src`, `dist/web` and `scripts/fix-node-pty.mjs` into `app.staging` beside the database, with a generated `package.json` (name, version, `engines` and `dependencies` only, so installing runs none of the package's own scripts).
@@ -38,7 +38,7 @@ Before any of that, right after the tmux and Tailscale checks, the installer rea
 `scripts/uninstall.ts` (`k-bench uninstall [--dry-run] [--purge]`) reverses the install without the owner needing to know how it was done. In order, each step announcing itself (prefixed `would:` in a dry run) or saying there is nothing to remove:
 
 1. `launchctl bootout` the LaunchAgent if it is loaded (stopping it leaves tmux, and so every Session, running), then delete its plist.
-2. Read the serve configuration and, if `findOwnEntry(config, 7680)` finds k-bench's entry, switch it off with `serveOffArgs`. Other entries are left alone and named. If the Tailscale CLI is missing the step is skipped with a note; if reading or removing fails, the command carries on, says what was not removed and exits non-zero.
+2. Read the serve configuration and switch off every entry `findOwnEntries(config, 7680)` finds (k-bench's, on each port it is published on: a reinstall on another `--https-port` leaves the earlier one) with `serveOffArgs`. Other entries are left alone and named. If the Tailscale CLI is missing the step is skipped with a note; if reading or removing fails, the command carries on, says what was not removed and exits non-zero.
 3. Delete the app folder (and any `app.staging` / `app.previous` left by an interrupted install). The database beside it stays.
 4. With `--purge` only: end the `k-bench` tmux server (`tmux -L k-bench kill-server`, ending every Session), delete the data folder and delete `~/Library/Logs/k-bench`.
 
@@ -55,10 +55,10 @@ It ends by listing what it kept (the data folder, the running Sessions, the logs
 
 ## The tailscale serve configuration
 
-`scripts/tailscale-serve.ts` reads `tailscale serve status --json` and is shared by the `k-bench` commands: `install` uses it to protect other setups, and `uninstall` and `status` build on it (`status` uses `findOwnEntry` and `serveUrl`). Its parsing is pure and unit-tested (`test/tailscale-serve.test.ts`); `readServeConfig(tailscale)` is the only call that runs the CLI.
+`scripts/tailscale-serve.ts` reads `tailscale serve status --json` and is shared by the `k-bench` commands: `install` uses it to protect other setups, and `uninstall` and `status` build on it (`status` uses `findOwnEntry` and `serveUrl`). Its parsing is pure and is tested through the packed command, with stub serve configurations; `readServeConfig(tailscale)` is the only call that runs the CLI.
 
 - The JSON is a `Web` map keyed `<host>:<port>` (each with `Handlers` by URL path: `Proxy`, `Path`, `Text` or `Redirect`) and a `TCP` map by port (`{ "HTTPS": true }` for a web listener, `{ "TCPForward": "host:port" }` for a raw forward). `{}` means nothing is served.
-- `parseServeConfig` turns that into entries, one per port. `findOwnEntry(config, localPort)` finds k-bench's own entry on whichever port: a web entry whose only handler is `/` proxying to `http://127.0.0.1:<localPort>` (7680 for the Installed instance; the Dev instance's `pnpm dev:serve` entry, proxying to 7690, is therefore not k-bench's own). An entry that shares its port with other paths is not. `portUse(config, port, localPort)` says whether a port is free, k-bench's own or something else, and `serveUrl(dnsName, port)` builds the URL (no `:port` for 443).
+- `parseServeConfig` turns that into entries, one per port. `findOwnEntries(config, localPort)` finds k-bench's own entries (`findOwnEntry` is the first), on whichever ports: a web entry whose only handler is `/` proxying to `http://127.0.0.1:<localPort>` (7680 for the Installed instance; the Dev instance's `pnpm dev:serve` entry, proxying to 7690, is therefore not k-bench's own). An entry that shares its port with other paths is not. `portUse(config, port, localPort)` says whether a port is free, k-bench's own or something else (judged by what is on that port, not by whichever k-bench entry comes first), and `serveUrl(dnsName, port)` builds the URL (no `:port` for `DEFAULT_HTTPS_PORT`, 443).
 - `serveOffArgs(entry)` gives the arguments that switch an entry off, for `--force` and for uninstall.
 
 The installer copies the app out of the package instead of running it in place: `npm i -g` replaces the package's folder, which would swap files under a running server. The LaunchAgent runs `app/dist/js/src/server/main.js` with the app folder as its working directory, which is where the server finds `dist/web` and `build-info.json`. Stopping the agent leaves tmux, and so every Session, running (ADR 0001).
