@@ -143,7 +143,7 @@ export class TerminalClient {
 
   /**
    * Waits for the server to end this terminal: its Session was deleted, or its shell exited.
-   * The literal, not the protocol's constant, is the wire contract the README promises
+   * The literal, not the protocol's constant, is the wire contract docs/internals/api.md promises
    * (4410 = ended), so changing the constant fails here.
    */
   async waitForEnded(): Promise<void> {

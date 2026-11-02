@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "dist/js"
+  },
+  "include": [
+    "src/server",
+    "src/shared",
+    "scripts/k-bench.ts",
+    "scripts/install.ts",
+    "scripts/install-lib.ts",
+    "scripts/command-lib.ts",
+    "scripts/uninstall.ts",
+    "scripts/status.ts",
+    "scripts/tailscale-serve.ts"
+  ]
+}

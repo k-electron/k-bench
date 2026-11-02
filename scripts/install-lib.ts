@@ -10,6 +10,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -46,6 +47,21 @@ export function resolveTailscaleCli(options: {
   return isExecutableFile(app) ? app : undefined;
 }
 
+/**
+ * What to tell the owner when the running Node is older than the package's `engines.node`
+ * (a `>=<major>` range), which npm only warns about. Undefined when it is new enough.
+ */
+export function nodeVersionProblem(
+  running: string,
+  engines?: string,
+): string | undefined {
+  const required = Number(/\d+/.exec(engines ?? "")?.[0]);
+  if (!Number.isInteger(required) || Number(running.split(".")[0]) >= required) {
+    return undefined;
+  }
+  return `Node ${running} is too old: k-bench needs Node ${required} or later. Install a current Node (for example \`brew install node\`), then run \`k-bench install\` again.`;
+}
+
 export interface TailscaleIdentity {
   /** The tailnet login of the user this node belongs to. */
   login: string;
@@ -79,6 +95,9 @@ function xml(text: string): string {
     .replaceAll("'", "&apos;");
 }
 
+/** The compiled server, relative to the app folder (and to the package root). */
+export const SERVER_ENTRY = "dist/js/src/server/main.js";
+
 /**
  * The LaunchAgent for the Installed instance.
  * - `RunAtLoad` and `KeepAlive`: starts at login and after a crash.
@@ -106,7 +125,7 @@ export function buildLaunchAgentPlist(options: {
   <key>ProgramArguments</key>
   <array>
     <string>${xml(options.nodePath)}</string>
-    <string>${xml(join(options.appDir, "src/server/main.ts"))}</string>
+    <string>${xml(join(options.appDir, SERVER_ENTRY))}</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${xml(options.appDir)}</string>
@@ -130,31 +149,63 @@ ${env}
 }
 
 /**
- * What the installed app needs from the repo: the server, the modules it shares with the
- * browser, built assets and the manifest.
+ * What the installed app copies from the package: the compiled server (with the modules it
+ * shares with the browser), the built front end, and the script that restores node-pty's
+ * spawn-helper execute bit. Its package.json is generated: see `appManifest`.
  */
-const APP_FILES = [
-  "src/server",
-  "src/shared",
-  "dist/web",
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  // package.json's postinstall, which restores node-pty's spawn-helper execute bit.
-  "scripts/fix-node-pty.mjs",
-];
+const APP_FILES = ["dist/js/src", "dist/web", "scripts/fix-node-pty.mjs"];
 
-/** Copies the app files from the repo into a fresh `stagingDir` (replacing any leftovers). */
-export function stageApp(options: { repoDir: string; stagingDir: string }): void {
-  if (!existsSync(join(options.repoDir, "dist/web/index.html"))) {
-    throw new Error("dist/web has not been built: run `pnpm build` first.");
+/** The nearest folder at or above `start` that holds a package.json. */
+export function findPackageRoot(start: string): string {
+  for (let dir = start; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, "package.json"))) return dir;
+    if (dirname(dir) === dir) throw new Error(`no package.json at or above ${start}`);
+  }
+}
+
+/**
+ * The installed app's package.json: only what its dependencies and `engines` need, so that
+ * installing them in the app folder runs none of the package's own scripts.
+ */
+export function appManifest(pkg: {
+  version?: string;
+  engines?: unknown;
+  dependencies?: Record<string, string>;
+}): Record<string, unknown> {
+  return {
+    name: "k-bench-app",
+    private: true,
+    version: pkg.version,
+    type: "module",
+    engines: pkg.engines,
+    dependencies: pkg.dependencies,
+  };
+}
+
+/**
+ * Copies the app files from the package (the npm package, or a built checkout) into a fresh
+ * `stagingDir` (replacing any leftovers), with `manifest` as its package.json.
+ */
+export function stageApp(options: {
+  packageDir: string;
+  stagingDir: string;
+  manifest: Record<string, unknown>;
+}): void {
+  for (const built of ["dist/web/index.html", SERVER_ENTRY]) {
+    if (!existsSync(join(options.packageDir, built))) {
+      throw new Error(`${built} has not been built: run \`pnpm build\` first.`);
+    }
   }
   rmSync(options.stagingDir, { recursive: true, force: true });
   for (const file of APP_FILES) {
     const target = join(options.stagingDir, file);
     mkdirSync(dirname(target), { recursive: true });
-    cpSync(join(options.repoDir, file), target, { recursive: true });
+    cpSync(join(options.packageDir, file), target, { recursive: true });
   }
+  writeFileSync(
+    join(options.stagingDir, "package.json"),
+    `${JSON.stringify(options.manifest, null, 2)}\n`,
+  );
 }
 
 /**

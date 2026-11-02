@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in k-bench does not work as expected
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do not include your real hostname, tailnet name, login or email: use placeholders such as `<your-host>.<tailnet>.ts.net` and `you@example.com`.
+
+        Run `k-bench status` first: the [troubleshooting guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/troubleshooting.md) starts from it and covers the common failures.
+
+        If this is a security problem (for example, someone other than you can get in), do not file it here. Report it privately; see the security policy.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the steps to reproduce it.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.4
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: The output of `node --version`.
+      placeholder: v26.0.0
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: k-bench version or commit
+      description: The output of `k-bench --version`, or the commit if you installed from a checkout.
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `k-bench status`
+      description: Run `k-bench status` in a terminal on the Mac and paste its output. It contains your tailnet login, your Mac's tailnet name and your URL, so replace those with placeholders such as `you@example.com` and `<your-host>.<tailnet>.ts.net` first. If the command itself fails, say so.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant lines from `~/Library/Logs/k-bench/k-bench.log`, with the same placeholders. The troubleshooting guide explains where the logs are.
+      render: text
