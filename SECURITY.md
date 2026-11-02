@@ -10,6 +10,8 @@ Please do not report a vulnerability in a public issue, pull request or discussi
 
 k-bench is a remote shell: anyone who can reach it can run commands on the owner's Mac as the owner. Its only defence is that only the owner's own tailnet login gets in (see [Access](docs/internals/access.md) and [ADR 0003](docs/adr/0003-tailnet-only-single-user-access.md)). A bug that lets someone else past that check, such as the login check, the Origin check, or the server listening beyond `127.0.0.1`, is therefore serious, and so is anything that lets a web page on another site act on the owner's behalf. Please report these even if you are unsure they are exploitable.
 
+If you are an owner rather than a researcher, the [user guide](docs/guide/README.md) covers setting k-bench up, and [Troubleshooting](docs/guide/troubleshooting.md#a-403) covers what a 403 from the login check means.
+
 ## What to include
 
 - What you found and which part of k-bench it affects.
