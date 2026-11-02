@@ -76,7 +76,7 @@ jobs:
           pnpm test:e2e
 
       - name: Check that npm supports trusted publishing
-        if: steps.mode.outputs.real == 'true'
+        if: steps.mode.outputs.real == 'true' || env.DRY_RUN == 'true'
         run: node scripts/check-npm.ts
 
       - name: Publish to npm

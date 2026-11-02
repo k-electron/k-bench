@@ -35,6 +35,7 @@ Notes from [npm's trusted publishing docs](https://docs.npmjs.com/trusted-publis
    ```
 
    It checks that you are on `main` with a clean tree, that `main` equals `origin/main`, that the version is valid semver, newer than the current one and not already in the changelog, and that Unreleased has notes. Then it creates the branch `release-0.1.0`, bumps `package.json`, moves the Unreleased notes under `## [0.1.0] - <today>` (leaving a fresh empty Unreleased and updating the link references at the bottom of `CHANGELOG.md`), commits, pushes the branch and opens the pull request with `gh pr create`. It needs `gh` signed in. `--date YYYY-MM-DD` overrides today's date.
+   If the push or `gh pr create` fails, you are left on the `release-<version>` branch and a re-run refuses because the branch exists: switch to `main`, delete the branch (locally, and on `origin` if it was pushed), fix the cause and run it again.
 3. Review the PR (the diff is `package.json` and `CHANGELOG.md`) and merge it. To abandon the release, close the PR without merging and delete the branch.
 4. The merge to `main` runs the release workflow. When it finishes, the version is on npm, `v<version>` is tagged on the merge commit, and the GitHub Release exists with that version's changelog section as its notes.
 
