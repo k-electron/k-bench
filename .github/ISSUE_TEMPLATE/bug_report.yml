@@ -7,6 +7,8 @@ body:
       value: |
         Thanks for reporting a bug. Please do not include your real hostname, tailnet name, login or email: use placeholders such as `<your-host>.<tailnet>.ts.net` and `you@example.com`.
 
+        Run `k-bench status` first: the [troubleshooting guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/troubleshooting.md) starts from it and covers the common failures.
+
         If this is a security problem (for example, someone other than you can get in), do not file it here. Report it privately; see the security policy.
   - type: textarea
     id: what-happened
@@ -34,16 +36,16 @@ body:
     id: version
     attributes:
       label: k-bench version or commit
-      description: Where you installed it from, and which version or commit.
+      description: The output of `k-bench --version`, or the commit if you installed from a checkout.
   - type: textarea
     id: status
     attributes:
       label: Output of `k-bench status`
-      description: Leave this blank if your version does not have the command yet.
+      description: Run `k-bench status` in a terminal on the Mac and paste its output. It contains your tailnet login, your Mac's tailnet name and your URL, so replace those with placeholders such as `you@example.com` and `<your-host>.<tailnet>.ts.net` first. If the command itself fails, say so.
       render: text
   - type: textarea
     id: logs
     attributes:
       label: Logs
-      description: The relevant lines from `~/Library/Logs/k-bench/k-bench.log`.
+      description: The relevant lines from `~/Library/Logs/k-bench/k-bench.log`, with the same placeholders. The troubleshooting guide explains where the logs are.
       render: text

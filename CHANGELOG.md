@@ -11,7 +11,7 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
 ### Added
 
 - Workspaces: named entries that point at project folders on the Host. Add one with the folder picker, rename it, change its folder, reorder Workspaces by dragging, or delete it (its Sessions end; the folder on disk is never touched). A Workspace whose folder has gone is Missing, and its Sessions can't start until the folder is fixed, while everything else keeps working.
-- Sessions: named, persistent shells inside a Workspace, started in its folder. A Session keeps running when no browser is viewing it, so long jobs and Claude conversations carry on. Rename, delete and restart them. A Session whose shell has gone (it exited, or the Host rebooted or logged out) is Stopped; one click restarts it as a fresh shell in the same folder.
+- Sessions: named, persistent shells inside a Workspace, started in its folder. A Session keeps running when no browser is viewing it, so long jobs and Claude conversations carry on. Rename, delete and restart them. A Session whose shell has gone (it exited, or the Host rebooted or logged out) is Stopped; restart it from its menu as a fresh shell in the same folder. After a logout or restart k-bench comes back on its own when you log in, with everything still listed and every Session Stopped.
 - Two Panes: show two Sessions side by side on a wide screen, with a Focused Pane that opening a Session from the sidebar targets. On a phone there is a single Pane.
 - Bells: a Session raises a Bell when its shell rings the terminal bell, shown on its row in the sidebar (and on a collapsed Workspace), and cleared once you view that Session.
 - Phone layout: a drawer for the Workspaces and Sessions, and a row of extra keys for the keys a phone keyboard lacks.
@@ -19,9 +19,10 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
 - Tailnet-only access: k-bench listens on localhost and is published through `tailscale serve`. It admits only requests carrying the owner's own tailnet login and refuses cross-origin requests. There is no password, LAN or other tunnel mode.
 - The `k-bench` command, installed from npm with `npm i -g @k-electron/k-bench`:
   - `k-bench install` installs or updates the background service (a LaunchAgent that starts at login) and publishes it with `tailscale serve`. It finds your tailnet login automatically, stops rather than replacing a different service already on the HTTPS port (`--https-port` picks another port, `--force` replaces it), replaces its own earlier install without `--force`, and prints the URL. `--dry-run` shows every change first.
-  - `k-bench uninstall` stops the service and removes its login item and its own `tailscale serve` entry, keeping your Workspaces, Sessions and data. `--purge` also deletes the data and ends every Session. `--dry-run` shows what it would remove.
+  - `k-bench uninstall` stops the service and removes its login item and its own `tailscale serve` entry, keeping your Workspaces, Sessions and data. `--purge` also deletes the data and the logs and ends every Session. `--dry-run` shows what it would remove.
   - `k-bench status` checks tmux, Tailscale (running, logged in, HTTPS certificates), the service and the installed version, prints the URL, and exits non-zero when something is wrong.
 - Updating is two commands: upgrade the npm package, then run `k-bench install` again. Running Sessions keep running through an update.
+- A README and a [user guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
 - Requirements: macOS, Node 26 or later, tmux and Tailscale with HTTPS certificates enabled.
 
 [Unreleased]: https://github.com/k-electron/k-bench/commits/main

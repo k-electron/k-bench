@@ -1,6 +1,6 @@
 # Contributing to k-bench
 
-k-bench is a web app, reachable only on the owner's tailnet, that runs persistent terminal Sessions on the Host (a Mac), organised into Workspaces. See `GLOSSARY.md` for the vocabulary, which these docs and the code use throughout, and `docs/adr/` for the design decisions. How it works inside is in [the internals docs](docs/internals/README.md).
+k-bench is a web app, reachable only on the owner's tailnet, that runs persistent terminal Sessions on the Host (a Mac), organised into Workspaces. See `GLOSSARY.md` for the vocabulary, which these docs and the code use throughout, and `docs/adr/` for the design decisions. How it works inside is in [the internals docs](docs/internals/README.md). If you want to set k-bench up and use it, rather than change it, the [user guide](docs/guide/README.md) is the place to start.
 
 ## Prerequisites and setup
 
