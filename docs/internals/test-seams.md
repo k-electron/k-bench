@@ -1,6 +1,6 @@
 # Test seams
 
-[docs/testing.md](../testing.md) says what a good test is here and how to write one. This page describes the two harnesses tests go through: Seam 1, the server's HTTP/WebSocket API with Vitest, and Seam 2, the browser with Playwright. Run them with `pnpm test` and `pnpm test:e2e`; Playwright needs its browser once (`pnpm exec playwright install chromium`).
+[docs/testing.md](../testing.md) says what a good test is here and how to write one. This page describes the three harnesses tests go through: Seam 1, the server's HTTP/WebSocket API with Vitest; Seam 2, the browser with Playwright; and Seam 3, the packed `k-bench` command run as a process, also with Vitest. Run them with `pnpm test` (Seams 1 and 3) and `pnpm test:e2e` (Seam 2); Playwright needs its browser once (`pnpm exec playwright install chromium`).
 
 ## Seam 1: the server (Vitest)
 
@@ -24,6 +24,18 @@ Specs live in `e2e/`.
 - Playwright has two projects: `desktop` (1280x800, every spec except `phone.spec.ts`) and `phone` (a Pixel 7: touch, 412px wide, runs only `e2e/phone.spec.ts`). `AppPage` has `openDrawer()`, `drawer` and `extraKey(name)` for the phone project, whose sidebar is hidden until the drawer is open.
 - To add a test, write `e2e/<topic>.spec.ts`, import `test`/`expect` from `./harness.ts`, and add any new UI helper to `AppPage`. Use `kbench.instance.makeFolder()` for Workspace folders.
 
+## Seam 3: the packed `k-bench` command (Vitest)
+
+`test/packed-command.test.ts` tests what a stranger gets from `npm i -g @k-electron/k-bench`: the real package, run as a process. Its harness is `test/harness/packed.ts`.
+
+- `packedPackage()` runs `pnpm build` (with `NODE_ENV=production`, since Vitest sets `test`), `npm pack`, and installs the tarball into a temp prefix with `npm install --global --prefix <tmp>`. Never the real prefix. It runs once per test process, fetches the package's dependencies from the npm registry (so it needs the network, and the npm cache makes repeats fast) and returns the installed package folder, its `k-bench` bin and its version. Call it in a `beforeAll` with a long timeout; tests that use it should share one file, because each test file packs again.
+- `new Stubs(options)` makes a folder of stub programs, written as plain `sh` so they run under the bash 3.2 of the CI runner. `runKBench(pkg, args, { stubs })` runs the packed command with `PATH` set to that folder plus `/usr/bin:/bin` and nothing else, and `HOME` set to a fresh empty folder (it returns it as `result.home`), so the command can reach neither the real machine nor a real tmux or Tailscale.
+  - `tmux: false`, `tailscale: false` or `launchctl: false` leave that program off PATH (a Mac with the Tailscale app still has its CLI at the fallback path inside `/Applications/Tailscale.app`, which the installer also finds). The folder also holds a `node` link, so the bin's `#!/usr/bin/env node` still works.
+  - `tailscale` answers `status --json` and `serve status --json` from files. Set them per test with `new Stubs({ tailscale: { status, serveStatus } })`, or change them later with `stubs.setStatus(...)` and `stubs.setServeStatus(...)`; pass an object (stringified) or a string. The defaults are a logged-in node and an empty serve config. Any other `tailscale` invocation is a change to the tailnet and is recorded: `stubs.tailscaleWrites()` lists them, which is how a test checks that a dry run, or a refusal, changed nothing.
+  - `launchctl: { loaded: true }` makes `launchctl print` succeed; every call is recorded in `stubs.launchctlCalls()`.
+- To add a case, add a test to `test/packed-command.test.ts`, build the `Stubs` it needs and assert on the exit status, stdout, stderr, the files left in `result.home` and the recorded calls. If a command needs a new stub behaviour, add an option to `Stubs` rather than writing a one-off script in the test.
+- Covered: the packed package runs at all (`--version`, so compiled JavaScript with nothing missing), its server starts from the installed package and serves the built front end with the version in the startup line, `install --dry-run` describes the install and changes nothing, and a missing tmux fails clearly. The real install, which loads a LaunchAgent and publishes on the tailnet, is not run: see the [manual checklist](install-verification.md).
+
 ## The installer and a built server
 
-The install changes the real system, so only its pure parts are unit-tested (`test/install.test.ts`); the rest is the [manual checklist](install-verification.md). To try a production build by hand without installing it, run `pnpm smoke` (add `--hold` to keep it up for manual requests); everything it starts is cleaned up when it exits.
+The install changes the real system, so only its pure parts are unit-tested (`test/install.test.ts`), plus the packed command's dry run (Seam 3); the rest is the [manual checklist](install-verification.md). To try a production build by hand without installing it, run `pnpm smoke` (add `--hold` to keep it up for manual requests); everything it starts is cleaned up when it exits. See [Packaging](packaging.md) for how the package is built.

@@ -22,7 +22,7 @@ pnpm exec playwright install chromium     # once: Playwright needs its browser
 k-bench runs as one of two fully separate instances, so that working on it never touches the Sessions you are working in:
 
 - The **Dev instance** is a copy run from your checkout with `pnpm dev`. Its data lives in `./.data/` and its tmux socket is `k-bench-dev`, and restarting it never touches the Installed instance.
-- The **Installed instance** is the copy you use day to day, running in the background on the Host (launchd plus `tailscale serve`). Its data lives in `~/Library/Application Support/k-bench/` and its tmux socket is `k-bench`. Install it with `pnpm install-app` (see below).
+- The **Installed instance** is the copy you use day to day, running in the background on the Host (launchd plus `tailscale serve`). Its data lives in `~/Library/Application Support/k-bench/` and its tmux socket is `k-bench`. Install it with `pnpm install-app` from a checkout, or `k-bench install` from the npm package (see below).
 
 Neither touches the other: the install never touches `./.data/` or the `k-bench-dev` socket, and `pnpm dev` and `pnpm test` never touch the Installed instance's data or the `k-bench` socket.
 
@@ -32,13 +32,15 @@ Neither touches the other: the install never touches `./.data/` or the `k-bench-
 pnpm install     # also restores the execute bit on node-pty's spawn-helper, and turns on the git hooks in .githooks
 pnpm dev         # Dev instance: server (watch mode) on port 7690 plus Vite on :5173, which proxies /api; data in ./.data, tmux socket "k-bench-dev"
 pnpm dev:serve   # publish the Dev instance on the tailnet at https port 8443
-pnpm build       # production front end into dist/web
-pnpm start       # the server alone; serves dist/web when it exists
-pnpm install-app # build and install the Installed instance (launchd + tailscale serve); --dry-run to preview
+pnpm build       # production build: the front end into dist/web, the server and the `k-bench` command compiled into dist/js
+pnpm build:web   # just the front end (Vite)
+pnpm build:server # just the compiled server and command (tsc -p tsconfig.build.json)
+pnpm start       # the server alone, run from the TypeScript source; serves dist/web when it exists
+pnpm install-app # build and install the Installed instance (launchd + tailscale serve); the same as `k-bench install`; --dry-run to preview
 pnpm smoke       # build, then probe the production server on a throwaway instance and clean up; --hold keeps it up for manual requests
 pnpm lint        # Biome (warnings fail it too)
 pnpm typecheck   # tsc, for the server/tests and for the front end (web/)
-pnpm test        # Vitest (Seam 1, the server)
+pnpm test        # Vitest (Seam 1, the server; Seam 3, the packed `k-bench` command, which builds and packs the package and needs the network)
 pnpm test:e2e    # Playwright (Seam 2, the browser); builds the front end first
 pnpm check       # lint + typecheck + test
 ```
@@ -60,7 +62,7 @@ The `installed` preset is port 7680, tmux socket `k-bench` and the data folder `
 ## Checks and CI
 
 - Every commit runs Biome on the staged files and the typecheck (`.githooks/pre-commit`).
-- `pnpm check` is lint, typecheck and the Vitest suite; `pnpm test:e2e` is the Playwright suite. Playwright needs its browser once: `pnpm exec playwright install chromium`.
+- `pnpm check` is lint, typecheck and the Vitest suite (which builds and packs the package for the packed-command tests, so it needs the network, tmux, and `pnpm` and `npm` on PATH); `pnpm test:e2e` is the Playwright suite. Playwright needs its browser once: `pnpm exec playwright install chromium`.
 - CI (`.github/workflows/ci.yml`, macOS) runs `pnpm check` and `pnpm test:e2e` on every push to `main` and every pull request.
 - How to write tests, and what a good one is, is in [docs/testing.md](docs/testing.md). The harnesses are described in [Test seams](docs/internals/test-seams.md).
 
@@ -81,19 +83,23 @@ pnpm install-app --dry-run   # prints every step and changes nothing
 pnpm install-app
 ```
 
-This builds k-bench and installs it as the Installed instance:
+`pnpm install-app` is `k-bench install` run from your checkout: the installer an owner runs from the npm package (`npm i -g @k-electron/k-bench`, then `k-bench install`), except that from a checkout it builds first. [Packaging](docs/internals/packaging.md) describes both. It installs k-bench as the Installed instance:
 
-- the server, built assets and production dependencies (including node-pty, with its `spawn-helper` execute bit checked) go to `~/Library/Application Support/k-bench/app/`; the database lives beside it in `~/Library/Application Support/k-bench/`;
+- the compiled server, the built front end and the production dependencies (`npm install --omit=dev`, so it needs the network; this includes node-pty, with its `spawn-helper` execute bit checked) go to `~/Library/Application Support/k-bench/app/`; the database lives beside it in `~/Library/Application Support/k-bench/`;
 - `~/Library/LaunchAgents/com.k-bench.server.plist` is written and (re)loaded: `RunAtLoad`, `KeepAlive`, `AbandonProcessGroup`, the absolute Node path, a PATH that includes `/opt/homebrew/bin` (tmux is found by name), and the installed instance's environment (`K_BENCH_INSTANCE=installed`, port 7680, tmux socket `k-bench`). Logs go to `~/Library/Logs/k-bench/k-bench.log`;
 - your tailnet login, read from `tailscale status --json`, is recorded in the plist as `K_BENCH_ALLOWED_LOGIN` (`--login you@example.com` skips the lookup);
-- the commit being installed (and whether there were uncommitted changes) is recorded in `app/build-info.json`, and the server's startup line in the log names it;
+- the package version, and from a checkout the commit being installed (and whether there were uncommitted changes), are recorded in `app/build-info.json`, and the server's startup line in the log names them;
 - `tailscale serve --bg --https=443 http://127.0.0.1:7680` publishes it at `https://<your-host>.<tailnet>.ts.net/`. This replaces whatever `tailscale serve` already publishes at port 443 of the Host.
 
 It never touches `./.data/` or the `k-bench-dev` tmux socket.
 
 ### Update
 
-`git pull`, then `pnpm install-app` again. The agent is stopped, the app folder replaced, and the agent loaded again (so the old server never runs from a half-swapped folder); Sessions live in tmux, which the agent abandons rather than kills, so every Session keeps running. Open browser tabs reconnect on their own.
+`git pull`, then `pnpm install-app` again (an owner upgrades the package with `npm i -g @k-electron/k-bench` and runs `k-bench install` again). The agent is stopped, the app folder replaced, and the agent loaded again (so the old server never runs from a half-swapped folder); Sessions live in tmux, which the agent abandons rather than kills, so every Session keeps running. Open browser tabs reconnect on their own.
+
+### Packaging
+
+The npm package ships compiled JavaScript (`dist/js`) and the built front end (`dist/web`), because Node does not strip TypeScript types under `node_modules`. `package.json` carries the package name, the `k-bench` command, the `files` allow-list and `engines`. Its version stays `0.0.0` until a release bumps it, and only the release workflow publishes: never run `npm publish` yourself. `npm pack --dry-run` lists what would ship. To try the package without touching your real npm prefix, run `npm pack`, then `npm install --global --prefix <tmp> ./k-electron-k-bench-<version>.tgz`, and run `<tmp>/bin/k-bench install --dry-run`. [Packaging](docs/internals/packaging.md) explains the build and the install in full.
 
 ### The Dev instance on the tailnet
 
@@ -109,7 +115,7 @@ This publishes the Dev server itself (127.0.0.1:7690), not Vite, so the same `Ta
 
 ### Verifying and removing an install
 
-The install changes the real system, so it is checked by hand, not by automated tests. The checklist, and how to remove the install, are in [Install verification](docs/internals/install-verification.md).
+The install changes the real system, so it is checked by hand: automated tests cover only its pure parts and the packed command's dry run (Seam 3). The checklist, which includes installing from the packed package, and how to remove the install are in [Install verification](docs/internals/install-verification.md).
 
 ## Pull requests
 
@@ -117,7 +123,7 @@ The install changes the real system, so it is checked by hand, not by automated 
 - Keep the change focused, and use the glossary's terms in code, docs and commit messages.
 - Run `pnpm check` and `pnpm test:e2e` before you push; CI runs both on every pull request, and a pull request needs them green.
 - Add or change tests as [docs/testing.md](docs/testing.md) describes: few, outcome-level, and able to fail.
-- If you change the installer, run through the [install verification checklist](docs/internals/install-verification.md) by hand, since automated tests cover only its pure parts.
+- If you change the installer or the packaging, run through the [install verification checklist](docs/internals/install-verification.md) by hand, since automated tests cover only its pure parts and the packed command's dry run.
 - Machine-local files (runtime data, logs, `.env*`, build output, editor and agent state) stay out of git. If your change introduces a new kind, update `.gitignore` in the same change.
 - Never put a real hostname, tailnet name, login, email or personal path in a commit, issue, pull request or doc; use placeholders such as `<your-host>.<tailnet>.ts.net`, `~/code/...` and `you@example.com`.
 - Report security problems privately, not in a pull request or issue: see [SECURITY.md](SECURITY.md).

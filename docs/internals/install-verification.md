@@ -1,6 +1,6 @@
 # Install verification
 
-The install changes the real system, so it is checked by hand, not by automated tests (only its pure parts are unit-tested in `test/install.test.ts`). How to install is in [CONTRIBUTING](../../CONTRIBUTING.md#install-from-a-checkout).
+The install changes the real system, so it is checked by hand, not by automated tests (only its pure parts are unit-tested in `test/install.test.ts`, and the packed command's dry run in `test/packed-command.test.ts`). How to install is in [CONTRIBUTING](../../CONTRIBUTING.md#install-from-a-checkout); how the install works is in [Packaging](packaging.md).
 
 ## Checklist
 
@@ -13,6 +13,16 @@ Create a couple of Sessions first, then:
 5. Log out and in again: k-bench comes back on its own, with every Workspace and Session still listed, and the Sessions show Stopped (logging out of the Host ends their shells). One click restarts each. Rebooting the Host gives the same result.
 6. `pnpm dev:serve` publishes the Dev instance on port 8443 and the same login check refuses other identities.
 7. Throughout, the Dev instance's `./.data/` and `k-bench-dev` socket are untouched by the install, and the Installed instance's data and `k-bench` socket are untouched by `pnpm dev` and `pnpm test`.
+
+## Installing from the packed package
+
+The checklist above holds for both routes. Check the npm route too whenever packaging or the installer changes:
+
+1. `pnpm build && npm pack`, then `npm install --global ./k-electron-k-bench-<version>.tgz` (this replaces any earlier global k-bench package; use `--prefix <tmp>` to keep it away from your real one, and then run `<tmp>/bin/k-bench`).
+2. `k-bench install --dry-run` lists every step and changes nothing; it does not offer to build.
+3. With Sessions running, `k-bench install`: every Session is still running, `app/build-info.json` has the package `version` and no `commit`, and the first line the server logs in `~/Library/Logs/k-bench/k-bench.log` names that version.
+4. `pnpm install-app` from a checkout still works: `build-info.json` has the `version` and the `commit`, and the startup line names both.
+5. Run `npm install --global` of a different build over the first one: the running server keeps serving from `app/` until the next `k-bench install`.
 
 ## Removing the install
 

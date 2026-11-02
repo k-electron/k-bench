@@ -6,5 +6,6 @@ How k-bench works inside. For setup, commands and the pull request flow, see [CO
 - [The Bell](bell.md): the tmux-hook mechanism, why it works that way, and its known limitations.
 - [The API](api.md): the HTTP and WebSocket endpoints.
 - [Access](access.md): the login check and the Origin check, and [ADR 0003](../adr/0003-tailnet-only-single-user-access.md).
-- [Test seams](test-seams.md): the Seam 1 and Seam 2 harnesses, and how to write a test with them (see also [Testing](../testing.md)).
+- [Packaging and the install](packaging.md): the npm package, the build, and how `k-bench install` turns it into the Installed instance.
+- [Test seams](test-seams.md): the Seam 1, 2 and 3 harnesses, and how to write a test with them (see also [Testing](../testing.md)).
 - [Install verification](install-verification.md): the manual checklist for the Installed instance, and how to remove it.

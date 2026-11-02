@@ -43,3 +43,6 @@ pnpm-debug.log*
 # --- OS cruft ---
 .DS_Store
 Thumbs.db
+
+# --- Packed package (npm pack) ---
+*.tgz
