@@ -108,6 +108,25 @@ export const HEALTHY_TAILSCALE_STATUS = {
   User: { "1": { LoginName: "owner@example.com" } },
 };
 
+/** The tailnet name in `HEALTHY_TAILSCALE_STATUS`, without the trailing dot. */
+export const STUB_DNS_NAME = "my-mac.example-tailnet.ts.net";
+
+/**
+ * What `tailscale serve status --json` prints (the shape Tailscale itself prints) when
+ * `tailscale serve --bg --https=<port> <proxy>` has been run, once per `[port, proxy]`.
+ */
+export function serveStatusOf(...services: [port: number, proxy: string][]): unknown {
+  return {
+    TCP: Object.fromEntries(services.map(([port]) => [String(port), { HTTPS: true }])),
+    Web: Object.fromEntries(
+      services.map(([port, proxy]) => [
+        `${STUB_DNS_NAME}:${port}`,
+        { Handlers: { "/": { Proxy: proxy } } },
+      ]),
+    ),
+  };
+}
+
 export interface StubOptions {
   /** `false` leaves tmux off PATH. Default: present. */
   tmux?: boolean;

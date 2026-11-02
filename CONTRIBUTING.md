@@ -89,7 +89,7 @@ pnpm install-app
 - `~/Library/LaunchAgents/com.k-bench.server.plist` is written and (re)loaded: `RunAtLoad`, `KeepAlive`, `AbandonProcessGroup`, the absolute Node path, a PATH that includes `/opt/homebrew/bin` (tmux is found by name), and the installed instance's environment (`K_BENCH_INSTANCE=installed`, port 7680, tmux socket `k-bench`). Logs go to `~/Library/Logs/k-bench/k-bench.log`;
 - your tailnet login, read from `tailscale status --json`, is recorded in the plist as `K_BENCH_ALLOWED_LOGIN` (`--login you@example.com` skips the lookup);
 - the package version, and from a checkout the commit being installed (and whether there were uncommitted changes), are recorded in `app/build-info.json`, and the server's startup line in the log names them;
-- `tailscale serve --bg --https=443 http://127.0.0.1:7680` publishes it at `https://<your-host>.<tailnet>.ts.net/`. This replaces whatever `tailscale serve` already publishes at port 443 of the Host.
+- `tailscale serve --bg --https=443 http://127.0.0.1:7680` publishes it at `https://<your-host>.<tailnet>.ts.net/`, and the install ends by printing that URL. If port 443 already serves anything other than k-bench's own entry, the install stops before changing anything and names its two ways out: `--https-port <n>` publishes k-bench on another HTTPS port (the URL then ends `:<n>/`), and `--force` replaces what is on the port. Reinstalling over k-bench's own entry needs neither.
 
 It never touches `./.data/` or the `k-bench-dev` tmux socket.
 
