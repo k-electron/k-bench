@@ -4,9 +4,12 @@
 
 - `dev.mjs`: `pnpm dev`.
 - `dev-serve.ts`: `pnpm dev:serve`.
-- `install.ts`: `pnpm install-app`, with its pure, unit-tested parts in `install-lib.ts`.
+- `k-bench.ts`: the `k-bench` command (the package's `bin`); `pnpm install-app` runs `k-bench install`.
+- `install.ts`: `k-bench install`, with its pure, unit-tested parts in `install-lib.ts`.
 - `smoke.ts`: `pnpm smoke`.
 - `fix-node-pty.mjs`: restores the execute bit on node-pty's `spawn-helper`.
+
+The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsconfig.build.json`) for the npm package: see [Packaging](packaging.md).
 
 ## `src/server/`
 
@@ -50,5 +53,5 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
 ## `test/` and `e2e/`
 
 - `test/`: outcome-based tests, see [docs/testing.md](../testing.md).
-- `test/harness/`: the Seam 1 harness, see [Test seams](test-seams.md).
+- `test/harness/`: the Seam 1 harness (and `packed.ts`, the Seam 3 harness), see [Test seams](test-seams.md).
 - `e2e/`: the Seam 2 (Playwright) specs and harness, see [Test seams](test-seams.md).

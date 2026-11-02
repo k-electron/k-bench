@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -89,7 +89,7 @@ describe.skipIf(process.platform !== "darwin")("the LaunchAgent plist", () => {
     const { ProgramArguments, WorkingDirectory } = plist();
     expect(ProgramArguments).toEqual([
       "/opt/homebrew/bin/node",
-      `${appDir}/src/server/main.ts`,
+      `${appDir}/dist/js/src/server/main.js`,
     ]);
     expect(WorkingDirectory).toBe(appDir);
   });
@@ -175,38 +175,44 @@ describe("finding the Tailscale CLI", () => {
 });
 
 describe("installing the app files", () => {
-  function fakeRepo(version: string): string {
-    const repo = tempDir();
-    write(join(repo, "src/server/main.ts"), `main ${version}`);
-    write(join(repo, "src/server/app.ts"), `app ${version}`);
-    write(join(repo, "src/shared/terminal-protocol.ts"), `protocol ${version}`);
-    write(join(repo, "dist/web/index.html"), `<html>${version}</html>`);
-    write(join(repo, "package.json"), "{}");
-    write(join(repo, "pnpm-lock.yaml"), "lock");
-    write(join(repo, "pnpm-workspace.yaml"), "allowBuilds:\n  node-pty: true\n");
-    write(join(repo, "scripts/fix-node-pty.mjs"), "// fix");
-    write(join(repo, "scripts/install.ts"), "// not part of the app");
-    write(join(repo, "test/other.test.ts"), "// not part of the app");
-    write(join(repo, ".data/secret.db"), "dev data");
-    return repo;
+  function fakePackage(version: string): string {
+    const pkg = tempDir();
+    write(join(pkg, "dist/js/src/server/main.js"), `main ${version}`);
+    write(join(pkg, "dist/js/src/server/app.js"), `app ${version}`);
+    write(join(pkg, "dist/js/src/shared/terminal-protocol.js"), `protocol ${version}`);
+    write(
+      join(pkg, "dist/js/scripts/k-bench.js"),
+      "// the command is not part of the app",
+    );
+    write(join(pkg, "dist/web/index.html"), `<html>${version}</html>`);
+    write(join(pkg, "package.json"), "{}");
+    write(join(pkg, "scripts/fix-node-pty.mjs"), "// fix");
+    write(join(pkg, "scripts/install.ts"), "// not part of the app");
+    write(join(pkg, "test/other.test.ts"), "// not part of the app");
+    write(join(pkg, ".data/secret.db"), "dev data");
+    return pkg;
   }
+  const manifest = { name: "k-bench-app", version: "9.9.9" };
 
   it("stages the server, built assets and install manifest, and nothing else", () => {
     const staged = join(tempDir(), "app.staging");
-    stageApp({ repoDir: fakeRepo("1"), stagingDir: staged });
-    expect(readFileSync(join(staged, "src/server/main.ts"), "utf8")).toBe("main 1");
-    // The server imports the terminal protocol it shares with the browser.
-    expect(readFileSync(join(staged, "src/shared/terminal-protocol.ts"), "utf8")).toBe(
-      "protocol 1",
+    stageApp({ packageDir: fakePackage("1"), stagingDir: staged, manifest });
+    expect(readFileSync(join(staged, "dist/js/src/server/main.js"), "utf8")).toBe(
+      "main 1",
     );
+    // The server imports the terminal protocol it shares with the browser.
+    expect(
+      readFileSync(join(staged, "dist/js/src/shared/terminal-protocol.js"), "utf8"),
+    ).toBe("protocol 1");
     expect(readFileSync(join(staged, "dist/web/index.html"), "utf8")).toBe(
       "<html>1</html>",
     );
-    for (const file of ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]) {
-      expect(existsSync(join(staged, file))).toBe(true);
-    }
+    expect(JSON.parse(readFileSync(join(staged, "package.json"), "utf8"))).toEqual(
+      manifest,
+    );
     expect(existsSync(join(staged, "scripts/fix-node-pty.mjs"))).toBe(true);
     expect(existsSync(join(staged, "scripts/install.ts"))).toBe(false);
+    expect(existsSync(join(staged, "dist/js/scripts"))).toBe(false);
     expect(existsSync(join(staged, "test"))).toBe(false);
     expect(existsSync(join(staged, ".data"))).toBe(false);
   });
@@ -214,16 +220,18 @@ describe("installing the app files", () => {
   it("starts from a clean staging folder", () => {
     const staged = join(tempDir(), "app.staging");
     write(join(staged, "leftover-from-a-failed-run"), "x");
-    stageApp({ repoDir: fakeRepo("1"), stagingDir: staged });
+    stageApp({ packageDir: fakePackage("1"), stagingDir: staged, manifest });
     expect(existsSync(join(staged, "leftover-from-a-failed-run"))).toBe(false);
   });
 
-  it("fails clearly when the front end has not been built", () => {
-    const repo = fakeRepo("1");
-    rmSync(join(repo, "dist"), { recursive: true });
-    expect(() => stageApp({ repoDir: repo, stagingDir: join(tempDir(), "s") })).toThrow(
-      /pnpm build/,
-    );
+  it("fails clearly when the front end or the server has not been built", () => {
+    for (const missing of ["dist/web", "dist/js"]) {
+      const pkg = fakePackage("1");
+      rmSync(join(pkg, missing), { recursive: true });
+      expect(() =>
+        stageApp({ packageDir: pkg, stagingDir: join(tempDir(), "s"), manifest }),
+      ).toThrow(/pnpm build/);
+    }
   });
 
   it("an update replaces the app and leaves the rest of the data folder alone", () => {
@@ -231,15 +239,16 @@ describe("installing the app files", () => {
     write(join(dataDir, "k-bench.db"), "the owner's workspaces");
     const appDir = join(dataDir, "app");
     const staging = join(dataDir, "app.staging");
+    const mainJs = join(appDir, "dist/js/src/server/main.js");
 
-    stageApp({ repoDir: fakeRepo("1"), stagingDir: staging });
+    stageApp({ packageDir: fakePackage("1"), stagingDir: staging, manifest });
     swapInStagedApp({ appDir, stagingDir: staging });
-    expect(readFileSync(join(appDir, "src/server/main.ts"), "utf8")).toBe("main 1");
+    expect(readFileSync(mainJs, "utf8")).toBe("main 1");
 
-    stageApp({ repoDir: fakeRepo("2"), stagingDir: staging });
+    stageApp({ packageDir: fakePackage("2"), stagingDir: staging, manifest });
     swapInStagedApp({ appDir, stagingDir: staging });
 
-    expect(readFileSync(join(appDir, "src/server/main.ts"), "utf8")).toBe("main 2");
+    expect(readFileSync(mainJs, "utf8")).toBe("main 2");
     expect(readFileSync(join(dataDir, "k-bench.db"), "utf8")).toBe(
       "the owner's workspaces",
     );
@@ -267,37 +276,5 @@ describe("the native node-pty build", () => {
 
   it("reports node-pty missing altogether", () => {
     expect(nodePtyProblems(tempDir()).join("\n")).toMatch(/node-pty/);
-  });
-});
-
-describe("pnpm install-app --dry-run", () => {
-  function run(home: string, path: string) {
-    return spawnSync(
-      process.execPath,
-      ["scripts/install.ts", "--dry-run", "--login", "owner@example.com"],
-      { encoding: "utf8", env: { HOME: home, PATH: path } },
-    );
-  }
-
-  it("describes the install and changes nothing", () => {
-    const home = tempDir();
-    const bin = tempDir();
-    write(join(bin, "tailscale"), "#!/bin/sh\necho ran > $HOME/ran\n", 0o755);
-    write(join(bin, "tmux"), "#!/bin/sh\n", 0o755);
-    const result = run(home, `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`);
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("dry run");
-    expect(result.stdout).toContain("owner@example.com");
-    expect(result.stdout).toContain("--https=443");
-    expect(result.stdout).toContain(join(home, "Library/LaunchAgents"));
-    expect(readdirSync(home)).toEqual([]);
-  });
-
-  it("fails when tmux is missing, even as a dry run", () => {
-    const bin = tempDir();
-    write(join(bin, "tailscale"), "", 0o755);
-    const result = run(tempDir(), bin);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/tmux/);
   });
 });

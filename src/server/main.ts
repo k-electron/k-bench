@@ -19,14 +19,26 @@ console.log(
   `k-bench ${describeBuild()} listening on http://127.0.0.1:${server.port} (tmux socket "${config.tmuxSocket}", data ${config.dataDir})`,
 );
 
-/** Which commit is running: `pnpm install-app` records it in build-info.json. */
-function describeBuild(): string {
+function readJson(file: string): Record<string, unknown> {
   try {
-    const info = JSON.parse(readFileSync(resolve("build-info.json"), "utf8"));
-    return `${String(info.commit).slice(0, 7)}${info.dirty ? "+uncommitted" : ""} (installed ${info.installedAt})`;
+    return JSON.parse(readFileSync(resolve(file), "utf8"));
   } catch {
-    return "(uninstalled checkout)";
+    return {};
   }
+}
+
+/**
+ * Which version, and from a checkout which commit, is running. `k-bench install` records
+ * both in build-info.json; without it (a checkout, or the package run in place) the version
+ * is read from package.json.
+ */
+function describeBuild(): string {
+  const info = readJson("build-info.json");
+  const version = info.version ?? readJson("package.json").version ?? "(unknown version)";
+  const commit = info.commit
+    ? ` commit ${String(info.commit).slice(0, 7)}${info.dirty ? "+uncommitted" : ""}`
+    : "";
+  return `${version}${commit} (${info.installedAt ? `installed ${info.installedAt}` : "not installed"})`;
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
