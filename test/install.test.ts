@@ -116,7 +116,7 @@ describe.skipIf(process.platform !== "darwin")("the LaunchAgent plist", () => {
 
 describe("reading tailscale status --json", () => {
   const status = JSON.stringify({
-    Self: { UserID: 222, DNSName: "karims-mac.tail1234.ts.net.", HostName: "karims-mac" },
+    Self: { UserID: 222, DNSName: "my-mac.tail1234.ts.net.", HostName: "my-mac" },
     User: {
       "111": { ID: 111, LoginName: "friend@example.com" },
       "222": { ID: 222, LoginName: "owner@example.com" },
@@ -128,7 +128,7 @@ describe("reading tailscale status --json", () => {
   });
 
   it("gives the tailnet name without the trailing dot", () => {
-    expect(parseTailscaleStatus(status).dnsName).toBe("karims-mac.tail1234.ts.net");
+    expect(parseTailscaleStatus(status).dnsName).toBe("my-mac.tail1234.ts.net");
   });
 
   it("refuses output that does not say who this node belongs to", () => {

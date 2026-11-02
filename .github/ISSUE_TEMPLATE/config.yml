@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/k-electron/k-bench/security/advisories/new
+    about: k-bench is a remote shell. Report vulnerabilities privately here, never in a public issue.
