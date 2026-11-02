@@ -35,6 +35,18 @@ The checklist above holds for both routes. Check the npm route too whenever pack
 4. `pnpm install-app` from a checkout still works: `build-info.json` has the `version` and the `commit`, and the startup line names both.
 5. Run `npm install --global` of a different build over the first one: the running server keeps serving from `app/` until the next `k-bench install`.
 
-## Removing the install
+## Uninstall and purge
 
-To remove the install: `launchctl bootout gui/$(id -u)/com.k-bench.server`, delete the plist (`~/Library/LaunchAgents/com.k-bench.server.plist`), `tailscale serve --https=443 off` (use the port you installed on; `tailscale serve status` shows which entry proxies to `127.0.0.1:7680`), and delete `~/Library/Application Support/k-bench/app` (the database and tmux sessions stay).
+`k-bench uninstall` and `k-bench uninstall --purge` change the real system, and `--purge` is destructive. Look with `tailscale serve status`, `launchctl print gui/$(id -u)/com.k-bench.server` and `tmux -L k-bench list-sessions` before and after each item. When you are done, reinstall (`k-bench install`, or `pnpm install-app`) to get the Installed instance back.
+
+**Never run the purge items on a machine whose Sessions or Workspaces you care about.** `--purge` deletes the database and ends the `k-bench` tmux server, which ends every Session, and nothing brings them back. Do them on a Host (or a macOS user account) whose Installed instance is disposable. The non-purge items are safe for Sessions, but still stop the service and unpublish it until you reinstall.
+
+1. `k-bench uninstall --dry-run` prints every step and changes nothing: the LaunchAgent still loads, `tailscale serve status` and the app folder are unchanged. It says what it would keep (the data folder and the `k-bench` tmux server) and `k-bench uninstall --purge --dry-run` says it would delete the data and end every Session. It also works, and says "nothing to ..." for each missing piece, when k-bench is not installed (run it again after item 3, and after item 6).
+2. With another service on a different port (for example `tailscale serve --bg --https=8444 http://127.0.0.1:3000`, a throwaway entry removed afterwards with `tailscale serve --https=8444 off`) beside k-bench's, the dry run names only k-bench's own entry for removal, and says it leaves the other alone.
+3. With a few Sessions running, `k-bench uninstall`: the LaunchAgent is gone (`launchctl print` fails, the plist is deleted, it does not come back at next login), k-bench's `tailscale serve` entry is gone and the other entry still serves, the `app` folder is gone, and `~/Library/Application Support/k-bench/` still holds the database. The Sessions are still running (`tmux -L k-bench list-sessions`), and the output lists what was kept.
+4. `k-bench install` afterwards restores k-bench with every Workspace listed and the Sessions that kept running still running.
+5. Run item 3 again with k-bench already uninstalled: it exits 0 and each step says there is nothing to remove.
+6. Purge, only on a disposable instance (see the warning): `k-bench uninstall --purge` also deletes `~/Library/Application Support/k-bench/` and `~/Library/Logs/k-bench/` and ends the tmux server (`tmux -L k-bench list-sessions` finds no server). The output says plainly that the data is deleted and every Session ended. A `k-bench install` after it starts from an empty database.
+7. Uninstall was run while Tailscale is not running: the other steps still happen, the error names the serve entry that was not removed, and the exit status is non-zero.
+
+The packed command's uninstall, against stub `launchctl`, `tailscale` and `tmux` and a temp HOME, is covered by `test/packed-command.test.ts`; the items above are what the stubs cannot confirm (real launchd, a real `tailscale serve ... off` and a real tmux server ending).

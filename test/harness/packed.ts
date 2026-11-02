@@ -152,7 +152,8 @@ function asText(value: unknown): string {
  * - `tailscale` answers `status --json` and `serve status --json` from files a test can
  *   rewrite with `setStatus` and `setServeStatus`. Any other invocation is a change to the
  *   tailnet, and is recorded: `tailscaleWrites()`.
- * - `tmux` does nothing; `launchctl` records every call (`launchctlCalls()`).
+ * - `tmux` records every call (`tmuxCalls()`) and answers none of them; `launchctl` records
+ *   every call (`launchctlCalls()`).
  * - `node` is a link to the running Node, so `#!/usr/bin/env node` works with a PATH
  *   that holds nothing else (in particular, no real tmux or tailscale).
  */
@@ -162,7 +163,9 @@ export class Stubs {
   constructor(options: StubOptions = {}) {
     const state = this.dir;
     symlinkSync(process.execPath, join(state, "node"));
-    if (options.tmux !== false) this.script("tmux", "exit 0");
+    if (options.tmux !== false) {
+      this.script("tmux", `echo "$*" >> '${state}/tmux.log'`);
+    }
     if (options.tailscale !== false) {
       this.setStatus(options.tailscale?.status ?? HEALTHY_TAILSCALE_STATUS);
       this.setServeStatus(options.tailscale?.serveStatus ?? {});
@@ -212,6 +215,11 @@ if [ "$1" = print ]; then exit ${loaded ? 0 : 113}; fi`,
   /** Every `launchctl` invocation, as argument lines. */
   launchctlCalls(): string[] {
     return this.lines("launchctl.log");
+  }
+
+  /** Every `tmux` invocation, as argument lines. */
+  tmuxCalls(): string[] {
+    return this.lines("tmux.log");
   }
 
   /** PATH for a `k-bench` process: the stubs, then only the system tools `env` needs. */

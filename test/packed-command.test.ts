@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LOGIN_HEADER } from "./harness/instance.ts";
 import {
@@ -165,6 +165,122 @@ describe("the packed k-bench command", () => {
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("--https-port");
     });
+  });
+});
+
+describe("the packed k-bench command: uninstall", () => {
+  // k-bench published on 8443 beside another service on 443.
+  const serveStatus = () => {
+    const own = serveStatusOf([8443, "http://127.0.0.1:7680"]) as {
+      TCP: object;
+      Web: object;
+    };
+    const other = serveStatusOf([443, "http://127.0.0.1:3000"]) as typeof own;
+    return { TCP: { ...own.TCP, ...other.TCP }, Web: { ...own.Web, ...other.Web } };
+  };
+  const installedStubs = () =>
+    new Stubs({ launchctl: { loaded: true }, tailscale: { serveStatus: serveStatus() } });
+
+  /** A HOME laid out as `k-bench install` leaves it. */
+  function installedHome() {
+    const home = packedTempDir();
+    const dataDir = join(home, "Library/Application Support/k-bench");
+    const paths = {
+      plist: join(home, "Library/LaunchAgents/com.k-bench.server.plist"),
+      app: join(dataDir, "app"),
+      database: join(dataDir, "k-bench.db"),
+      log: join(home, "Library/Logs/k-bench/k-bench.log"),
+    };
+    for (const file of [
+      paths.plist,
+      join(paths.app, "package.json"),
+      paths.database,
+      paths.log,
+    ]) {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "x");
+    }
+    return { home, dataDir, ...paths };
+  }
+
+  const endedTmux = (stubs: Stubs) =>
+    stubs.tmuxCalls().some((call) => call.includes("kill-server"));
+
+  it("--dry-run says it removes the service and keeps the data, and changes nothing", () => {
+    const { home, dataDir, ...paths } = installedHome();
+    const stubs = installedStubs();
+    const result = runKBench(pkg, ["uninstall", "--dry-run"], { stubs, home });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("dry run");
+    expect(result.stdout).toContain("bootout");
+    expect(result.stdout).toContain(paths.plist);
+    expect(result.stdout).toContain(paths.app);
+    expect(result.stdout).toMatch(/would keep/i);
+    expect(result.stdout).toContain(dataDir);
+    expect(result.stdout).not.toContain("kill-server");
+    expect(result.stdout).toMatch(/Sessions? carry on/);
+    // Only k-bench's own entry (8443) goes; the other service on 443 stays.
+    expect(result.stdout).toContain("--https=8443 off");
+    expect(result.stdout).not.toContain("--https=443");
+    for (const path of Object.values(paths)) expect(existsSync(path), path).toBe(true);
+    expect(stubs.tailscaleWrites()).toEqual([]);
+    expect(stubs.launchctlCalls().every((call) => call.startsWith("print "))).toBe(true);
+    expect(endedTmux(stubs)).toBe(false);
+  });
+
+  it("--purge --dry-run says it deletes the data and ends every Session, and changes nothing", () => {
+    const { home, dataDir, ...paths } = installedHome();
+    const stubs = installedStubs();
+    const result = runKBench(pkg, ["uninstall", "--purge", "--dry-run"], {
+      stubs,
+      home,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toMatch(/delete.*data/i);
+    expect(result.stdout).toContain(dataDir);
+    expect(result.stdout).toMatch(/ends? every Session/i);
+    expect(result.stdout).toContain("kill-server");
+    for (const path of Object.values(paths)) expect(existsSync(path), path).toBe(true);
+    expect(stubs.tailscaleWrites()).toEqual([]);
+    expect(endedTmux(stubs)).toBe(false);
+  });
+
+  it("--dry-run works, and says there is nothing to remove, when k-bench is not installed", () => {
+    for (const args of [["--dry-run"], ["--purge", "--dry-run"]]) {
+      const stubs = new Stubs();
+      const result = runKBench(pkg, ["uninstall", ...args], { stubs });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toMatch(/no LaunchAgent/i);
+      expect(result.stdout).toMatch(/no tailscale serve entry/i);
+      expect(result.stdout).toMatch(/no app folder/i);
+      expect(readdirSync(result.home)).toEqual([]);
+      expect(stubs.tailscaleWrites()).toEqual([]);
+    }
+  });
+
+  it("removes the service but keeps the data and the Sessions; --purge removes the rest", () => {
+    const { home, dataDir, ...paths } = installedHome();
+    const stubs = installedStubs();
+    const first = runKBench(pkg, ["uninstall"], { stubs, home });
+    expect(first.status, first.stderr).toBe(0);
+    expect(existsSync(paths.plist)).toBe(false);
+    expect(existsSync(paths.app)).toBe(false);
+    expect(existsSync(paths.database)).toBe(true);
+    expect(
+      stubs
+        .launchctlCalls()
+        .some((call) => /^bootout .*com\.k-bench\.server$/.test(call)),
+    ).toBe(true);
+    // The other service on 443 is left alone.
+    expect(stubs.tailscaleWrites()).toEqual(["serve --https=8443 off"]);
+    expect(endedTmux(stubs)).toBe(false);
+    expect(first.stdout).toMatch(/kept/i);
+
+    const purge = runKBench(pkg, ["uninstall", "--purge"], { stubs, home });
+    expect(purge.status, purge.stderr).toBe(0);
+    expect(existsSync(dataDir)).toBe(false);
+    expect(existsSync(paths.log)).toBe(false);
+    expect(stubs.tmuxCalls()).toContain("-L k-bench kill-server");
   });
 });
 

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { install } from "./install.ts";
 import { findPackageRoot } from "./install-lib.ts";
+import { uninstall } from "./uninstall.ts";
 
 const USAGE = `Usage: k-bench <command> [options]
 
@@ -13,6 +14,10 @@ Commands:
                   install or update k-bench as a background service, published on
                   HTTPS port 443 unless --https-port says otherwise; --force replaces
                   whatever else is on that port
+  uninstall [--dry-run] [--purge]
+                  stop and remove the service, its tailscale serve entry and the app
+                  folder, keeping your data and running Sessions; --purge also deletes
+                  the data and ends every Session
 
 Options:
   --help, -h      show this help
@@ -31,6 +36,8 @@ if (command === "--version" || command === "-v") {
   process.exit(1);
 } else if (command === "install") {
   await install(rest);
+} else if (command === "uninstall") {
+  await uninstall(rest);
 } else {
   console.error(`k-bench: unknown command "${command}"\n\n${USAGE}`);
   process.exit(1);

@@ -33,6 +33,17 @@ The installer looks for its files in the package folder (the nearest folder with
 
 Before any of that, right after the tmux and Tailscale checks, the installer reads the serve configuration (below). If the chosen port serves anything other than k-bench's own entry and there is no `--force`, it exits with an error that names `--https-port` and `--force`, having changed nothing; a dry run checks too. The install ends by printing the URL, `https://<host>/` or `https://<host>:<port>/` (a dry run says where k-bench would be reachable).
 
+## Uninstall
+
+`scripts/uninstall.ts` (`k-bench uninstall [--dry-run] [--purge]`) reverses the install without the owner needing to know how it was done. In order, each step announcing itself (prefixed `would:` in a dry run) or saying there is nothing to remove:
+
+1. `launchctl bootout` the LaunchAgent if it is loaded (stopping it leaves tmux, and so every Session, running), then delete its plist.
+2. Read the serve configuration and, if `findOwnEntry(config, 7680)` finds k-bench's entry, switch it off with `serveOffArgs`. Other entries are left alone and named. If the Tailscale CLI is missing the step is skipped with a note; if reading or removing fails, the command carries on, says what was not removed and exits non-zero.
+3. Delete the app folder (and any `app.staging` / `app.previous` left by an interrupted install). The database beside it stays.
+4. With `--purge` only: end the `k-bench` tmux server (`tmux -L k-bench kill-server`, ending every Session), delete the data folder and delete `~/Library/Logs/k-bench`.
+
+It ends by listing what it kept (the data folder, the running Sessions, the logs), or, with `--purge`, by saying nothing was kept and that `npm uninstall -g @k-electron/k-bench` removes the command itself. A dry run does the read-only checks (`launchctl print`, `tailscale serve status --json`, `tmux list-sessions`, which paths exist) and changes nothing; it therefore works, and says so, when nothing is installed. Like the install, it always targets the Installed instance and ignores any `K_BENCH_*` override in the environment.
+
 ## The tailscale serve configuration
 
 `scripts/tailscale-serve.ts` reads `tailscale serve status --json` and is shared by the `k-bench` commands: `install` uses it to protect other setups, and `uninstall` and `status` build on it. Its parsing is pure and unit-tested (`test/tailscale-serve.test.ts`); `readServeConfig(tailscale)` is the only call that runs the CLI.
