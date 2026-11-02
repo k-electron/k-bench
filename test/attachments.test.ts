@@ -11,6 +11,28 @@ import { tmuxClientProcessCount, tmuxSessionNames } from "./harness/tmux.ts";
 
 const SIZE = { cols: 120, rows: 30 };
 
+/**
+ * How soon typed input must reach the shell when a different terminal starts typing. The
+ * shell gets the typer's size within tmux's 250ms resize throttle, and usually well inside
+ * it, while a wait that gives up on that takes over half a second, so it can never pass.
+ */
+const MAX_INPUT_DELAY_MS = 500;
+
+/** Milliseconds from `type` until the shell has run the command printing `marker`. */
+async function timeUntilShellRuns(
+  viewer: RecordingViewer,
+  marker: string,
+  type: () => void | Promise<void>,
+): Promise<number> {
+  const start = performance.now();
+  await type();
+  await pollUntil(() => viewer.output.includes(marker), {
+    intervalMs: 5,
+    description: `output ${marker}`,
+  });
+  return performance.now() - start;
+}
+
 describe("Attachments", () => {
   it("shrugs off input and resizes once the Session's shell has exited", async () => {
     const { attachments, sessionId, socket } = await bootAttachments();
@@ -61,6 +83,51 @@ describe("Attachments", () => {
       description: "the detached tmux client to exit",
     });
     expect(leaving.endings).toEqual([]);
+  });
+
+  describe("when a different terminal starts typing", () => {
+    /**
+     * Two terminals of different sizes on one Session, the first having typed last, so the
+     * second's typing has to take the window's size.
+     */
+    async function twoTerminals() {
+      const { attachments, sessionId } = await bootAttachments();
+      const firstViewer = new RecordingViewer();
+      const secondViewer = new RecordingViewer();
+      const first = attachments.attach(sessionId, SIZE, firstViewer);
+      const second = attachments.attach(sessionId, { cols: 80, rows: 24 }, secondViewer);
+      first.input(`${echoCommand("first-typed-3c1a")}\r`);
+      await secondViewer.waitForOutput("first-typed-3c1a");
+      return { second, secondViewer };
+    }
+
+    it("gets its input to the shell without holding it back", async () => {
+      const { second, secondViewer } = await twoTerminals();
+
+      const elapsed = await timeUntilShellRuns(secondViewer, "second-typed-7d0b", () =>
+        second.input(`${echoCommand("second-typed-7d0b")}\r`),
+      );
+
+      expect(elapsed).toBeLessThan(MAX_INPUT_DELAY_MS);
+    });
+
+    it("gets its input to the shell promptly when it resizes as it types", async () => {
+      const { second, secondViewer } = await twoTerminals();
+
+      const elapsed = await timeUntilShellRuns(
+        secondViewer,
+        "resized-typed-52e8",
+        async () => {
+          second.input(`${echoCommand("resized-typed-52e8")}\r`);
+          // One turn of the event loop: the module has taken the input and is checking the
+          // shell's size, so the resize lands after the key arrived but before tmux has it.
+          await new Promise((resolve) => setImmediate(resolve));
+          second.resize(60, 20);
+        },
+      );
+
+      expect(elapsed).toBeLessThan(MAX_INPUT_DELAY_MS);
+    });
   });
 
   it("ends the viewer as failed when its Session cannot be looked up", async () => {

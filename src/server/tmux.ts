@@ -190,16 +190,26 @@ export class TmuxDriver {
       });
   }
 
-  /** The size of the Session's window, which is what its shell sees. */
-  async windowSize(id: string): Promise<Size> {
-    const out = await this.run([
-      "display-message",
-      "-p",
-      "-t",
-      `=${PREFIX}${id}`,
-      "#{window_width} #{window_height}",
-    ]);
-    const [cols, rows] = out.trim().split(" ").map(Number);
+  /**
+   * The size the Session's shell sees: that of its tmux pane's terminal. tmux resizes that
+   * terminal some time after the window (at most once every 250ms per tmux pane), so the
+   * window's size can be ahead of it. tmux names the terminal; `stty` reads its size.
+   */
+  async shellSize(id: string): Promise<Size> {
+    const tmuxPaneTty = (
+      await this.run([
+        "display-message",
+        "-p",
+        "-t",
+        // The trailing colon names the Session's current window. Without it tmux 3.8
+        // finds no window and prints an empty value, without failing.
+        `=${PREFIX}${id}:`,
+        "#{pane_tty}",
+      ])
+    ).trim();
+    // `-f` is the macOS spelling (the Host is a Mac); it prints "<rows> <cols>".
+    const { stdout } = await execFileAsync("stty", ["-f", tmuxPaneTty, "size"]);
+    const [rows, cols] = stdout.trim().split(" ").map(Number);
     return { cols: cols ?? 0, rows: rows ?? 0 };
   }
 

@@ -282,8 +282,10 @@ class Terminal implements Attachment {
   /**
    * The window takes the size of whoever typed last. tmux (`window-size latest`) resizes the
    * window to the client that last sent a key, but only after it has read that key, and the
-   * shell can read the same key first. So when a different terminal starts typing, its first
-   * character goes in alone and the rest waits until the window has taken its size.
+   * shell can read the same key first, and the shell's terminal follows the window only some
+   * time later. So when a different terminal starts typing, its first character goes in alone
+   * and the rest waits until the shell sees that terminal's size, or half a second has gone
+   * by.
    */
   private async writeSizedToTyper(data: string): Promise<void> {
     const { lastTyper, tmux } = this.context;
@@ -292,10 +294,12 @@ class Terminal implements Attachment {
     }
     if (this.phase !== "attached") return;
     lastTyper.set(this.sessionId, this);
-    const wanted = this.size;
-    const same = (a: Size) => a.cols === wanted.cols && a.rows === wanted.rows;
+    // Against this terminal's size now, not when the key arrived: a resize during the wait
+    // changes the size the shell will get.
+    const isThisSize = (a: Size) =>
+      a.cols === this.size.cols && a.rows === this.size.rows;
     try {
-      if (same(await tmux.windowSize(this.sessionId))) return this.write(data);
+      if (isThisSize(await tmux.shellSize(this.sessionId))) return this.write(data);
       // An escape sequence must not be cut, so it goes in whole.
       const head = data.startsWith("\x1b")
         ? data
@@ -303,7 +307,7 @@ class Terminal implements Attachment {
       this.write(head);
       for (let i = 0; i < 50 && this.phase === "attached"; i++) {
         await new Promise((resolve) => setTimeout(resolve, 10));
-        if (same(await tmux.windowSize(this.sessionId))) break;
+        if (isThisSize(await tmux.shellSize(this.sessionId))) break;
       }
       if (data.length > head.length) this.write(data.slice(head.length));
     } catch {
