@@ -6,6 +6,8 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-04
+
 ### Fixed
 
 - On a phone, the on-screen keyboard no longer covers the bottom of the terminal. While it is up, the app fits the space above it (so the cursor line stays visible, on iPhone as on Android), the header and the full Extra keys row are hidden, and a compact overlay in the terminal's top-right corner gives Esc, Tab, Enter, a close-keyboard key and the arrows. Ctrl and ⇧Tab return with the keyboard down. The Session resizes to match while the keyboard is up.
@@ -37,6 +39,7 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
 - A README and a [user guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
 - Requirements: macOS, Node 26 or later, tmux and Tailscale with HTTPS certificates enabled.
 
-[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/k-electron/k-bench/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/k-electron/k-bench/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/k-electron/k-bench/releases/tag/v0.1.0
