@@ -10,12 +10,22 @@ Trusted publishing can only be configured on a package that already exists, so t
 
 1. Create the `k-electron` scope on npm (a user or organisation named `k-electron` that you control).
 2. Publish a placeholder `0.0.0` by hand, once, so the package exists. The repo's `package.json` is at `0.0.0` for exactly this: from a clean checkout, `npm login`, then `npm publish --access public`. (`prepack` builds the package first. This is the only publish ever done by hand, and the workflow never publishes `0.0.0`.)
-3. On npmjs.com, open the package's settings and add a **trusted publisher** of type GitHub Actions:
+3. Add a **trusted publisher** of type GitHub Actions, either from the command line or on npmjs.com (package settings):
+
+   ```sh
+   npm trust github @k-electron/k-bench --file release.yml --repo k-electron/k-bench --allow-publish --dry-run
+   ```
+
+   Run it again without `--dry-run` once the output looks right. The values are:
    - Organization or user: `k-electron`
    - Repository: `k-bench`
    - Workflow filename: `release.yml` (the file is `.github/workflows/release.yml`; every field is case-sensitive and must match exactly)
    - Environment: leave empty (the workflow does not use a GitHub environment)
-4. Optionally, once a trusted publisher is working, set the package's publishing access to require two-factor authentication and disallow tokens, so that trusted publishing is the only way in.
+
+   `npm trust list @k-electron/k-bench` shows what is configured.
+4. Optionally, once a trusted publisher is working, require two-factor authentication and disallow tokens for the package, so that trusted publishing is the only way in: `npm access set mfa=publish @k-electron/k-bench`, or the package's publishing access setting on npmjs.com. Trusted publishing is unaffected.
+
+If your npm account's two-factor method is a passkey, npm asks you to approve each write (publish, deprecate, `trust`, `access`) in the browser. It only offers that when it has a terminal, so run the command in an interactive shell and open the link it prints promptly: the link expires within a minute or so.
 
 Notes from [npm's trusted publishing docs](https://docs.npmjs.com/trusted-publishers):
 
