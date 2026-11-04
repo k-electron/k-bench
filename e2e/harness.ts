@@ -44,6 +44,13 @@ export class AppPage {
       .getByRole("button", { name, exact: true });
   }
 
+  /** On the phone, while the on-screen keyboard is up: a key in the compact overlay over the terminal. */
+  overlayKey(name: string): Locator {
+    return this.page
+      .getByRole("group", { name: "Typing keys", exact: true })
+      .getByRole("button", { name, exact: true });
+  }
+
   /** A Session's row in the sidebar. */
   session(name: string): Locator {
     return this.sidebar.getByRole("button", { name, exact: true });

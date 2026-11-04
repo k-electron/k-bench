@@ -146,3 +146,86 @@ test("the phone's open Session survives a reload", async ({ app, kbench }) => {
   await expect(app.terminal("session 1")).toBeVisible();
   await expect(app.terminal("session 2")).toHaveCount(0);
 });
+
+test("with the on-screen keyboard up the app gives the terminal the room and compact keys replace the row", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+  const input = terminal.getByRole("textbox", { name: "Terminal input" });
+  const menu = app.page.getByRole("button", { name: "Menu", exact: true });
+  const { rows: rowsBefore } = await app.terminalSize(terminal);
+  await expect(menu).toBeVisible();
+  await expect(app.extraKey("Ctrl")).toBeVisible();
+
+  // The keyboard takes room from the page and the width stays the same: the height shrinks.
+  const viewport = app.page.viewportSize();
+  if (!viewport) throw new Error("no viewport");
+  await input.focus();
+  await app.page.setViewportSize({
+    width: viewport.width,
+    height: viewport.height - 300,
+  });
+
+  await expect(menu).toBeHidden();
+  await expect(app.extraKey("Esc")).toBeHidden();
+  await expect(app.overlayKey("Enter")).toBeVisible();
+  await expect
+    .poll(async () => (await app.terminalSize(terminal)).rows)
+    .toBeLessThan(rowsBefore);
+
+  // The compact keys type into the Session and leave the keyboard open.
+  await app.page.keyboard.type("cat -vt");
+  await app.overlayKey("Enter").tap();
+  await app.overlayKey("Esc").tap();
+  await app.page.keyboard.type("A");
+  await app.overlayKey("Tab").tap();
+  await app.page.keyboard.type("B");
+  await app.overlayKey("Up").tap();
+  await app.page.keyboard.type("C");
+  await app.overlayKey("Down").tap();
+  await app.page.keyboard.type("D");
+  await app.overlayKey("Left").tap();
+  await app.page.keyboard.type("E");
+  await app.overlayKey("Right").tap();
+  await app.page.keyboard.type("F");
+  await app.overlayKey("Enter").tap();
+  await expect(terminal).toContainText("^[A^IB^[[AC^[[BD^[[DE^[[CF");
+  await expect(input).toBeFocused();
+
+  // Closing the keyboard brings the header and the full row back.
+  await app.overlayKey("Close keyboard").tap();
+  await expect(menu).toBeVisible();
+  await expect(app.extraKey("Ctrl")).toBeVisible();
+  await expect(app.extraKey("Shift Tab")).toBeVisible();
+  await expect(app.overlayKey("Enter")).toBeHidden();
+});
+
+test("the full extra keys row comes back when the keyboard goes away by itself", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+
+  const viewport = app.page.viewportSize();
+  if (!viewport) throw new Error("no viewport");
+  await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+  await app.page.setViewportSize({
+    width: viewport.width,
+    height: viewport.height - 300,
+  });
+  await expect(app.overlayKey("Enter")).toBeVisible();
+
+  await app.page.setViewportSize(viewport);
+  await expect(app.extraKey("Ctrl")).toBeVisible();
+  await expect(app.overlayKey("Enter")).toBeHidden();
+  await expect(app.page.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
+});

@@ -167,7 +167,10 @@ export function TerminalView({
   // The phone's extra keys go to the terminal in the Focused Pane, as if typed.
   useEffect(() => {
     if (!focused) return;
-    return registerTerminal((data) => terminalRef.current?.input(data, true));
+    return registerTerminal(
+      (data) => terminalRef.current?.input(data, true),
+      () => terminalRef.current?.blur(),
+    );
   }, [focused]);
 
   useEffect(() => {
@@ -287,7 +290,7 @@ export function TerminalView({
       {reconnecting && (
         <div
           role="status"
-          className="absolute top-2 right-2 rounded bg-amber-500 px-2 py-1 text-xs font-medium text-black"
+          className="absolute top-2 left-2 rounded bg-amber-500 px-2 py-1 text-xs font-medium text-black"
         >
           reconnecting…
         </div>

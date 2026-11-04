@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
 import { PaneArea } from "@/components/PaneArea";
 import { Sidebar } from "@/components/Sidebar";
+import { TypingKeys } from "@/components/TypingKeys";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./layout";
 import { ActionsProvider, useAppState } from "./useAppState";
 import { useIsPhone } from "./useIsPhone";
+import { useKeyboardUp } from "./useKeyboardUp";
 
 const DELETED_NOTICE = "This Session was deleted.";
 
@@ -30,6 +32,9 @@ const DELETED_NOTICE = "This Session was deleted.";
 export function App() {
   const { state, actions, error } = useAppState();
   const phone = useIsPhone();
+  // With the on-screen keyboard up the app fits the space above it, minus the header and
+  // the Extra keys row, which a compact overlay on the terminal replaces.
+  const keyboardUp = useKeyboardUp(phone);
   const [stored, updateStored] = useLayout();
   // The phone has one Pane; the same stored layout drives it, showing the Focused Pane.
   const layout = phone ? onePane(stored) : stored;
@@ -83,7 +88,12 @@ export function App() {
 
   return (
     <ActionsProvider value={actions}>
-      <div className="flex h-full">
+      <div
+        className={cn(
+          "flex h-full",
+          keyboardUp && "fixed inset-x-0 top-(--app-top) h-(--app-height)",
+        )}
+      >
         {drawerShown && (
           <button
             type="button"
@@ -116,44 +126,49 @@ export function App() {
           error={error}
         />
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
-            {phone ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Menu"
-                onClick={() => setDrawerOpen(true)}
-              >
-                <MenuIcon />
-              </Button>
-            ) : (
-              <span />
-            )}
-            {!phone && (
-              <Button
-                variant={layout.paneCount === 2 ? "secondary" : "ghost"}
-                size="sm"
-                aria-label="Two panes"
-                aria-pressed={layout.paneCount === 2}
-                onClick={() => update(togglePaneCount)}
-              >
-                <Columns2Icon />
-              </Button>
-            )}
+          {!keyboardUp && (
+            <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
+              {phone ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Menu"
+                  onClick={() => setDrawerOpen(true)}
+                >
+                  <MenuIcon />
+                </Button>
+              ) : (
+                <span />
+              )}
+              {!phone && (
+                <Button
+                  variant={layout.paneCount === 2 ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-label="Two panes"
+                  aria-pressed={layout.paneCount === 2}
+                  onClick={() => update(togglePaneCount)}
+                >
+                  <Columns2Icon />
+                </Button>
+              )}
+            </div>
+          )}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <PaneArea
+              layout={layout}
+              sessions={sessions}
+              notices={notices}
+              emptyMessage={
+                state?.workspaces.length === 0
+                  ? "Create a Workspace to get started."
+                  : "Select a Session."
+              }
+              onFocus={(pane) => update((l) => focusPane(l, pane))}
+              onResize={(ratio) => update((l) => setRatio(l, ratio))}
+            />
+            {keyboardUp && focusedSession(layout) && <TypingKeys />}
           </div>
-          <PaneArea
-            layout={layout}
-            sessions={sessions}
-            notices={notices}
-            emptyMessage={
-              state?.workspaces.length === 0
-                ? "Create a Workspace to get started."
-                : "Select a Session."
-            }
-            onFocus={(pane) => update((l) => focusPane(l, pane))}
-            onResize={(ratio) => update((l) => setRatio(l, ratio))}
-          />
-          {phone && focusedSession(layout) && <ExtraKeys />}
+          {phone && !keyboardUp && focusedSession(layout) && <ExtraKeys />}
         </main>
       </div>
     </ActionsProvider>
