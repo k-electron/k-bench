@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Fixed
+
+- New Sessions start in their Workspace folder after upgrading k-bench. Upgrading deleted the folder the running tmux server was started from, and from then on every new Session's shell opened in that deleted folder (showing `/` and a `getcwd` error) instead of its Workspace folder.
+
 ## [0.1.0] - 2026-11-03
 
 First public release. k-bench is a web app, reachable only on the owner's tailnet, that runs persistent terminal Sessions on the Host (a Mac), organised into Workspaces. It runs real programs in real terminals, Claude Code included, so nothing is hidden behind a wrapper.

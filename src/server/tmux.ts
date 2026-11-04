@@ -21,12 +21,41 @@ export interface LiveSession {
   bell: boolean;
 }
 
+/** The owner's login shell. */
+function ownerShell(): string {
+  return userInfo().shell || "/bin/zsh";
+}
+
+/**
+ * What a Session's pane runs: the owner's shell as a login shell, so their PATH and aliases
+ * are present even though launchd provides a bare environment, started in `folder`.
+ *
+ * The `cd` is needed as well as `new-session -c`: tmux ignores `-c` once the tmux server's own
+ * working directory has been deleted, and the shell then starts in that deleted folder. That
+ * happens to every server an earlier install started, because upgrading deletes the old app
+ * folder, which is the launchd working directory. The folder and shell are passed as
+ * arguments, never spliced into the script, so no folder name can break or inject into it.
+ * The `cd` runs in zsh with no startup files, not /bin/sh: macOS's /bin/sh is bash, which
+ * prints a `getcwd` error when it starts in a deleted folder. A failed `cd` (the folder
+ * vanished just now) still starts the shell, as tmux alone would have.
+ */
+function sessionCommand(folder: string): string[] {
+  return [
+    "/bin/zsh",
+    "-f",
+    "-c",
+    'cd -- "$1"; exec "$2" -l',
+    "zsh",
+    folder,
+    ownerShell(),
+  ];
+}
+
 /** Applied to the instance's tmux server whenever a Session is created (idempotent). */
 function serverConfiguration(): string[][] {
   return [
-    // tmux starts this as a login shell, so the owner's PATH and aliases are present
-    // even though launchd provides a bare environment.
-    ["set", "-g", "default-shell", userInfo().shell || "/bin/zsh"],
+    // The shell for any pane tmux starts without a command of its own (`sessionCommand`).
+    ["set", "-g", "default-shell", ownerShell()],
     ["set", "-g", "default-terminal", "tmux-256color"],
     ["set", "-g", "status", "off"],
     ["set", "-g", "mouse", "on"],
@@ -124,6 +153,8 @@ export class TmuxDriver {
       PREFIX + id,
       "-c",
       folder,
+      "--",
+      ...sessionCommand(folder),
     ]);
     // This may have started the tmux server, which a Bell watch idles without.
     for (const watch of this.bellWatches) watch.serverStarted();
