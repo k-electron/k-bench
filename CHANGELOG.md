@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Fixed
+
+- On a phone, the on-screen keyboard no longer covers the bottom of the terminal. While it is up, the app fits the space above it (so the cursor line stays visible, on iPhone as on Android), the header and the full Extra keys row are hidden, and a compact overlay in the terminal's top-right corner gives Esc, Tab, Enter, a close-keyboard key and the arrows. Ctrl and ⇧Tab return with the keyboard down. The Session resizes to match while the keyboard is up.
+
 ## [0.1.1] - 2026-11-04
 
 ### Fixed
