@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createTestInstance } from "./harness/instance.ts";
 import { echoCommand } from "./harness/terminal.ts";
@@ -33,6 +35,28 @@ describe("Terminal WebSocket", () => {
     terminal.run("pwd");
 
     await terminal.waitForOutput(folder);
+  });
+
+  it("starts the shell in the Workspace folder when the tmux server's own folder was deleted", async () => {
+    // An earlier install started the tmux server from its app folder, and upgrading
+    // deleted that folder while the server, and its Sessions, kept running.
+    const instance = createTestInstance();
+    const doomed = instance.makeFolder("previous-app");
+    execFileSync("tmux", ["-L", instance.config.tmuxSocket, "new-session", "-d"], {
+      cwd: doomed,
+    });
+    rmSync(doomed, { recursive: true });
+    const server = await instance.start();
+    const folder = instance.makeFolder("it's a project");
+    const workspace = await server.createWorkspace({ folder });
+    const session = await server.createSession(workspace.id);
+    const terminal = await server.openTerminal(session.id);
+
+    terminal.run(`printf 'cwd=%s=\\n' "$(pwd -P)"`);
+
+    await terminal.waitForOutput(`cwd=${folder}=`);
+    // Nothing that ran before the shell may have complained about starting in the deleted folder.
+    expect(terminal.output).not.toContain("getcwd");
   });
 
   it("starts a login shell with the owner's PATH", async () => {
