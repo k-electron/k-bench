@@ -1,6 +1,6 @@
 import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { sendKey, toggleCtrl, useCtrlArmed } from "../terminalInput";
+import { KEYS, sendKey, toggleCtrl, useCtrlArmed } from "../terminalInput";
 import { Button } from "./ui/button";
 
 // Pressing a key must not take focus from the terminal, or the on-screen keyboard closes.
@@ -42,13 +42,13 @@ export function ExtraKeys() {
       aria-label="Extra keys"
       className="flex shrink-0 gap-1 border-t bg-card p-1"
     >
-      <Key name="Esc" data={"\x1b"}>
+      <Key name="Esc" data={KEYS.esc}>
         Esc
       </Key>
-      <Key name="Tab" data={"\t"}>
+      <Key name="Tab" data={KEYS.tab}>
         Tab
       </Key>
-      <Key name="Shift Tab" data={"\x1b[Z"}>
+      <Key name="Shift Tab" data={KEYS.shiftTab}>
         ⇧Tab
       </Key>
       <Button
@@ -60,16 +60,16 @@ export function ExtraKeys() {
       >
         Ctrl
       </Button>
-      <Key name="Left" data={"\x1b[D"}>
+      <Key name="Left" data={KEYS.left}>
         <ArrowLeftIcon />
       </Key>
-      <Key name="Up" data={"\x1b[A"}>
+      <Key name="Up" data={KEYS.up}>
         <ArrowUpIcon />
       </Key>
-      <Key name="Down" data={"\x1b[B"}>
+      <Key name="Down" data={KEYS.down}>
         <ArrowDownIcon />
       </Key>
-      <Key name="Right" data={"\x1b[C"}>
+      <Key name="Right" data={KEYS.right}>
         <ArrowRightIcon />
       </Key>
     </div>

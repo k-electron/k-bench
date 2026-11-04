@@ -8,13 +8,42 @@ import { useSyncExternalStore } from "react";
 
 let sender: ((data: string) => void) | null = null;
 
-/** Registers the terminal that extra keys go to (the one in the Focused Pane). */
-export function registerTerminal(send: (data: string) => void): () => void {
+let blurrer: (() => void) | null = null;
+
+/**
+ * Registers the terminal that extra keys go to (the one in the Focused Pane), and how to
+ * take keyboard focus off it.
+ */
+export function registerTerminal(
+  send: (data: string) => void,
+  blur: () => void,
+): () => void {
   sender = send;
+  blurrer = blur;
   return () => {
-    if (sender === send) sender = null;
+    if (sender === send) {
+      sender = null;
+      blurrer = null;
+    }
   };
 }
+
+/** Takes focus off the registered terminal, which closes the on-screen keyboard. */
+export function closeKeyboard(): void {
+  blurrer?.();
+}
+
+/** The keys of the Extra keys and the compact keys over the terminal, as the terminal gets them. */
+export const KEYS = {
+  esc: "\x1b",
+  tab: "\t",
+  shiftTab: "\x1b[Z",
+  enter: "\r",
+  left: "\x1b[D",
+  up: "\x1b[A",
+  down: "\x1b[B",
+  right: "\x1b[C",
+} as const;
 
 /** Sends `data` to the registered terminal as if it had been typed. */
 export function sendKey(data: string): void {
