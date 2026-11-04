@@ -96,5 +96,6 @@ On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-be
 
 - The **extra keys** sit along the bottom while a Session is open. They are the keys a phone keyboard lacks: **Esc**, **Tab**, **⇧Tab** (Shift-Tab), **Ctrl**, and the four arrow keys. Tapping one sends it to the Session as if you had typed it, and doesn't close your keyboard.
 - **Ctrl** is one-shot: tap it, then the next key you press, on the extra row or on your keyboard, is sent with Ctrl held. Ctrl then `c` is Ctrl-C. It un-arms after that one key.
+- While your **on-screen keyboard is up**, k-bench fits into the space above it, so the line you're typing on stays visible. To make room, the menu button and the extra keys row are hidden, and a few of the extra keys float in the terminal's top-right corner instead: **Esc**, **Tab**, **Enter**, **⌄** (close the keyboard) and the four arrows. Close the keyboard with **⌄** to get the menu button and the full row back, including **Ctrl** and **⇧Tab**. While the keyboard is up, the Session takes the smaller size, so another device viewing it sees it shrink too, until that device is used again.
 
 Next: [Using k-bench with Claude Code](claude-code.md).

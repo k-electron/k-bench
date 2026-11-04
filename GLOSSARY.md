@@ -44,6 +44,10 @@ _Avoid_: split, window, tab
 The Pane that opening a Session from the sidebar targets. Exactly one Pane is focused at a time.
 _Avoid_: active pane, current pane
 
+**Extra keys**:
+On a phone, the keys a terminal needs that the on-screen keyboard lacks, such as Esc, Tab and Ctrl. They type into the Session in the Focused Pane. While the on-screen keyboard is up, only a few of them show, as a small overlay on the terminal.
+_Avoid_: shortcut bar, toolbar, key row, typing keys
+
 ## Running k-bench
 
 **Installed instance**:
