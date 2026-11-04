@@ -196,6 +196,14 @@ test("with the on-screen keyboard up the app gives the terminal the room and com
   await app.overlayKey("Enter").tap();
   await expect(terminal).toContainText("^[A^IB^[[AC^[[BD^[[DE^[[CF");
   await expect(input).toBeFocused();
+  // Ctrl and ⇧Tab are only on the full row, with the keyboard down.
+  await expect(app.overlayKey("Ctrl")).toHaveCount(0);
+  await expect(app.overlayKey("Shift Tab")).toHaveCount(0);
+
+  // Turning the phone sideways changes the width, which is not the keyboard going away.
+  await app.page.setViewportSize({ width: 600, height: 300 });
+  await expect(app.overlayKey("Enter")).toBeVisible();
+  await expect(menu).toBeHidden();
 
   // Closing the keyboard brings the header and the full row back.
   await app.overlayKey("Close keyboard").tap();

@@ -35,16 +35,22 @@ export function useKeyboardUp(enabled: boolean): boolean {
     if (!enabled) return;
     const root = document.documentElement;
     let baseline = visible();
+    let wasUp = false;
 
     const update = () => {
       const now = visible();
       const focused = terminalFocused();
       // The size the page has without a keyboard: followed while no terminal is focused
       // (so it is the size from just before the keyboard opens), and across rotations.
-      if (!focused || now.width !== baseline.width) baseline = now;
-      else if (now.height > baseline.height)
+      if (!focused) baseline = now;
+      else if (now.width !== baseline.width) {
+        // A rotation. The page's size without a keyboard is unknown now, so if the keyboard
+        // was up it stays up (until the terminal loses focus or the page grows again).
+        baseline = wasUp ? { ...now, height: now.height + KEYBOARD_MIN_DROP } : now;
+      } else if (now.height > baseline.height)
         baseline = { ...baseline, height: now.height };
       const keyboard = focused && baseline.height - now.height >= KEYBOARD_MIN_DROP;
+      wasUp = keyboard;
       setUp(keyboard);
       if (keyboard) {
         root.style.setProperty("--app-top", `${now.top}px`);

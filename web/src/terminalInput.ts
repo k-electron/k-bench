@@ -8,7 +8,7 @@ import { useSyncExternalStore } from "react";
 
 let sender: ((data: string) => void) | null = null;
 
-let closer: (() => void) | null = null;
+let blurrer: (() => void) | null = null;
 
 /**
  * Registers the terminal that extra keys go to (the one in the Focused Pane), and how to
@@ -19,18 +19,18 @@ export function registerTerminal(
   blur: () => void,
 ): () => void {
   sender = send;
-  closer = blur;
+  blurrer = blur;
   return () => {
     if (sender === send) {
       sender = null;
-      closer = null;
+      blurrer = null;
     }
   };
 }
 
 /** Takes focus off the registered terminal, which closes the on-screen keyboard. */
 export function closeKeyboard(): void {
-  closer?.();
+  blurrer?.();
 }
 
 /** The keys of the Extra keys and the compact keys over the terminal, as the terminal gets them. */

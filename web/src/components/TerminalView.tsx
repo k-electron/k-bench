@@ -288,6 +288,7 @@ export function TerminalView({
     <div className="relative h-full w-full">
       <div ref={container} className="h-full w-full touch-none" />
       {reconnecting && (
+        // Top-left: the phone's compact keys sit in the top-right while the keyboard is up.
         <div
           role="status"
           className="absolute top-2 left-2 rounded bg-amber-500 px-2 py-1 text-xs font-medium text-black"
