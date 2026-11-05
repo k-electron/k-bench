@@ -10,10 +10,18 @@ export interface ScrollTarget {
 const VELOCITY_WINDOW_MS = 100;
 /** A finger that rested this long before lifting was placed, not flicked. */
 const REST_BEFORE_LIFT_MS = 50;
-/** Slower than this (px/ms) a lift doesn't glide, and a glide comes to a stop. */
+/** Slower than this (px/ms) a lift doesn't glide. */
 const MIN_GLIDE_SPEED = 0.05;
-/** The share of speed a glide keeps each millisecond: iOS's normal deceleration. */
-const DECELERATION_PER_MS = 0.998;
+/** The share of speed a fast glide keeps each millisecond: a little gentler than iOS's normal (0.998), to make up for the distance the settle takes off. */
+const DECELERATION_PER_MS = 0.9985;
+/**
+ * Below this many lines per frame a glide settles to a stop at an even rate, over
+ * `SETTLE_MS` from this speed, rather than fading as iOS does. History moves in whole
+ * lines, so a slow glide can only step a line every few frames, and iOS's long fade would
+ * spend over a second visibly stepping down through those speeds.
+ */
+const SETTLE_LINES_PER_FRAME = 2;
+const SETTLE_MS = 400;
 /** A flick this soon after touching down during a glide adds to the glide's speed. */
 const STACK_WITHIN_MS = 300;
 const FRAME_MS = 1000 / 60;
@@ -25,7 +33,8 @@ interface Sample {
 
 /**
  * Scrolls `target` by one-finger drags on `element` that follow the finger line by line,
- * and keeps a flick gliding after the finger lifts, slowing as iOS lists do. Another flick
+ * and keeps a flick gliding after the finger lifts, slowing as iOS lists do and then settling
+ * to an even stop. Another flick
  * the same way while gliding adds to the speed, capped at a screenful of lines per frame.
  * A touch during a glide stops it and is otherwise swallowed: no tap reaches the terminal.
  * Returns a function that stops listening and ends any glide.
@@ -63,11 +72,17 @@ export function touchScrolls(element: HTMLElement, target: ScrollTarget): () => 
   const glide = (now: number) => {
     const elapsed = Math.min(now - lastFrameAt, 4 * FRAME_MS);
     lastFrameAt = now;
-    glideSpeed *= DECELERATION_PER_MS ** elapsed;
-    if (Math.abs(glideSpeed) < MIN_GLIDE_SPEED) {
+    const settleSpeed = (SETTLE_LINES_PER_FRAME * target.lineHeight()) / FRAME_MS;
+    const speed = Math.abs(glideSpeed);
+    const slower =
+      speed > settleSpeed
+        ? speed * DECELERATION_PER_MS ** elapsed
+        : speed - (settleSpeed / SETTLE_MS) * elapsed;
+    if (slower <= 0) {
       stopGlide();
       return;
     }
+    glideSpeed = Math.sign(glideSpeed) * slower;
     move(glideSpeed * elapsed);
     glideFrame = requestAnimationFrame(glide);
   };

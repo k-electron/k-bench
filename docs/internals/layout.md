@@ -51,7 +51,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
 - `src/api.ts` is the API client.
 - `src/layout.ts` is the per-device Pane layout: a `Layout` value plus pure functions such as `openInFocusedPane`, `openInOtherPane`, `togglePaneCount`, `moveFocus` and `setRatio`, and `useLayout()`, which keeps it in browser storage.
 - `src/useIsPhone.ts` is the single desktop/phone breakpoint (767px). On a phone `App.tsx` shows one Pane (the stored layout's Focused Pane), the sidebar as a slide-out drawer opened by the "Menu" button, and `components/ExtraKeys` (Esc, Tab, Shift Tab, one-shot Ctrl, arrows), whose keys and Ctrl state live in `src/terminalInput.ts` and reach the shell through the terminal's normal input path.
-- `src/touchScroll.ts` turns one-finger drags into whole-line scrolls that follow the finger, and keeps a flick gliding with iOS-style deceleration. It knows nothing about xterm.js or tmux.
+- `src/touchScroll.ts` turns one-finger drags into whole-line scrolls that follow the finger, and keeps a flick gliding with iOS-style deceleration that settles to an even stop once it is slow (a slow fade in whole lines visibly steps). It knows nothing about xterm.js or tmux.
 - `src/wheelReports.ts` turns line counts into mouse-wheel reports through xterm.js, one report per line. tmux is bound to scroll History one line per report (`serverConfiguration` in `src/server/tmux.ts`), so this module also sends five reports per desktop wheel step to keep the desktop feel. The two halves of that pairing point at each other.
 
 ## `test/` and `e2e/`
