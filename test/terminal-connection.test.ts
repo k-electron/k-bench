@@ -83,4 +83,33 @@ describe("Terminal connection", () => {
     await terminal.waitForOutput("after-5f3a96");
     expect(terminal.output).not.toContain("dropped-d24b71");
   });
+
+  it("reconnects at once when the page wakes, without waiting out the backoff", async () => {
+    const { instance, server, session } = await bootSession();
+    let wake: () => void = () => {};
+    // A retry delay no test would wait out: only waking can bring the connection back.
+    const terminal = instance.openTerminalConnection(session.id, {
+      retryFirstMs: 600_000,
+      retryMaxMs: 600_000,
+      wake: (retry) => {
+        wake = retry;
+        return () => {};
+      },
+    });
+    terminal.run(echoCommand("awake-1b9e44"));
+    await terminal.waitForOutput("awake-1b9e44");
+
+    await server.stop();
+    await pollUntil(() => terminal.reconnecting, {
+      description: "the reconnecting report",
+    });
+    await instance.start();
+    wake();
+    await pollUntil(() => !terminal.reconnecting, {
+      description: "the connection to be back",
+    });
+    terminal.run(echoCommand("again-c70d25"));
+
+    await terminal.waitForOutput("again-c70d25");
+  });
 });

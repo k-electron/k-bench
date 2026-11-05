@@ -269,6 +269,8 @@ export class TestInstance {
       size?: { cols: number; rows: number };
       retryFirstMs?: number;
       retryMaxMs?: number;
+      /** What the browser's visibility and online events are: given `retry`, returns how to stop. */
+      wake?: (retry: () => void) => () => void;
     } = {},
   ): TerminalConnectionProbe {
     const probe = new TerminalConnectionProbe((countSocket) =>
@@ -277,6 +279,7 @@ export class TestInstance {
         size: options.size ?? { cols: 120, rows: 30 },
         retryFirstMs: options.retryFirstMs ?? 20,
         retryMaxMs: options.retryMaxMs ?? 100,
+        wake: options.wake,
         openSocket: (path) => {
           if (!this.running)
             throw new Error("start the instance before opening a terminal");
