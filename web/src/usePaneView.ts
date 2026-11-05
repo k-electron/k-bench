@@ -33,8 +33,6 @@ export interface PaneViewModel {
   paneCount: 1 | 2;
   /** Share of the width the first Pane takes, when two are laid out. */
   ratio: number;
-  /** The tab's title, after the Focused Pane's Session. */
-  title: string;
   /** The Session in the Focused Pane, if it has one. */
   focusedSessionId: string | undefined;
   /** Plain click on a Session: opens it in the Focused Pane. */
@@ -44,8 +42,6 @@ export interface PaneViewModel {
   /** Focuses a Pane (clicking in it), given as `PaneView.pane`. */
   focusPane(pane: 0 | 1): void;
   togglePaneCount(): void;
-  /** ⌘\: moves the focus to the other Pane. */
-  moveFocus(): void;
   setRatio(ratio: number): void;
 }
 
@@ -111,18 +107,29 @@ export function usePaneView(state: AppState | undefined, phone: boolean): PaneVi
     [phone, update],
   );
 
+  // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey && !event.ctrlKey && !event.altKey && event.key === "\\") {
+        event.preventDefault();
+        event.stopPropagation();
+        moveFocusIntent();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [moveFocusIntent]);
+
   return {
     panes,
     paneCount: shown.length === 2 ? 2 : 1,
     ratio: saved.ratio,
-    title,
     focusedSessionId: focusedSession?.session.id,
     openInFocusedPane: (id) => update((l) => openInFocusedPane(l, id)),
     openInOtherPane: (id) =>
       update((l) => (phone ? stashInOtherPane(l, id) : openInOtherPane(l, id))),
     focusPane: (pane) => update((l) => focusPane(l, pane)),
     togglePaneCount: () => update((l) => (phone ? l : togglePaneCount(l))),
-    moveFocus: moveFocusIntent,
     setRatio: (ratio) => update((l) => setRatio(l, ratio)),
   };
 }

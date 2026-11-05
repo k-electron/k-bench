@@ -34,20 +34,6 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerShown]);
 
-  // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
-  const { moveFocus } = panes;
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey && !event.ctrlKey && !event.altKey && event.key === "\\") {
-        event.preventDefault();
-        event.stopPropagation();
-        moveFocus();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [moveFocus]);
-
   return (
     <ActionsProvider value={actions}>
       <div
