@@ -49,11 +49,11 @@ export function useAppState(): {
 } {
   const [state, setState] = useState<State>();
   const [error, setError] = useState<string>();
-  const client = useRef<StateClient>(undefined);
+  const clientRef = useRef<StateClient>(undefined);
 
   useEffect(() => {
     const created = createStateClient({ openSocket: () => new WebSocket(eventsUrl()) });
-    client.current = created;
+    clientRef.current = created;
     const unsubscribe = created.subscribe(setState);
     const resync = () => created.resync();
     window.addEventListener("focus", resync);
@@ -61,13 +61,13 @@ export function useAppState(): {
       window.removeEventListener("focus", resync);
       unsubscribe();
       created.close();
-      client.current = undefined;
+      clientRef.current = undefined;
     };
   }, []);
 
   const actions = useMemo((): Actions => {
     const whenShown = (change: Change<unknown>) =>
-      client.current?.whenShown(change) ?? Promise.resolve(false);
+      clientRef.current?.whenShown(change) ?? Promise.resolve(false);
     const act = async (request: Promise<Change<unknown>>) => {
       await whenShown(await request);
     };
@@ -97,7 +97,7 @@ export function useAppState(): {
             },
         );
         // A refused order sends no snapshot: resync for one, putting the order right.
-        return act(api.reorderWorkspaces(ids)).catch(() => client.current?.resync());
+        return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
       },
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>
