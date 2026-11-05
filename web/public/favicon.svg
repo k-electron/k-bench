@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>k-bench</title>
+  <rect width="64" height="64" rx="14" fill="#252525"/>
+  <path fill="#fafafa" d="M15 10H29V31.5L37 23H51L39 35L52 54H37.5L29 41.5V54H15Z"/>
+</svg>
