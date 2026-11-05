@@ -80,8 +80,10 @@ export function App() {
     const next = (id: string | null, notice: string | null) =>
       id === null ? notice : gone(id) ? DELETED_NOTICE : null;
     setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
-    update((l) => forgetMissingSessions(l, existing));
-  }, [state, layout.sessions, update]);
+    // The saved layout, not the phone's one-Pane view: forgetting a Session needs only ids,
+    // and saving the view would drop the second Pane whenever the window turns phone-sized.
+    updateStored((l) => forgetMissingSessions(l, existing));
+  }, [state, layout.sessions, updateStored]);
 
   // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
   useEffect(() => {

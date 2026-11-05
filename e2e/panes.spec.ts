@@ -130,6 +130,39 @@ test("after a reload the Pane count, both Sessions, the focus and the divider ar
   await expect(app.panesToggle).toHaveAttribute("aria-pressed", "true");
 });
 
+test("narrowing the window to phone width and widening it again keeps both Panes", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSessions("project", 2);
+  await app.session("session 1").click();
+  await app.session("session 2").click({ modifiers: ["Meta"] });
+  await page.keyboard.press("Meta+Backslash");
+  await expect(app.pane(2)).toHaveAttribute("aria-current", "true");
+  await app.dragDivider(-250);
+  const dragged = await app.divider.getAttribute("aria-valuenow");
+  const wide = page.viewportSize();
+  if (!wide) throw new Error("The test page should have a viewport");
+
+  await page.setViewportSize({ width: 500, height: wide.height });
+  await expect(app.pane(2)).toHaveCount(0);
+  await expect(app.terminal("session 2")).toBeVisible();
+
+  await page.setViewportSize(wide);
+  const restored = async () => {
+    await expect(app.terminalIn(1, "session 1")).toBeVisible();
+    await expect(app.terminalIn(2, "session 2")).toBeVisible();
+    await expect(app.pane(2)).toHaveAttribute("aria-current", "true");
+    await expect(app.pane(1)).not.toHaveAttribute("aria-current", "true");
+    await expect(app.divider).toHaveAttribute("aria-valuenow", dragged ?? "");
+  };
+  await restored();
+  await page.reload();
+  await restored();
+});
+
 test("dragging the divider resizes both terminals and both shells see the new sizes", async ({
   app,
   kbench,
