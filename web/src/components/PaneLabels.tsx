@@ -1,22 +1,11 @@
-import type { SessionState, WorkspaceState } from "@/api";
 import { cn } from "@/lib/utils";
-import { type Layout, paneColumns } from "../layout";
-
-/** A Session with the name of the Workspace it belongs to. */
-export function locateSession(
-  workspaces: WorkspaceState[] | undefined,
-  id: string | null,
-): { workspace: string; session: SessionState } | undefined {
-  for (const workspace of workspaces ?? []) {
-    const session = workspace.sessions.find((s) => s.id === id);
-    if (session) return { workspace: workspace.name, session };
-  }
-  return undefined;
-}
+import { paneColumns } from "../layout";
+import type { PaneView } from "../usePaneView";
 
 interface PaneLabelsProps {
-  layout: Layout;
-  workspaces: WorkspaceState[] | undefined;
+  panes: PaneView[];
+  paneCount: 1 | 2;
+  ratio: number;
   className?: string;
 }
 
@@ -26,35 +15,32 @@ interface PaneLabelsProps {
  * Pane's left edge, divider drags included. A label is cut off with an ellipsis at about
  * two thirds of its Pane's width, which also keeps the right-hand one clear of the toggle.
  */
-export function PaneLabels({ layout, workspaces, className }: PaneLabelsProps) {
-  const two = layout.paneCount === 2;
-  const label = (index: 0 | 1) => {
-    const found = locateSession(workspaces, layout.sessions[index]);
-    if (!found) return <div />;
+export function PaneLabels({ panes, paneCount, ratio, className }: PaneLabelsProps) {
+  const two = paneCount === 2;
+  const [first, second] = panes;
+  const label = (index: number, { content, focused }: PaneView) => {
+    if (content.kind !== "session") return <div />;
     return (
       <div
         role="note"
         aria-label={`Pane ${index + 1} label`}
-        className={cn(
-          "max-w-2/3 truncate px-2 text-sm",
-          two && layout.focus !== index && "opacity-50",
-        )}
+        className={cn("max-w-2/3 truncate px-2 text-sm", two && !focused && "opacity-50")}
       >
-        <span className="text-muted-foreground">{found.workspace} ›</span>{" "}
-        <span>{found.session.name}</span>
+        <span className="text-muted-foreground">{content.workspace} ›</span>{" "}
+        <span>{content.session.name}</span>
       </div>
     );
   };
   return (
     <div
       className={cn("grid min-w-0 items-center", className)}
-      style={{ gridTemplateColumns: paneColumns(layout) }}
+      style={{ gridTemplateColumns: paneColumns(paneCount, ratio) }}
     >
-      {label(0)}
-      {two && (
+      {first ? label(0, first) : <div />}
+      {two && second && (
         <>
           <div />
-          {label(1)}
+          {label(1, second)}
         </>
       )}
     </div>

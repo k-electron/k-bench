@@ -1,35 +1,38 @@
 import { useRef } from "react";
-import type { SessionState } from "@/api";
 import { cn } from "@/lib/utils";
-import { type Layout, MAX_RATIO, MIN_RATIO, paneColumns } from "../layout";
+import { MAX_RATIO, MIN_RATIO, paneColumns } from "../layout";
+import type { PaneView } from "../usePaneView";
 import { Pane } from "./Pane";
 
+const DELETED_NOTICE = "This Session was deleted.";
+
 interface PaneAreaProps {
-  layout: Layout;
-  sessions: SessionState[];
+  panes: PaneView[];
+  paneCount: 1 | 2;
+  /** Share of the width the first Pane takes, when two are shown. */
+  ratio: number;
   /** Shown in an empty Pane. */
   emptyMessage: string;
-  /** Why a Pane is empty, when it is: for instance that its Session was deleted. */
-  notices: [string | null, string | null];
+  /** Called with `PaneView.pane` of the Pane clicked in. */
   onFocus: (pane: 0 | 1) => void;
   onResize: (ratio: number) => void;
 }
 
 /** The main view: one or two Panes side by side, with a draggable divider between them. */
 export function PaneArea({
-  layout,
-  sessions,
+  panes,
+  paneCount,
+  ratio,
   emptyMessage,
-  notices,
   onFocus,
   onResize,
 }: PaneAreaProps) {
   const grid = useRef<HTMLDivElement>(null);
-  const two = layout.paneCount === 2;
+  const two = paneCount === 2;
 
-  const slot = (index: 0 | 1) => {
-    const session = sessions.find((s) => s.id === layout.sessions[index]);
-    const focused = layout.focus === index;
+  const [first, second] = panes;
+
+  const slot = (index: number, { pane, content, focused }: PaneView) => {
     return (
       // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings form styling; this only names the slot
       <div
@@ -37,19 +40,19 @@ export function PaneArea({
         aria-label={`Pane ${index + 1}`}
         aria-current={focused ? "true" : undefined}
         // Capture, so a click anywhere in the Pane (including the terminal) focuses it.
-        onMouseDownCapture={() => onFocus(index)}
+        onMouseDownCapture={() => onFocus(pane)}
         className={cn(
           "min-h-0 min-w-0 border-t-2 border-transparent",
           two && focused && "border-primary",
         )}
       >
-        {session ? (
-          <Pane key={session.id} session={session} focused={focused} />
+        {content.kind === "session" ? (
+          <Pane key={content.session.id} session={content.session} focused={focused} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {notices[index] ? (
+            {content.kind === "deleted" ? (
               <p role="status" aria-label="Pane notice">
-                {notices[index]} {emptyMessage}
+                {DELETED_NOTICE} {emptyMessage}
               </p>
             ) : (
               emptyMessage
@@ -69,10 +72,10 @@ export function PaneArea({
     <div
       ref={grid}
       className="grid min-h-0 flex-1"
-      style={{ gridTemplateColumns: paneColumns(layout) }}
+      style={{ gridTemplateColumns: paneColumns(paneCount, ratio) }}
     >
-      {slot(0)}
-      {two && (
+      {first && slot(0, first)}
+      {two && second && (
         <>
           {/* biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA pattern for a resizable split */}
           <div
@@ -81,7 +84,7 @@ export function PaneArea({
             aria-orientation="vertical"
             aria-valuemin={Math.round(MIN_RATIO * 100)}
             aria-valuemax={Math.round(MAX_RATIO * 100)}
-            aria-valuenow={Math.round(layout.ratio * 100)}
+            aria-valuenow={Math.round(ratio * 100)}
             tabIndex={0}
             className="cursor-col-resize touch-none bg-border hover:bg-primary focus-visible:bg-primary"
             onPointerDown={(event) =>
@@ -97,11 +100,11 @@ export function PaneArea({
                 event.key === "ArrowLeft" ? -0.02 : event.key === "ArrowRight" ? 0.02 : 0;
               if (step) {
                 event.preventDefault();
-                onResize(layout.ratio + step);
+                onResize(ratio + step);
               }
             }}
           />
-          {slot(1)}
+          {slot(1, second)}
         </>
       )}
     </div>

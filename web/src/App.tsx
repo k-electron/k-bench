@@ -1,30 +1,16 @@
 import { Columns2Icon, MenuIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
 import { PaneArea } from "@/components/PaneArea";
-import { locateSession, PaneLabels } from "@/components/PaneLabels";
+import { PaneLabels } from "@/components/PaneLabels";
 import { Sidebar } from "@/components/Sidebar";
 import { TypingKeys } from "@/components/TypingKeys";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  focusedSession,
-  focusPane,
-  forgetMissingSessions,
-  type Layout,
-  moveFocus,
-  onePane,
-  openInFocusedPane,
-  openInOtherPane,
-  setRatio,
-  togglePaneCount,
-  useLayout,
-} from "./layout";
 import { ActionsProvider, useAppState } from "./useAppState";
 import { useIsPhone } from "./useIsPhone";
 import { useKeyboardUp } from "./useKeyboardUp";
-
-const DELETED_NOTICE = "This Session was deleted.";
+import { usePaneView } from "./usePaneView";
 
 /**
  * The app shell. On desktop, the sidebar beside the main view (one or two Panes). On a
@@ -36,14 +22,7 @@ export function App() {
   // With the on-screen keyboard up the app fits the space above it, minus the header and
   // the Extra keys row, which a compact overlay on the terminal replaces.
   const keyboardUp = useKeyboardUp(phone);
-  const [stored, updateStored] = useLayout();
-  // The phone has one Pane; the same stored layout drives it, showing the Focused Pane.
-  const layout = phone ? onePane(stored) : stored;
-  const update = useCallback(
-    (change: (layout: Layout) => Layout) =>
-      updateStored((l) => change(phone ? onePane(l) : l)),
-    [phone, updateStored],
-  );
+  const panes = usePaneView(state, phone);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerShown = phone && drawerOpen;
   useEffect(() => {
@@ -55,49 +34,19 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerShown]);
 
-  const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
-
-  // The tab is titled after the Focused Pane's Session.
-  const focused = locateSession(state?.workspaces, focusedSession(layout));
-  const title = focused
-    ? `${focused.session.name} · ${focused.workspace} — k-bench`
-    : "k-bench";
-  useEffect(() => {
-    document.title = title;
-  }, [title]);
-
-  // A Session deleted (here or on another device) empties its Pane, with a notice, rather
-  // than reconnecting to nothing.
-  const [notices, setNotices] = useState<[string | null, string | null]>([null, null]);
-  // Keyed on the ids, not the array: on a phone, `layout` is rebuilt every render.
-  const [a, b] = layout.sessions;
-  useEffect(() => {
-    if (!state) return;
-    const existing = new Set(
-      state.workspaces.flatMap((w) => w.sessions.map((s) => s.id)),
-    );
-    const gone = (id: string | null) => id !== null && !existing.has(id);
-    // A Pane showing a Session has no notice; one whose Session just vanished gets one.
-    const next = (id: string | null, notice: string | null) =>
-      id === null ? notice : gone(id) ? DELETED_NOTICE : null;
-    setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
-    // The saved layout, not the phone's one-Pane view: forgetting a Session needs only ids,
-    // and saving the view would drop the second Pane whenever the window turns phone-sized.
-    updateStored((l) => forgetMissingSessions(l, existing));
-  }, [state, a, b, updateStored]);
-
   // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
+  const { moveFocus } = panes;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey && !event.ctrlKey && !event.altKey && event.key === "\\") {
         event.preventDefault();
         event.stopPropagation();
-        update(moveFocus);
+        moveFocus();
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [update]);
+  }, [moveFocus]);
 
   return (
     <ActionsProvider value={actions}>
@@ -123,17 +72,17 @@ export function App() {
             phone && !drawerOpen && "invisible -translate-x-full",
           )}
           state={state}
-          openId={focusedSession(layout) ?? undefined}
+          openId={panes.focusedSessionId}
           onOpen={(id) => {
-            update((l) => openInFocusedPane(l, id));
+            panes.openInFocusedPane(id);
             setDrawerOpen(false);
           }}
-          onOpenInOtherPane={(id) => update((l) => openInOtherPane(l, id))}
+          onOpenInOtherPane={panes.openInOtherPane}
           onCreateSession={async (workspaceId) => {
             // Resolves once the new Session is in state, so the Pane knows it.
             const id = await actions.createSession(workspaceId);
             if (id === undefined) return;
-            update((l) => openInFocusedPane(l, id));
+            panes.openInFocusedPane(id);
             setDrawerOpen(false);
           }}
           error={error}
@@ -155,18 +104,19 @@ export function App() {
               {/* On a phone the labels start after the Menu button; on desktop they span the
                   bar, over the Panes' own columns, with the toggle on top at the right. */}
               <PaneLabels
-                layout={layout}
-                workspaces={state?.workspaces}
+                panes={panes.panes}
+                paneCount={panes.paneCount}
+                ratio={panes.ratio}
                 className={phone ? "flex-1" : "absolute inset-0"}
               />
               {!phone && (
                 <Button
                   className="relative mr-2 ml-auto"
-                  variant={layout.paneCount === 2 ? "secondary" : "ghost"}
+                  variant={panes.paneCount === 2 ? "secondary" : "ghost"}
                   size="sm"
                   aria-label="Two panes"
-                  aria-pressed={layout.paneCount === 2}
-                  onClick={() => update(togglePaneCount)}
+                  aria-pressed={panes.paneCount === 2}
+                  onClick={panes.togglePaneCount}
                 >
                   <Columns2Icon />
                 </Button>
@@ -175,20 +125,20 @@ export function App() {
           )}
           <div className="relative flex min-h-0 flex-1 flex-col">
             <PaneArea
-              layout={layout}
-              sessions={sessions}
-              notices={notices}
+              panes={panes.panes}
+              paneCount={panes.paneCount}
+              ratio={panes.ratio}
               emptyMessage={
                 state?.workspaces.length === 0
                   ? "Create a Workspace to get started."
                   : "Select a Session."
               }
-              onFocus={(pane) => update((l) => focusPane(l, pane))}
-              onResize={(ratio) => update((l) => setRatio(l, ratio))}
+              onFocus={panes.focusPane}
+              onResize={panes.setRatio}
             />
-            {keyboardUp && focusedSession(layout) && <TypingKeys />}
+            {keyboardUp && panes.focusedSessionId && <TypingKeys />}
           </div>
-          {phone && !keyboardUp && focusedSession(layout) && <ExtraKeys />}
+          {phone && !keyboardUp && panes.focusedSessionId && <ExtraKeys />}
         </main>
       </div>
     </ActionsProvider>
