@@ -1,6 +1,6 @@
 {
   "name": "@k-electron/k-bench",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Persistent terminal Sessions on your Mac, organised into Workspaces, reachable from any device on your tailnet.",
   "license": "MIT",
   "repository": {
