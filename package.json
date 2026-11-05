@@ -58,10 +58,10 @@
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
-    "hono": "^4.13.16",
-    "node-pty": "^1.1.0",
-    "ws": "^8.22.1"
+    "@hono/node-server": "2.1.6",
+    "hono": "4.13.16",
+    "node-pty": "1.1.0",
+    "ws": "8.22.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",
@@ -78,7 +78,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.2",
-    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-react": "^6.2.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",

@@ -17,6 +17,8 @@ pnpm exec playwright install chromium     # once: Playwright needs its browser
 
 `pnpm install` also restores the execute bit on node-pty's `spawn-helper` and turns on the git hooks in `.githooks`.
 
+pnpm won't resolve a release younger than 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`), so `pnpm update` or `pnpm add` can skip the newest version of a package. That is deliberate: it gives a compromised release time to be noticed. The server's dependencies in `package.json` are pinned exactly; bump them with `pnpm update` or by editing the version, and let the lockfile follow.
+
 ## The two instances
 
 k-bench runs as one of two fully separate instances, so that working on it never touches the Sessions you are working in:

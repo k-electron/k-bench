@@ -1,2 +1,6 @@
 allowBuilds:
   node-pty: true
+
+# A release has to be at least 3 days old (in minutes) before pnpm will resolve it, so a freshly
+# published, possibly compromised version can't reach this repo's lockfile before it's been noticed.
+minimumReleaseAge: 4320
