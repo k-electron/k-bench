@@ -45,6 +45,7 @@ import {
   portUse,
   readServeConfig,
   serveOffArgs,
+  servePublishArgs,
   serveUrl,
 } from "./tailscale-serve.ts";
 
@@ -306,12 +307,7 @@ export async function install(argv: string[]): Promise<void> {
       },
     );
   }
-  const serveArgs = [
-    "serve",
-    "--bg",
-    `--https=${httpsPort}`,
-    `http://127.0.0.1:${config.port}`,
-  ];
+  const serveArgs = servePublishArgs(httpsPort, config.port);
   await step(`publish on the tailnet: ${tailscale} ${serveArgs.join(" ")}`, () => {
     execFileSync(tailscale, serveArgs, { stdio: "inherit" });
   });

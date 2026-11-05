@@ -111,6 +111,14 @@ export function kBenchLocalUrl(localPort: number): string {
   return `http://127.0.0.1:${localPort}`;
 }
 
+/**
+ * The arguments that publish k-bench's server on `httpsPort`. Built from `kBenchLocalUrl`,
+ * so the entry they make is one that `findOwnEntries` recognises and uninstall can remove.
+ */
+export function servePublishArgs(httpsPort: number, localPort: number): string[] {
+  return ["serve", "--bg", `--https=${httpsPort}`, kBenchLocalUrl(localPort)];
+}
+
 function isKBenchProxy(proxy: string | undefined, localPort: number): boolean {
   if (proxy === undefined) return false;
   const normalised = proxy.replace(/\/+$/, "").replace("://localhost:", "://127.0.0.1:");
