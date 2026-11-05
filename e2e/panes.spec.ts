@@ -167,6 +167,32 @@ test("narrowing the window to phone width and widening it again keeps both Panes
   await restored();
 });
 
+test("opening a Session in a narrowed window changes only the Focused Pane, and widening brings both Panes back", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSessions("project", 3);
+  await app.session("session 1").click();
+  await app.session("session 2").click({ modifiers: ["Meta"] });
+  await page.keyboard.press("Meta+Backslash");
+  await expect(app.pane(2)).toHaveAttribute("aria-current", "true");
+  const wide = page.viewportSize();
+  if (!wide) throw new Error("The test page should have a viewport");
+
+  await page.setViewportSize({ width: 500, height: wide.height });
+  await expect(app.pane(2)).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await app.session("session 3").click();
+  await expect(app.terminal("session 3")).toBeVisible();
+
+  await page.setViewportSize(wide);
+  await expect(app.terminalIn(1, "session 1")).toBeVisible();
+  await expect(app.terminalIn(2, "session 3")).toBeVisible();
+  await expect(app.pane(2)).toHaveAttribute("aria-current", "true");
+});
+
 test("dragging the divider resizes both terminals and both shells see the new sizes", async ({
   app,
   kbench,

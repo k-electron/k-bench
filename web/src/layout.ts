@@ -35,9 +35,9 @@ export const defaultLayout: Layout = {
  * The CSS grid columns of the main view: one column, or two with the divider's 6px between.
  * The Panes and the labels above them share this, so a label sits over its own Pane.
  */
-export function paneColumns(layout: Layout): string {
-  return layout.paneCount === 2
-    ? `minmax(0, ${layout.ratio}fr) 6px minmax(0, ${1 - layout.ratio}fr)`
+export function paneColumns(paneCount: 1 | 2, ratio: number): string {
+  return paneCount === 2
+    ? `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`
     : "minmax(0, 1fr)";
 }
 
@@ -67,6 +67,16 @@ export function openInFocusedPane(layout: Layout, id: string): Layout {
 /** Opens a Session in the other Pane, showing it if only one Pane is visible. */
 export function openInOtherPane(layout: Layout, id: string): Layout {
   return place({ ...layout, paneCount: 2 }, id, layout.focus === 0 ? 1 : 0);
+}
+
+/**
+ * Puts a Session in the Pane that is not focused without changing the Pane count: a phone
+ * shows one Pane, so opening in the other Pane must not be visible there. If the Focused
+ * Pane already has it, nothing happens.
+ */
+export function stashInOtherPane(layout: Layout, id: string): Layout {
+  if (focusedSession(layout) === id) return layout;
+  return place(layout, id, layout.focus === 0 ? 1 : 0);
 }
 
 /** Goes down to one Pane, keeping the Focused Pane's Session (the phone is always this). */

@@ -57,6 +57,43 @@ test("deleting a Session on one device empties the Pane showing it on the other,
   await expect(otherDevice.session("session 1")).toBeVisible();
 });
 
+test("a Session deleted while the window is narrowed leaves its notice on the same Pane after widening", async ({
+  app,
+  otherDevice,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSessions("project", 2);
+  const page = otherDevice.page;
+  await otherDevice.session("session 1").click();
+  await otherDevice.session("session 2").click({ modifiers: ["Meta"] });
+  await page.keyboard.press("Meta+Backslash");
+  await expect(otherDevice.terminalIn(2, "session 2")).toBeVisible();
+  const wide = page.viewportSize();
+  if (!wide) throw new Error("The test page should have a viewport");
+
+  await page.setViewportSize({ width: 500, height: wide.height });
+  await expect(otherDevice.terminal("session 2")).toBeVisible();
+
+  await app.sessionMenu("session 2", "Delete");
+  await app.page
+    .getByRole("alertdialog", { name: "Delete session 2?" })
+    .getByRole("button", { name: "Delete session" })
+    .click();
+  await expect(page.getByRole("status", { name: "Pane notice" })).toContainText(
+    "This Session was deleted",
+  );
+
+  await page.setViewportSize(wide);
+  await expect(otherDevice.terminalIn(1, "session 1")).toBeVisible();
+  await expect(
+    otherDevice.pane(2).getByRole("status", { name: "Pane notice" }),
+  ).toContainText("This Session was deleted");
+  await expect(
+    otherDevice.pane(1).getByRole("status", { name: "Pane notice" }),
+  ).toHaveCount(0);
+});
+
 test("a shell that exits shows as Stopped on the other device too", async ({
   app,
   otherDevice,
