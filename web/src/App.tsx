@@ -69,13 +69,14 @@ export function App() {
   // A Session deleted (here or on another device) empties its Pane, with a notice, rather
   // than reconnecting to nothing.
   const [notices, setNotices] = useState<[string | null, string | null]>([null, null]);
+  // Keyed on the ids, not the array: on a phone, `layout` is rebuilt every render.
+  const [a, b] = layout.sessions;
   useEffect(() => {
     if (!state) return;
     const existing = new Set(
       state.workspaces.flatMap((w) => w.sessions.map((s) => s.id)),
     );
     const gone = (id: string | null) => id !== null && !existing.has(id);
-    const [a, b] = layout.sessions;
     // A Pane showing a Session has no notice; one whose Session just vanished gets one.
     const next = (id: string | null, notice: string | null) =>
       id === null ? notice : gone(id) ? DELETED_NOTICE : null;
@@ -83,7 +84,7 @@ export function App() {
     // The saved layout, not the phone's one-Pane view: forgetting a Session needs only ids,
     // and saving the view would drop the second Pane whenever the window turns phone-sized.
     updateStored((l) => forgetMissingSessions(l, existing));
-  }, [state, layout.sessions, updateStored]);
+  }, [state, a, b, updateStored]);
 
   // ⌘\ moves focus between Panes. Capture, so the terminal never sees the keystroke.
   useEffect(() => {

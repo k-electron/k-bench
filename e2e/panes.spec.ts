@@ -141,7 +141,11 @@ test("narrowing the window to phone width and widening it again keeps both Panes
   await app.session("session 2").click({ modifiers: ["Meta"] });
   await page.keyboard.press("Meta+Backslash");
   await expect(app.pane(2)).toHaveAttribute("aria-current", "true");
+  const before = Number(await app.divider.getAttribute("aria-valuenow"));
   await app.dragDivider(-250);
+  await expect
+    .poll(async () => Number(await app.divider.getAttribute("aria-valuenow")))
+    .toBeLessThan(before);
   const dragged = await app.divider.getAttribute("aria-valuenow");
   const wide = page.viewportSize();
   if (!wide) throw new Error("The test page should have a viewport");
