@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- The server's dependencies (`hono`, `@hono/node-server`, `ws` and `node-pty`) are now pinned to exact versions, so `npm i -g @k-electron/k-bench` and `k-bench install` run the versions k-bench was tested with instead of resolving newer ones on the day you install. Updated `@hono/node-server` to 2.1.6.
+
 ### Fixed
 
 - Narrowing the window to phone width, or rotating a large phone to portrait, no longer throws away the second Pane. Widening it again brings back both Panes, their Sessions, the Focused Pane and the divider where they were.
