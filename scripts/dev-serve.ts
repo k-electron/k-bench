@@ -8,6 +8,7 @@ import { delimiter } from "node:path";
 import { parseArgs } from "node:util";
 import { resolveConfig } from "../src/server/config.ts";
 import { parseTailscaleStatus, resolveTailscaleCli } from "./install-lib.ts";
+import { servePublishArgs } from "./tailscale-serve.ts";
 
 const HTTPS_PORT = 8443;
 
@@ -30,7 +31,7 @@ if (!tailscale) {
 
 const args = flags.off
   ? ["serve", `--https=${HTTPS_PORT}`, "off"]
-  : ["serve", "--bg", `--https=${HTTPS_PORT}`, `http://127.0.0.1:${port}`];
+  : servePublishArgs(HTTPS_PORT, port);
 console.log(
   `${flags["dry-run"] ? "would run" : "running"}: ${tailscale} ${args.join(" ")}`,
 );
