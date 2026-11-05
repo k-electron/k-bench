@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 
 /**
  * The per-device Pane layout: how many Panes the main view shows, which Session is in
@@ -167,7 +167,9 @@ function save(layout: Layout): void {
  */
 export function useLayout(): [Layout, (change: (layout: Layout) => Layout) => void] {
   const [layout, setLayout] = useState<Layout>(load);
-  useEffect(() => save(layout), [layout]);
+  // Saved before the browser paints, so a layout on screen is always the one stored: with a
+  // passive effect, a reload right after a divider drag could restore the drag's last step.
+  useLayoutEffect(() => save(layout), [layout]);
   const update = useCallback(
     (change: (layout: Layout) => Layout) => setLayout(change),
     [],

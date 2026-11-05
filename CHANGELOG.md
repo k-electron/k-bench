@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Fixed
+
+- Reloading right after dragging the divider between Panes no longer brings it back a little short of where you left it.
+
 ## [0.1.3] - 2026-11-04
 
 ### Added
