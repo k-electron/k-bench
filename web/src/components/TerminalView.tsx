@@ -1,25 +1,32 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { type IDisposable, type IEvent, Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
-import {
-  CLOSE_SESSION_ENDED,
-  type ClientMessage,
-  encodeClientMessage,
-  type TerminalSize,
-  terminalPath,
-} from "../../../src/shared/terminal-protocol.ts";
+import { createTerminalConnection } from "../terminalConnection";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 import { touchScrolls } from "../touchScroll";
 import { wheelReports } from "../wheelReports";
 
-const RETRY_FIRST_MS = 500;
-const RETRY_MAX_MS = 5000;
-
-/** The terminal WebSocket URL for a Session at a given size. */
-function terminalUrl(sessionId: string, size: TerminalSize): string {
-  const url = new URL(terminalPath(sessionId, size), window.location.href);
+/** The terminal WebSocket URL for a path from `terminalPath`. */
+function terminalUrl(path: string): string {
+  const url = new URL(path, window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
+}
+
+/**
+ * Calls `retry` when a phone that slept or regained its network should not wait out the
+ * backoff: the page became visible, or the browser went online.
+ */
+function retryWhenAwake(retry: () => void): () => void {
+  const onVisibility = () => {
+    if (document.visibilityState !== "hidden") retry();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("online", retry);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("online", retry);
+  };
 }
 
 /**
@@ -102,10 +109,9 @@ function shiftDragSelects(element: HTMLElement): () => void {
 }
 
 /**
- * xterm.js attached to one Session over the terminal WebSocket. It fits its container and
- * reports every size change to the server, speaking `src/shared/terminal-protocol.ts`.
- * When the connection drops it reconnects by itself with backoff, and tmux redraws the
- * screen on every attach.
+ * xterm.js attached to one Session through a `TerminalConnection`, which owns the WebSocket
+ * and reconnects by itself with backoff. This fits the terminal to its container, plugs its
+ * input and size into the connection, writes the output, and shows "reconnecting…".
  */
 export function TerminalView({
   sessionId,
@@ -160,70 +166,25 @@ export function TerminalView({
     const reports = wheelReports(terminal);
     const stopTouchScroll = touchScrolls(element, reports);
 
-    let socket: WebSocket | undefined;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
-    let disposed = false;
-
-    // Input typed while a socket is still connecting (a freshly opened Session) is kept,
-    // not dropped, and sent once it opens.
-    const queued: string[] = [];
-    const send = (message: ClientMessage) => {
-      const text = encodeClientMessage(message);
-      if (socket?.readyState === WebSocket.OPEN) socket.send(text);
-      else if (socket?.readyState === WebSocket.CONNECTING) queued.push(text);
-    };
-
-    const connect = () => {
-      clearTimeout(retry);
-      const ws = new WebSocket(
-        terminalUrl(sessionId, { cols: terminal.cols, rows: terminal.rows }),
-      );
-      socket = ws;
-      ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
-        attempts = 0;
-        setReconnecting(false);
-        terminal.reset(); // tmux is about to redraw the whole screen
-        for (const text of queued.splice(0)) ws.send(text);
-      };
-      ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) terminal.write(new Uint8Array(event.data));
-      };
-      ws.onclose = (event) => {
-        if (disposed || socket !== ws) return;
-        // The Session was deleted or its shell exited: the state feed shows which.
-        if (event.code === CLOSE_SESSION_ENDED) return;
-        setReconnecting(true);
-        const delay = Math.min(RETRY_FIRST_MS * 2 ** attempts, RETRY_MAX_MS);
-        attempts += 1;
-        retry = setTimeout(connect, delay);
-      };
-    };
-    connect();
-
-    // A phone that slept or regained its network should not wait out the backoff.
-    const retryNow = () => {
-      if (document.visibilityState === "hidden") return;
-      if (socket && socket.readyState !== WebSocket.OPEN && !disposed && attempts > 0) {
-        if (socket.readyState === WebSocket.CONNECTING) return;
-        connect();
-      }
-    };
-    document.addEventListener("visibilitychange", retryNow);
-    window.addEventListener("online", retryNow);
+    const connection = createTerminalConnection({
+      sessionId,
+      size: { cols: terminal.cols, rows: terminal.rows },
+      openSocket: (path) => new WebSocket(terminalUrl(path)),
+      wake: retryWhenAwake,
+    });
+    const subscription = connection.subscribe({
+      output: (bytes) => terminal.write(bytes),
+      reconnecting: (on) => {
+        setReconnecting(on);
+        if (!on) terminal.reset(); // tmux is about to redraw the whole screen
+      },
+    });
 
     // An armed Ctrl is for the owner's next key, so the terminal's own answers pass it by.
     const input = onTerminalInput(terminal, (data, automatic) =>
-      send(
-        automatic
-          ? { type: "input", data, automatic }
-          : { type: "input", data: applyArmedCtrl(data) },
-      ),
+      connection.input(automatic ? data : applyArmedCtrl(data), automatic),
     );
-    const resized = terminal.onResize(({ cols, rows }) =>
-      send({ type: "resize", cols, rows }),
-    );
+    const resized = terminal.onResize(({ cols, rows }) => connection.resize(cols, rows));
     const observer = new ResizeObserver(() => fit.fit());
     observer.observe(element);
     terminalRef.current = terminal;
@@ -231,10 +192,6 @@ export function TerminalView({
 
     return () => {
       terminalRef.current = null;
-      disposed = true;
-      clearTimeout(retry);
-      document.removeEventListener("visibilitychange", retryNow);
-      window.removeEventListener("online", retryNow);
       observer.disconnect();
       input.dispose();
       resized.dispose();
@@ -242,7 +199,8 @@ export function TerminalView({
       stopShiftDrag();
       stopTouchScroll();
       reports.dispose();
-      socket?.close();
+      subscription();
+      connection.close();
       terminal.dispose();
     };
   }, [sessionId]);

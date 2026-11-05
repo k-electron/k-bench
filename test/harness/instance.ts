@@ -15,9 +15,11 @@ import {
   type State,
 } from "../../src/shared/state-protocol.ts";
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
+import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
 import { EventsClient } from "./events.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
+import { TerminalConnectionProbe } from "./terminal-connection.ts";
 
 export type { Snapshot, State };
 
@@ -180,6 +182,16 @@ export class TestServer {
     return socket;
   }
 
+  /** A terminal WebSocket (`path` from `terminalPath`) carrying the login header. */
+  openTerminalSocket(path: string): WebSocket {
+    const url = new URL(path, this.baseUrl);
+    url.protocol = "ws:";
+    const socket = new WebSocket(url, { headers: this.loginHeaders });
+    // A refused or dropped connection is the connection's to handle: it reconnects.
+    socket.on("error", () => {});
+    return socket;
+  }
+
   /**
    * Attempts a WebSocket upgrade on `path` and returns the HTTP status that refused it, or
    * 101 if it was accepted (the socket is closed again).
@@ -243,6 +255,38 @@ export class TestInstance {
     });
     this.toStop.push({ stop: async () => client.close() });
     return client;
+  }
+
+  /**
+   * A browser's connection to a Session's terminal (`web/src/terminalConnection.ts`), over
+   * a `ws` WebSocket carrying the login header. Like the state client it follows the
+   * instance across `stop()` and `start()`, and is closed with the instance. Backoff
+   * defaults to a few milliseconds so a test does not wait out the real delays.
+   */
+  openTerminalConnection(
+    sessionId: string,
+    options: {
+      size?: { cols: number; rows: number };
+      retryFirstMs?: number;
+      retryMaxMs?: number;
+    } = {},
+  ): TerminalConnectionProbe {
+    const probe = new TerminalConnectionProbe((countSocket) =>
+      createTerminalConnection({
+        sessionId,
+        size: options.size ?? { cols: 120, rows: 30 },
+        retryFirstMs: options.retryFirstMs ?? 20,
+        retryMaxMs: options.retryMaxMs ?? 100,
+        openSocket: (path) => {
+          if (!this.running)
+            throw new Error("start the instance before opening a terminal");
+          countSocket();
+          return this.running.openTerminalSocket(path);
+        },
+      }),
+    );
+    this.toStop.push({ stop: async () => probe.connection.close() });
+    return probe;
   }
 
   /** Has `dispose` stop `module` too, for tests that drive a server module directly. */
