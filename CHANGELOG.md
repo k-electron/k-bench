@@ -6,6 +6,11 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Added
+
+- A favicon: a lowercase k on a dark square. It also serves as the icon when you add k-bench to a phone's home screen.
+- The bar above the Panes shows which Session each Pane holds, as `Workspace › Session`, starting at that Pane's left edge. A long name is cut off with `…` at about two thirds of the Pane's width, and with two Panes the unfocused Pane's label is dimmed. The browser tab is titled after the Focused Pane's Session.
+
 ### Changed
 
 - Touch scrolling follows your finger line by line, and a flick keeps gliding after you lift it, slowing down the way iPhone lists do and then settling to a stop. Another flick while it glides speeds it up, and a touch stops it without opening the keyboard. Desktop wheel and trackpad scrolling through History feel as before, but full-screen programs that read the wheel themselves (such as vim or less) now scroll five of their steps per wheel step.
