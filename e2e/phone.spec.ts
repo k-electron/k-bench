@@ -16,7 +16,25 @@ test("the phone shows a single Pane and no Pane-count toggle", async ({
   await expect(app.panesToggle).toHaveCount(0);
 });
 
-test("the drawer opens from the menu button; tapping a Session opens it and closes the drawer", async ({
+test("the phone shows the open Session's label beside the Menu button", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"), { name: "alpha" });
+  await app.createSession("alpha");
+  await expect(app.terminal("session 1")).toBeVisible();
+
+  await expect(app.paneLabel(1)).toHaveText("alpha › session 1");
+  const menu = await app.page
+    .getByRole("button", { name: "Menu", exact: true })
+    .boundingBox();
+  const label = await app.paneLabel(1).boundingBox();
+  if (!menu || !label) throw new Error("The Menu button and the label should both show");
+  expect(label.x).toBeGreaterThanOrEqual(menu.x + menu.width);
+});
+
+test("the drawer opens from the menu button;tapping a Session opens it and closes the drawer", async ({
   app,
   kbench,
 }) => {

@@ -77,6 +77,11 @@ export class AppPage {
     return this.page.getByRole("group", { name: `Pane ${n}`, exact: true });
   }
 
+  /** The `Workspace › Session` label above Pane `n` in the top bar; absent for an empty Pane. */
+  paneLabel(n: 1 | 2): Locator {
+    return this.page.getByRole("note", { name: `Pane ${n} label`, exact: true });
+  }
+
   /** The terminal showing the named Session, found inside Pane `n`. */
   terminalIn(n: 1 | 2, sessionName: string): Locator {
     return this.pane(n).getByRole("region", {

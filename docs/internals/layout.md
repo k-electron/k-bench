@@ -45,6 +45,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
   - `SessionRow` and `BellBadge`;
   - `PaneArea`, one or two Panes with a draggable divider;
   - `Pane`, a Session's terminal in one slot;
+  - `PaneLabels`, the top bar's `Workspace › Session` label over each Pane, laid out on the same grid columns as `PaneArea` (`paneColumns` in `src/layout.ts`), so each label follows its Pane and the divider by construction; `locateSession` finds a Session's Workspace, and `App.tsx` also uses it to title the tab after the Focused Pane;
   - `TerminalView`, xterm.js on the terminal WebSocket: wheel and touch scroll tmux history (below), OSC 52 copies to the clipboard, shift-drag selects in the browser, and a dropped connection reconnects with backoff behind a "reconnecting…" badge;
   - `ExtraKeys`, for the phone layout (below).
 - `src/components/ui/` holds the shadcn/ui components.

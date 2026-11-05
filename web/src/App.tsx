@@ -2,6 +2,7 @@ import { Columns2Icon, MenuIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
 import { PaneArea } from "@/components/PaneArea";
+import { locateSession, PaneLabels } from "@/components/PaneLabels";
 import { Sidebar } from "@/components/Sidebar";
 import { TypingKeys } from "@/components/TypingKeys";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,15 @@ export function App() {
   }, [drawerShown]);
 
   const sessions = state?.workspaces.flatMap((w) => w.sessions) ?? [];
+
+  // The tab is titled after the Focused Pane's Session.
+  const focused = locateSession(state?.workspaces, focusedSession(layout));
+  const title = focused
+    ? `${focused.session.name} · ${focused.workspace} — k-bench`
+    : "k-bench";
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 
   // A Session deleted (here or on another device) empties its Pane, with a notice, rather
   // than reconnecting to nothing.
@@ -127,9 +137,10 @@ export function App() {
         />
         <main className="flex min-w-0 flex-1 flex-col">
           {!keyboardUp && (
-            <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
-              {phone ? (
+            <div className="relative flex h-9 shrink-0 items-center border-b">
+              {phone && (
                 <Button
+                  className="ml-2"
                   variant="ghost"
                   size="sm"
                   aria-label="Menu"
@@ -137,11 +148,17 @@ export function App() {
                 >
                   <MenuIcon />
                 </Button>
-              ) : (
-                <span />
               )}
+              {/* On a phone the labels start after the Menu button; on desktop they span the
+                  bar, over the Panes' own columns, with the toggle on top at the right. */}
+              <PaneLabels
+                layout={layout}
+                workspaces={state?.workspaces}
+                className={phone ? "flex-1" : "absolute inset-0"}
+              />
               {!phone && (
                 <Button
+                  className="relative mr-2 ml-auto"
                   variant={layout.paneCount === 2 ? "secondary" : "ghost"}
                   size="sm"
                   aria-label="Two panes"

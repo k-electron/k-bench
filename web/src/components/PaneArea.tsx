@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { SessionState } from "@/api";
 import { cn } from "@/lib/utils";
-import { type Layout, MAX_RATIO, MIN_RATIO } from "../layout";
+import { type Layout, MAX_RATIO, MIN_RATIO, paneColumns } from "../layout";
 import { Pane } from "./Pane";
 
 interface PaneAreaProps {
@@ -69,11 +69,7 @@ export function PaneArea({
     <div
       ref={grid}
       className="grid min-h-0 flex-1"
-      style={{
-        gridTemplateColumns: two
-          ? `minmax(0, ${layout.ratio}fr) 6px minmax(0, ${1 - layout.ratio}fr)`
-          : "minmax(0, 1fr)",
-      }}
+      style={{ gridTemplateColumns: paneColumns(layout) }}
     >
       {slot(0)}
       {two && (
