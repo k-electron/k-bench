@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import { EVENTS_PATH } from "../../src/shared/state-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
 /** A client of the events WebSocket: collects the state snapshots the server pushes. */
@@ -18,7 +19,7 @@ export class EventsClient<State> {
     baseUrl: string,
     headers: Record<string, string> = {},
   ): Promise<EventsClient<State>> {
-    const url = new URL("/api/events", baseUrl);
+    const url = new URL(EVENTS_PATH, baseUrl);
     url.protocol = "ws:";
     const socket = new WebSocket(url, { headers });
     const client = new EventsClient<State>(socket);

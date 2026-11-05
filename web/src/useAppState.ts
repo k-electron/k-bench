@@ -1,19 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, type AppState, api, type Change } from "./api";
+import { EVENTS_PATH, type State } from "../../src/shared/state-protocol.ts";
+import { ApiError, api, type Change } from "./api";
+import { createStateClient, type StateClient } from "./stateClient";
 
 /** The events WebSocket URL: the server pushes a full state snapshot on every change. */
 function eventsUrl(): string {
-  const url = new URL("/api/events", window.location.href);
+  const url = new URL(EVENTS_PATH, window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 }
-
-const MAX_BACKOFF_MS = 10_000;
-/**
- * How long an action waits for its change to show before it finishes anyway, so a dialog is
- * never stuck while the events WebSocket is down. The change shows once it reconnects.
- */
-const SHOW_WAIT_MS = 5_000;
 
 /**
  * The owner's actions. Each one finishes once its change is in `state`, so whatever runs
@@ -38,114 +33,41 @@ export interface Actions {
   restartSession(sessionId: string): Promise<void>;
 }
 
-/** An action waiting for a snapshot that shows its change. */
-interface Waiter {
-  revision: number;
-  /** The events connection open when the change was answered. */
-  connection: number;
-  /** True when a snapshot showed the change, false when the wait timed out. */
-  done: (shown: boolean) => void;
-}
-
 /**
  * The Workspaces and Sessions the server reports, and the owner's actions on them.
  *
- * State only ever arrives over the events WebSocket: a full snapshot on connecting, then one
- * on every change from any device. Snapshots come in order on the one socket, so the newest
- * always wins. An action finishes when a snapshot at the revision its request answered with
- * arrives (see `StateFeed` on the server), or any snapshot on a connection opened since, which
- * is fresher still. The socket reconnects by itself with backoff, and at once when the tab
- * regains focus, since a socket that slept with the device may look open but be dead.
+ * State only ever arrives through the `StateClient` (the events WebSocket), which this
+ * mirrors into React state. An action finishes when the client says its change shows. The
+ * client resyncs at once when the tab regains focus, since a socket that slept with the
+ * device may look open but be dead.
  */
 export function useAppState(): {
-  state: AppState | undefined;
+  state: State | undefined;
   actions: Actions;
   /** Why the last Session create or restart was refused, until the next one. */
   error: string | undefined;
 } {
-  const [state, setState] = useState<AppState>();
+  const [state, setState] = useState<State>();
   const [error, setError] = useState<string>();
-  const waiters = useRef(new Set<Waiter>());
-  /** Counts events connections, so a waiter knows a later one's snapshots are fresh. */
-  const connection = useRef(0);
-  /** The revision of the newest snapshot on the current connection, if one has come. */
-  const latest = useRef<number>(undefined);
-  /** Reconnects the events WebSocket, whose first snapshot is the current truth. */
-  const reconnect = useRef(() => {});
+  const clientRef = useRef<StateClient>(undefined);
 
   useEffect(() => {
-    let socket: WebSocket | undefined;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    let delay = 500;
-
-    const connect = () => {
-      clearTimeout(retry);
-      if (socket) {
-        socket.onclose = null;
-        socket.close();
-      }
-      const current = ++connection.current;
-      latest.current = undefined;
-      socket = new WebSocket(eventsUrl());
-      socket.onopen = () => {
-        delay = 500;
-      };
-      socket.onmessage = (event) => {
-        if (typeof event.data !== "string") return;
-        const { revision, ...snapshot } = JSON.parse(event.data) as AppState & {
-          revision: number;
-        };
-        setState(snapshot);
-        latest.current = revision;
-        for (const waiter of waiters.current) {
-          // A connection opened after the change was answered reads state after it, too.
-          if (waiter.connection < current || revision >= waiter.revision) {
-            waiter.done(true);
-          }
-        }
-      };
-      socket.onclose = () => {
-        // A restarted server numbers its revisions from 0 again.
-        latest.current = undefined;
-        retry = setTimeout(connect, delay);
-        delay = Math.min(delay * 2, MAX_BACKOFF_MS);
-      };
-    };
-    connect();
-    reconnect.current = connect;
-
-    window.addEventListener("focus", connect);
+    const created = createStateClient({ openSocket: () => new WebSocket(eventsUrl()) });
+    clientRef.current = created;
+    const unsubscribe = created.subscribe(setState);
+    const resync = () => created.resync();
+    window.addEventListener("focus", resync);
     return () => {
-      clearTimeout(retry);
-      window.removeEventListener("focus", connect);
-      if (socket) {
-        socket.onclose = null;
-        socket.close();
-      }
+      window.removeEventListener("focus", resync);
+      unsubscribe();
+      created.close();
+      clientRef.current = undefined;
     };
   }, []);
 
   const actions = useMemo((): Actions => {
-    /** Resolves once state shows `change`: true, or false if it timed out first. */
-    const whenShown = ({ revision }: Change<unknown>): Promise<boolean> => {
-      // The snapshot may well arrive before the response that names its revision.
-      if ((latest.current ?? -1) >= revision) {
-        return Promise.resolve(true);
-      }
-      return new Promise((resolve) => {
-        const timer = setTimeout(() => waiter.done(false), SHOW_WAIT_MS);
-        const waiter: Waiter = {
-          revision,
-          connection: connection.current,
-          done: (result) => {
-            clearTimeout(timer);
-            waiters.current.delete(waiter);
-            resolve(result);
-          },
-        };
-        waiters.current.add(waiter);
-      });
-    };
+    const whenShown = (change: Change<unknown>) =>
+      clientRef.current?.whenShown(change) ?? Promise.resolve(false);
     const act = async (request: Promise<Change<unknown>>) => {
       await whenShown(await request);
     };
@@ -174,8 +96,8 @@ export function useAppState(): {
               ),
             },
         );
-        // A refused order sends no snapshot: reconnect for one, putting the order right.
-        return act(api.reorderWorkspaces(ids)).catch(() => reconnect.current());
+        // A refused order sends no snapshot: resync for one, putting the order right.
+        return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
       },
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>

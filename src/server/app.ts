@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { REVISION_HEADER } from "../shared/state-protocol.ts";
 import { DirectoryError, listDirectories } from "./directories.ts";
 import { type Service, ServiceError } from "./service.ts";
 import { mountStatic } from "./static.ts";
@@ -62,7 +63,7 @@ export function createApp(
     await next();
     if (c.req.method === "GET" || c.res.status >= 400) return;
     const revision = options.onMutation?.();
-    if (revision !== undefined) c.res.headers.set("State-Revision", String(revision));
+    if (revision !== undefined) c.res.headers.set(REVISION_HEADER, String(revision));
   });
 
   // `k-bench status` asks this. It is behind the access guard like everything else, so the

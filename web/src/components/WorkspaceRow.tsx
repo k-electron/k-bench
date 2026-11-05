@@ -13,8 +13,8 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import type { WorkspaceState } from "@/api";
 import { cn } from "@/lib/utils";
+import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { BellBadge } from "./BellBadge";
 import { Button } from "./ui/button";
 import {

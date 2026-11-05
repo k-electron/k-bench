@@ -1,4 +1,4 @@
-import type { SessionState } from "@/api";
+import type { SessionState } from "../../../src/shared/state-protocol.ts";
 import { TerminalView } from "./TerminalView";
 
 interface PaneProps {

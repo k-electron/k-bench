@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { WorkspaceState } from "@/api";
+import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import {
   AlertDialog,
   AlertDialogCancel,

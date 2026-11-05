@@ -33,6 +33,7 @@ The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsco
 ## `src/shared/`
 
 - `terminal-protocol.ts` defines the terminal WebSocket protocol once; the server, the browser and the tests all import it.
+- `state-protocol.ts` does the same for state: the snapshot types, the `State-Revision` header, the events path, and decoding a snapshot or a response's revision.
 
 ## `web/`
 
@@ -50,6 +51,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
   - `ExtraKeys`, for the phone layout (below).
 - `src/components/ui/` holds the shadcn/ui components.
 - `src/api.ts` is the API client.
+- `src/stateClient.ts` is the state client, with no React: it keeps the events WebSocket connected (backoff, resync), hands each snapshot to subscribers and answers `whenShown(change)`. `src/useAppState.ts` is a thin wrapper that mirrors it into React state and builds the owner's actions.
 - `src/layout.ts` is the per-device Pane layout: a `Layout` value plus pure functions such as `openInFocusedPane`, `openInOtherPane`, `stashInOtherPane`, `togglePaneCount`, `moveFocus` and `setRatio`, and `useLayout()`, which keeps it in browser storage. It is the internals of `usePaneView`.
 - `src/usePaneView.ts` owns the Panes: it holds the saved layout, forgets deleted Sessions (keeping a notice with the saved Pane they were in), titles the tab, and returns what each visible Pane shows (a Session with its Workspace name, a deleted notice, or empty) along with the intents that change the layout. The components render that and look nothing up. The phone's one-Pane view is applied when reading only and never saved, so on a phone an intent acts on the saved layout's Focused Pane.
 - `src/useIsPhone.ts` is the single desktop/phone breakpoint (767px). On a phone `usePaneView` shows one Pane (the saved layout's Focused Pane), the sidebar as a slide-out drawer opened by the "Menu" button, and `components/ExtraKeys` (Esc, Tab, Shift Tab, one-shot Ctrl, arrows), whose keys and Ctrl state live in `src/terminalInput.ts` and reach the shell through the terminal's normal input path.

@@ -1,6 +1,8 @@
+import { encodeSnapshot, type State } from "../shared/state-protocol.ts";
+
 /**
  * Receives each state snapshot, serialised as JSON: the state's own fields plus `revision`
- * (see `StateFeed`).
+ * (see `StateFeed` and `src/shared/state-protocol.ts`).
  */
 export type SnapshotListener = (snapshot: string) => void;
 
@@ -20,7 +22,7 @@ export type SnapshotListener = (snapshot: string) => void;
  * again from 0 when the server restarts.
  */
 export class StateFeed {
-  private readonly read: () => Promise<object>;
+  private readonly read: () => Promise<State>;
   private readonly intervalMs: number;
   private readonly listeners = new Set<SnapshotListener>();
   /** Subscribers that have not been sent anything yet: they get the snapshot unchanged or not. */
@@ -34,7 +36,7 @@ export class StateFeed {
   private reading: Promise<void> | undefined;
   private dirty = false;
 
-  constructor(read: () => Promise<object>, options: { intervalMs?: number } = {}) {
+  constructor(read: () => Promise<State>, options: { intervalMs?: number } = {}) {
     this.read = read;
     this.intervalMs = options.intervalMs ?? 400;
   }
@@ -103,7 +105,7 @@ export class StateFeed {
   private async readOnce(): Promise<void> {
     // Taken before the read starts, so the state read is at least this fresh.
     const revision = this.revision;
-    let state: object;
+    let state: State;
     try {
       state = await this.read();
     } catch (error) {
@@ -114,7 +116,7 @@ export class StateFeed {
     const changed = body !== this.last || revision !== this.sentRevision;
     this.last = body;
     this.sentRevision = revision;
-    const snapshot = JSON.stringify({ revision, ...state });
+    const snapshot = encodeSnapshot(state, revision);
     const targets = changed ? [...this.listeners] : [...this.fresh];
     this.fresh.clear();
     for (const listener of targets) listener(snapshot);

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import type { State } from "../shared/state-protocol.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
@@ -14,26 +15,6 @@ export class ServiceError extends Error {
     super(message);
     this.kind = kind;
   }
-}
-
-export interface SessionState {
-  id: string;
-  name: string;
-  status: "running" | "stopped";
-  /** The Session's shell rang the terminal bell and nobody has seen it since. */
-  bell: boolean;
-}
-export interface WorkspaceState {
-  id: string;
-  name: string;
-  folder: string;
-  position: number;
-  /** The folder no longer exists on the Host. */
-  missing: boolean;
-  sessions: SessionState[];
-}
-export interface State {
-  workspaces: WorkspaceState[];
 }
 
 function isDirectory(path: string): boolean {

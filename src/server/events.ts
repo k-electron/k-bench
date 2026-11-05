@@ -1,9 +1,8 @@
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
+import { EVENTS_PATH } from "../shared/state-protocol.ts";
 import type { StateFeed } from "./state-feed.ts";
-
-const EVENTS_PATH = "/api/events";
 
 /**
  * The events WebSocket, one per browser tab: `GET /api/events`. The server sends the current
