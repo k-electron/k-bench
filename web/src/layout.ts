@@ -31,7 +31,6 @@ export const defaultLayout: Layout = {
   ratio: 0.5,
 };
 
-/** The Session shown in the Focused Pane, if any. */
 /**
  * The CSS grid columns of the main view: one column, or two with the divider's 6px between.
  * The Panes and the labels above them share this, so a label sits over its own Pane.
@@ -42,6 +41,7 @@ export function paneColumns(layout: Layout): string {
     : "minmax(0, 1fr)";
 }
 
+/** The Session shown in the Focused Pane, if any. */
 export function focusedSession(layout: Layout): string | null {
   return layout.sessions[layout.focus];
 }
