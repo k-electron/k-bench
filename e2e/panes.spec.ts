@@ -160,6 +160,36 @@ test("dragging the divider resizes both terminals and both shells see the new si
     .toBeGreaterThan(half);
 });
 
+test("each Pane is labelled with its Workspace and Session, and the page title follows the Focused Pane", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await expect(page).toHaveTitle("k-bench");
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  await app.createSession("alpha");
+  await expect(app.paneLabel(1)).toHaveText("alpha › session 1");
+  await expect(page).toHaveTitle("session 1 · alpha — k-bench");
+
+  await app.showTwoPanes();
+  await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
+  await expect(app.workspace("beta")).toBeVisible();
+  // An empty Pane has no label, and the title follows the Focused Pane (now empty).
+  await app.pane(2).click();
+  await expect(app.paneLabel(2)).toHaveCount(0);
+  await expect(page).toHaveTitle("k-bench");
+
+  await app.createSession("beta");
+  await expect(app.paneLabel(1)).toHaveText("alpha › session 1");
+  await expect(app.paneLabel(2)).toHaveText("beta › session 1");
+  await expect(page).toHaveTitle("session 1 · beta — k-bench");
+
+  await page.keyboard.press("Meta+Backslash");
+  await expect(page).toHaveTitle("session 1 · alpha — k-bench");
+  await app.pane(2).click();
+  await expect(page).toHaveTitle("session 1 · beta — k-bench");
+});
+
 test("without browser storage the default layout is used", async ({ page, kbench }) => {
   await page.addInitScript(() => {
     Object.defineProperty(globalThis, "localStorage", {

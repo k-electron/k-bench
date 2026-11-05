@@ -51,6 +51,7 @@ To fix it, open the Workspace's **...** menu, choose **Change folder** and point
 On a wide screen the main area shows one or two **Panes**, side by side, each showing one Session.
 
 - Turn the second Pane on and off with the **Two panes** button at the top right.
+- A label at the top of each Pane's column, `Workspace › Session`, says which Session the Pane shows. A long one is cut off with `…` at about two thirds of the Pane's width. With two Panes the Focused Pane's label is bright and the other is dimmed. The browser tab is titled after the Focused Pane's Session, as `Session · Workspace — k-bench`.
 - The **Focused Pane** is the one that opening a Session from the sidebar goes to, and the one that receives your keystrokes. With two Panes it has a bright line along its top edge. Click in a Pane to focus it, or press `⌘\` to move focus to the other one.
 - Click a Session to open it in the Focused Pane. To open it in the other Pane, hold `⌘` while you click it, or use **Open in other pane** in its menu. If only one Pane is showing, this turns the second on.
 - A Session can't be in both Panes. Opening one that is already in the other Pane swaps them.
@@ -90,7 +91,7 @@ On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-be
 ![The phone drawer listing Workspaces and Sessions](../images/phone-drawer.png)
 
 - The **drawer** holds your Workspaces and Sessions. Open it with the menu button at the top left. Choosing a Session closes it and shows that Session. Tap outside it to close it without choosing.
-- The **Pane** shows the Session you opened last.
+- The **Pane** shows the Session you opened last, and its `Workspace › Session` label sits beside the menu button.
 
 ![A phone Session with the extra keys along the bottom](../images/phone-terminal.png)
 
