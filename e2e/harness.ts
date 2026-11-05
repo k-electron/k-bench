@@ -285,20 +285,18 @@ export class AppPage {
 
   /**
    * Types `command` into `terminal`, presses Enter and waits for `expectedOutput`.
-   * Keystrokes typed before the terminal has connected are dropped, so a freshly opened
-   * terminal is retried.
+   * Keystrokes typed before the terminal has connected are kept and sent once it opens
+   * (see `web/src/terminalConnection.ts`), so a freshly opened terminal needs no retry.
    */
   async runCommand(
     terminal: Locator,
     command: string,
     expectedOutput: string,
   ): Promise<void> {
-    await expect(async () => {
-      await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
-      await this.page.keyboard.type(command);
-      await this.page.keyboard.press("Enter");
-      await expect(terminal).toContainText(expectedOutput, { timeout: 2_000 });
-    }).toPass();
+    await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+    await this.page.keyboard.type(command);
+    await this.page.keyboard.press("Enter");
+    await expect(terminal).toContainText(expectedOutput);
   }
 }
 
