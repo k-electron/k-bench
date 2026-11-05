@@ -8,6 +8,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Fixed
 
+- Narrowing the window to phone width, or rotating a large phone to portrait, no longer throws away the second Pane. Widening it again brings back both Panes, their Sessions, the Focused Pane and the divider where they were.
 - Reloading right after dragging the divider between Panes no longer brings it back a little short of where you left it.
 
 ## [0.1.3] - 2026-11-04
