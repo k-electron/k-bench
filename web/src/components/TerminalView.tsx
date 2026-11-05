@@ -18,14 +18,14 @@ function terminalUrl(path: string): string {
  * backoff: the page became visible, or the browser went online.
  */
 function retryWhenAwake(retry: () => void): () => void {
-  const onVisibility = () => {
+  const retryIfVisible = () => {
     if (document.visibilityState !== "hidden") retry();
   };
-  document.addEventListener("visibilitychange", onVisibility);
-  window.addEventListener("online", retry);
+  document.addEventListener("visibilitychange", retryIfVisible);
+  window.addEventListener("online", retryIfVisible);
   return () => {
-    document.removeEventListener("visibilitychange", onVisibility);
-    window.removeEventListener("online", retry);
+    document.removeEventListener("visibilitychange", retryIfVisible);
+    window.removeEventListener("online", retryIfVisible);
   };
 }
 

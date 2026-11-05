@@ -102,6 +102,7 @@ export function createTerminalConnection(
   let attempts = 0;
   let reconnecting = false;
   let closed = false;
+  let ended = false;
   // Frames sent while the socket is still opening (a freshly opened Session) are kept, not
   // dropped, and sent once it opens.
   const queued: string[] = [];
@@ -137,6 +138,7 @@ export function createTerminalConnection(
       if (closed || socket !== ws) return;
       // The Session was deleted or its shell exited: the state feed shows which.
       if (event.code === CLOSE_SESSION_ENDED) {
+        ended = true;
         for (const listener of [...listeners]) listener.ended?.();
         return;
       }
@@ -149,10 +151,9 @@ export function createTerminalConnection(
 
   // A phone that slept or regained its network should not wait out the backoff.
   const stopWaking = wake?.(() => {
-    if (socket && socket.readyState !== OPEN && !closed && attempts > 0) {
-      if (socket.readyState === CONNECTING) return;
-      connect();
-    }
+    const waiting =
+      socket && socket.readyState !== OPEN && socket.readyState !== CONNECTING;
+    if (waiting && !closed && !ended && attempts > 0) connect();
   });
 
   connect();

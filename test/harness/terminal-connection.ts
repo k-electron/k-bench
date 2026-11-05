@@ -13,8 +13,6 @@ export class TerminalConnectionProbe {
   private received = "";
   reconnecting = false;
   ended = false;
-  /** Every `reconnecting` report, in order. */
-  readonly reconnectingReports: boolean[] = [];
   /** How many sockets the connection has opened. */
   socketsOpened = 0;
 
@@ -28,7 +26,6 @@ export class TerminalConnectionProbe {
       },
       reconnecting: (on) => {
         this.reconnecting = on;
-        this.reconnectingReports.push(on);
       },
       ended: () => {
         this.ended = true;
