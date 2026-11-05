@@ -17,7 +17,7 @@ pnpm exec playwright install chromium     # once: Playwright needs its browser
 
 `pnpm install` also restores the execute bit on node-pty's `spawn-helper` and turns on the git hooks in `.githooks`.
 
-pnpm won't resolve a release younger than 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`), so `pnpm update` or `pnpm add` can skip the newest version of a package. That is deliberate: it gives a compromised release time to be noticed. The server's dependencies in `package.json` are pinned exactly, so bump one by editing its version and running `pnpm install`. The GitHub Actions in `.github/workflows` are pinned to commit SHAs, with the version in a trailing comment; when you bump one, look up the SHA of the new tag and keep both files in step.
+pnpm won't resolve a release younger than 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`), so `pnpm update` or `pnpm add` can skip the newest version of a package. That is deliberate: it gives a compromised release time to be noticed. The server's dependencies in `package.json` are pinned exactly, so bump one by editing its version and running `pnpm install`. The GitHub Actions in `.github/workflows` are pinned to commit SHAs, with the version in a trailing comment; when you bump one, look up the SHA of the new tag and keep both files in step. Dependabot (`.github/dependabot.yml`) opens a weekly PR for each of these, waiting 3 days after a release like the age gate does; add a CHANGELOG entry to the PR for a server dependency, since it changes what an owner's install resolves.
 
 ## The two instances
 
