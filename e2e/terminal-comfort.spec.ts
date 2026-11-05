@@ -85,6 +85,44 @@ test("swiping down on the terminal reveals earlier lines", async ({
     .toBe(true);
 });
 
+test("a flick keeps scrolling after the finger lifts, further than it travelled", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  const terminal = await openSession(app, kbench.instance.makeFolder("project"));
+  await app.runCommand(terminal, PRINT_LINES, LAST_LINE);
+  /** The earliest numbered line on screen. */
+  const earliestShown = async () => {
+    const numbers = [
+      ...((await terminal.textContent()) ?? "").matchAll(/scroll-(\d{3})-end/g),
+    ];
+    return Math.min(...numbers.map((match) => Number(match[1])));
+  };
+  const before = await earliestShown();
+  const box = await terminal.boundingBox();
+  if (!box) throw new Error("terminal not visible");
+  const x = box.x + box.width / 2;
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", y: number) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+    });
+
+  // A quick flick of 60px, a few lines' worth, sent without waiting so it stays quick.
+  const start = box.y + 100;
+  await Promise.all([
+    touch("touchStart", start),
+    touch("touchMove", start + 20),
+    touch("touchMove", start + 40),
+    touch("touchMove", start + 60),
+    touch("touchEnd", 0),
+  ]);
+
+  await expect.poll(earliestShown).toBeLessThanOrEqual(before - 15);
+});
+
 test("text selected in the terminal lands on the system clipboard", async ({
   app,
   kbench,

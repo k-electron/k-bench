@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- Touch scrolling follows your finger line by line, and a flick keeps gliding after you lift it, slowing down the way iPhone lists do and then settling to a stop. Another flick while it glides speeds it up, and a touch stops it without opening the keyboard. Desktop wheel and trackpad scrolling through History feel as before, but full-screen programs that read the wheel themselves (such as vim or less) now scroll five of their steps per wheel step.
+
 ## [0.1.2] - 2026-11-04
 
 ### Fixed

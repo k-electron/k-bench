@@ -28,6 +28,10 @@ _Avoid_: terminal, tab, tmux session
 The state of a Session whose shell no longer exists, because it exited, or the owner logged out of the Host or restarted it. A Stopped Session can be restarted as a fresh shell in the same folder.
 _Avoid_: dead, closed, killed
 
+**History**:
+A Session's earlier output, beyond what fits on screen, that the owner can scroll back through.
+_Avoid_: scrollback, buffer
+
 **Bell**:
 A Session's request for attention, raised when its shell rings the terminal bell and cleared once the owner views that Session.
 _Avoid_: notification, alert, activity

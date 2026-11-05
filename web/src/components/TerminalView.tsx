@@ -9,6 +9,8 @@ import {
   terminalPath,
 } from "../../../src/shared/terminal-protocol.ts";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
+import { touchScrolls } from "../touchScroll";
+import { wheelReports } from "../wheelReports";
 
 const RETRY_FIRST_MS = 500;
 const RETRY_MAX_MS = 5000;
@@ -99,47 +101,6 @@ function shiftDragSelects(element: HTMLElement): () => void {
   return () => element.removeEventListener("mousedown", onMouseDown, true);
 }
 
-/** Turns a one-finger swipe into mouse-wheel events, so a phone scrolls tmux's history. */
-function swipeScrolls(
-  element: HTMLElement,
-  target: () => HTMLElement | undefined,
-): () => void {
-  let lastY: number | undefined;
-  const onStart = (event: TouchEvent) => {
-    lastY = event.touches.length === 1 ? event.touches[0]?.clientY : undefined;
-  };
-  const onMove = (event: TouchEvent) => {
-    const touch = event.touches[0];
-    if (lastY === undefined || !touch) return;
-    event.preventDefault();
-    // Dragging down pulls earlier lines into view, as the wheel does when rolled up.
-    target()?.dispatchEvent(
-      new WheelEvent("wheel", {
-        bubbles: true,
-        cancelable: true,
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        deltaY: lastY - touch.clientY,
-        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-      }),
-    );
-    lastY = touch.clientY;
-  };
-  const onEnd = () => {
-    lastY = undefined;
-  };
-  element.addEventListener("touchstart", onStart, { passive: true });
-  element.addEventListener("touchmove", onMove, { passive: false });
-  element.addEventListener("touchend", onEnd);
-  element.addEventListener("touchcancel", onEnd);
-  return () => {
-    element.removeEventListener("touchstart", onStart);
-    element.removeEventListener("touchmove", onMove);
-    element.removeEventListener("touchend", onEnd);
-    element.removeEventListener("touchcancel", onEnd);
-  };
-}
-
 /**
  * xterm.js attached to one Session over the terminal WebSocket. It fits its container and
  * reports every size change to the server, speaking `src/shared/terminal-protocol.ts`.
@@ -196,7 +157,8 @@ export function TerminalView({
       return true;
     });
     const stopShiftDrag = shiftDragSelects(element);
-    const stopSwipe = swipeScrolls(element, () => terminal.element);
+    const reports = wheelReports(terminal);
+    const stopTouchScroll = touchScrolls(element, reports);
 
     let socket: WebSocket | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -278,7 +240,8 @@ export function TerminalView({
       resized.dispose();
       clipboard.dispose();
       stopShiftDrag();
-      stopSwipe();
+      stopTouchScroll();
+      reports.dispose();
       socket?.close();
       terminal.dispose();
     };
