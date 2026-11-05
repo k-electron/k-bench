@@ -2,15 +2,24 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WebSocket } from "ws";
 import type { InstanceConfig } from "../../src/server/config.ts";
 import {
   type RunningServer,
   type ServerOptions,
   startServer,
 } from "../../src/server/server.ts";
+import {
+  EVENTS_PATH,
+  type Snapshot,
+  type State,
+} from "../../src/shared/state-protocol.ts";
+import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { EventsClient } from "./events.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
+
+export type { Snapshot, State };
 
 export interface WorkspaceInfo {
   id: string;
@@ -21,22 +30,6 @@ export interface SessionInfo {
   id: string;
   name: string;
 }
-export interface State {
-  workspaces: Array<
-    WorkspaceInfo & {
-      position: number;
-      missing: boolean;
-      sessions: Array<SessionInfo & { status: "running" | "stopped"; bell: boolean }>;
-    }
-  >;
-}
-
-/**
- * What the events WebSocket pushes: the state, plus the revision it is fresh to. A change
- * request answers with the revision (`State-Revision` header) whose snapshot first shows it.
- */
-export type Snapshot = State & { revision: number };
-
 /** The header `tailscale serve` adds to every request it proxies. */
 export const LOGIN_HEADER = "Tailscale-User-Login";
 
@@ -177,6 +170,16 @@ export class TestServer {
     return EventsClient.open<Snapshot>(this.baseUrl, this.loginHeaders);
   }
 
+  /** An events WebSocket carrying the login header, which Node's built-in one cannot send. */
+  openEventsSocket(): WebSocket {
+    const url = new URL(EVENTS_PATH, this.baseUrl);
+    url.protocol = "ws:";
+    const socket = new WebSocket(url, { headers: this.loginHeaders });
+    // A refused or dropped connection is the client's to handle: it reconnects.
+    socket.on("error", () => {});
+    return socket;
+  }
+
   /**
    * Attempts a WebSocket upgrade on `path` and returns the HTTP status that refused it, or
    * 101 if it was accepted (the socket is closed again).
@@ -198,6 +201,8 @@ export class TestServer {
 export class TestInstance {
   readonly config: InstanceConfig;
   readonly root: string;
+  /** The server most recently started. */
+  private running: TestServer | undefined;
   /** Servers and modules this instance stops when it is disposed. */
   private readonly toStop: Array<{ stop(): Promise<void> }> = [];
 
@@ -219,7 +224,25 @@ export class TestInstance {
       this.config.allowedLogin,
     );
     this.toStop.push(server);
+    this.running = server;
     return server;
+  }
+
+  /**
+   * A browser's state client, connected to this instance's server. After a restart it
+   * reconnects to the new server, which may be on another port, as the browser reconnects to
+   * the same address. Closed when the instance is disposed.
+   */
+  openStateClient(options: { showTimeoutMs?: number } = {}): StateClient {
+    const client = createStateClient({
+      ...options,
+      openSocket: () => {
+        if (!this.running) throw new Error("start the instance before opening a client");
+        return this.running.openEventsSocket();
+      },
+    });
+    this.toStop.push({ stop: async () => client.close() });
+    return client;
   }
 
   /** Has `dispose` stop `module` too, for tests that drive a server module directly. */

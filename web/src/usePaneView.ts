@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AppState, SessionState } from "@/api";
+import type { SessionState, State } from "../../src/shared/state-protocol.ts";
 import {
   focusPane,
   forgetMissingSessions,
@@ -52,7 +52,7 @@ export interface PaneViewModel {
  * action asks for. Every intent changes the saved layout, and on a phone acts on what the
  * phone shows, the saved layout's Focused Pane.
  */
-export function usePaneView(state: AppState | undefined, phone: boolean): PaneViewModel {
+export function usePaneView(state: State | undefined, phone: boolean): PaneViewModel {
   const [saved, update] = useLayout();
 
   // A Session deleted (here or on another device) empties its Pane, with a notice, rather

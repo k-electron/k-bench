@@ -14,9 +14,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useState } from "react";
-import type { AppState, WorkspaceState } from "@/api";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
+import type { State, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -24,7 +24,7 @@ import { SessionRow } from "./SessionRow";
 import { WorkspaceRow } from "./WorkspaceRow";
 
 interface SidebarProps {
-  state: AppState | undefined;
+  state: State | undefined;
   /** The Session in the Focused Pane. */
   openId: string | undefined;
   onOpen: (sessionId: string) => void;

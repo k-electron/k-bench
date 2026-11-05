@@ -1,24 +1,6 @@
-/** Typed client for the server's JSON API. Shapes mirror `src/server/service.ts`. */
+/** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
-export interface SessionState {
-  id: string;
-  name: string;
-  status: "running" | "stopped";
-  /** The shell rang the terminal bell and nobody has seen it since. */
-  bell: boolean;
-}
-export interface WorkspaceState {
-  id: string;
-  name: string;
-  folder: string;
-  position: number;
-  /** The folder no longer exists on the Host. */
-  missing: boolean;
-  sessions: SessionState[];
-}
-export interface AppState {
-  workspaces: WorkspaceState[];
-}
+import { revisionOf } from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
   path: string;
@@ -43,8 +25,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok)
     throw new ApiError(body.error ?? `Request failed (${response.status})`);
-  const revision = Number(response.headers.get("State-Revision") ?? Number.NaN);
-  return { value: body as T, revision };
+  return { value: body as T, revision: revisionOf(response.headers) };
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -65,7 +46,7 @@ function send<T>(
 
 /**
  * The server's API. Reads return their value; changes return a `Change`, so the caller can
- * wait for the change to show in state (see `useAppState`), which is the one way the
+ * wait for the change to show in state (see `StateClient`), which is the one way the
  * Workspaces and Sessions reach the page.
  */
 export const api = {

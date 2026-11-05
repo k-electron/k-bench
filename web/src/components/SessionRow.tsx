@@ -7,9 +7,9 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
-import type { SessionState } from "@/api";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
+import type { SessionState } from "../../../src/shared/state-protocol.ts";
 import { BellBadge } from "./BellBadge";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
