@@ -1,0 +1,26 @@
+# Weekly update PRs for the npm packages and the GitHub Actions. Nothing merges by itself: the
+# server's dependencies run with the owner's full access on the Host (ADR-0003), so each one gets
+# a review. `cooldown` is the same 3-day wait as `minimumReleaseAge` in pnpm-workspace.yaml.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      # Dev dependencies never reach the Host, so they come as one PR. The server's own
+      # dependencies (hono, @hono/node-server, ws, node-pty) each get a PR of their own.
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns: ["*"]
