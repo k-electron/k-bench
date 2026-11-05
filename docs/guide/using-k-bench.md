@@ -78,10 +78,10 @@ Things to know:
 
 The terminal's history is kept by tmux, up to 50,000 lines per Session, so it is there however you got back to the Session.
 
-- **Scroll** with your mouse wheel or trackpad to move back through the history. Scroll back down to the bottom to return to the live screen (or press `q`). On a phone, swipe with one finger.
+- **Scroll** with your mouse wheel or trackpad to move back through the history. Scroll back down to the bottom to return to the live screen (or press `q`). On a phone, drag with one finger, or flick to glide through the history quickly; flick again to go faster, and touch the screen to stop.
 - **Select and copy** by dragging with the mouse. When you let go, the selected text is copied to your clipboard.
 - If your browser doesn't let k-bench write to the clipboard, or you want the browser's own selection, hold **Shift** while you drag, then copy with `⌘C` as usual.
-- On a phone there is a swipe to scroll and nothing for selecting text. Use a desktop browser when you need to copy from a Session.
+- On a phone there is touch scrolling and nothing for selecting text. Use a desktop browser when you need to copy from a Session.
 
 ## The phone layout
 

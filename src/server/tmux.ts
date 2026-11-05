@@ -51,6 +51,11 @@ function sessionCommand(folder: string): string[] {
   ];
 }
 
+/** Binds a wheel key in a copy-mode table to scroll one line, as tmux's default does five. */
+function scrollOneLine(table: string, key: string, command: string): string[] {
+  return ["bind-key", "-T", table, key, "select-pane", "\\;", "send-keys", "-X", command];
+}
+
 /** Applied to the instance's tmux server whenever a Session is created (idempotent). */
 function serverConfiguration(): string[][] {
   return [
@@ -62,6 +67,13 @@ function serverConfiguration(): string[][] {
     ["set", "-g", "set-clipboard", "on"],
     ["set", "-g", "terminal-features[100]", "xterm*:clipboard"],
     ["set", "-g", "history-limit", "50000"],
+    // One line of History per wheel report, so a phone's swipe can follow the finger line
+    // by line. The web app sends several reports per desktop wheel step to keep that feel
+    // (`web/src/wheelReports.ts`).
+    ...["copy-mode", "copy-mode-vi"].flatMap((table) => [
+      scrollOneLine(table, "WheelUpPane", "scroll-up"),
+      scrollOneLine(table, "WheelDownPane", "scroll-down"),
+    ]),
     ["set", "-g", "window-size", "latest"],
     ["setw", "-g", "monitor-bell", "on"],
     ["set", "-g", "bell-action", "any"],
