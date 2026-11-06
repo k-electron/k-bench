@@ -113,3 +113,31 @@ test("quitting Claude Code stops the Session, and an error holds the screen unti
   await expect(app.sessionStatus("session 1", "stopped")).toBeVisible();
   await expect(app.claudeGlyph("session 1")).toBeVisible();
 });
+
+test("the Claude dialog reopens with the last Launch options, on any device, and an empty name", async ({
+  app,
+  otherDevice,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeSession("project", {
+    name: "refactor",
+    model: "Opus",
+    effort: "High",
+    advisor: "Off",
+    focusView: true,
+  });
+  await expect(app.session("refactor")).toHaveAttribute("aria-current", "true");
+
+  for (const device of [app, otherDevice]) {
+    await device.openClaudeDialog("project");
+    const dialog = device.claudeDialog;
+    await expect(dialog.getByLabel("Model", { exact: true })).toHaveValue("opus");
+    await expect(dialog.getByLabel("Effort", { exact: true })).toHaveValue("high");
+    await expect(dialog.getByLabel("Advisor", { exact: true })).toHaveValue("off");
+    await expect(dialog.getByRole("checkbox", { name: "Focus view" })).toBeChecked();
+    await expect(dialog.getByRole("textbox", { name: "Session name" })).toHaveValue("");
+    await device.page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  }
+});

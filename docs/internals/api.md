@@ -14,6 +14,8 @@ The API so far. Every request needs the login described in [Access](access.md).
   - `focusView`: a boolean. `true` passes `--settings '{"viewMode":"focus","tui":"fullscreen"}'` (both keys, because focus view needs the fullscreen renderer). It applies to that launch only and leaves the owner's Claude Code settings files unchanged.
 
   Claude Code quitting with status 0 makes the Session Stopped; with another status the pane keeps the error on screen ("Claude Code exited with an error. Press any key to close.") until a key is pressed, then the Session is Stopped. A blank name gives "session N", a taken name 409, a Missing Workspace 422.
+  Creating a Claude Session also records its Launch options on the Host, in a one-row table of their own, replacing the last ones (a refused creation records nothing; the name is never recorded). There is no write endpoint.
+- `GET /api/claude/launch-options`: the Launch options last used to create a Claude Session, as `{model, effort, advisor, focusView}`; all `"default"` with `focusView` false when none has been created. The New Claude dialog reads it each time it opens, so every device opens with the same choices. They survive a k-bench restart.
 - `PATCH /api/workspaces/:id` `{name?, folder?}`: rename and/or change the folder; 409 for a taken name, 422 for a blank name or a folder that does not exist (neither change is made if one is refused), 404 for an unknown Workspace.
 - `PUT /api/workspaces/order` `{ids}`: the full ordered list of Workspace ids (422 unless it is every Workspace exactly once).
 - `DELETE /api/workspaces/:id`: ends every Session's shell, then removes the Workspace (204). The folder on disk is never touched.

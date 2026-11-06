@@ -1,10 +1,11 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   DEFAULT_LAUNCH_OPTIONS,
   LAUNCH_CHOICES,
   type LaunchOptions,
 } from "../../../src/shared/launch-options.ts";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import { api } from "../api";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -30,9 +31,12 @@ function choiceLabel(choice: string): string {
 }
 
 /**
- * Launches a Claude Session in a Workspace. The name is optional (blank gives "session N");
- * the server's refusal, such as a taken name, shows here and keeps the other choices. The
- * dialog doesn't check which model and advisor go together: Claude Code does, at launch.
+ * Launches a Claude Session in a Workspace. The name is optional (blank gives "session N") and
+ * is never remembered; the Launch options open as last used, which the Host keeps. Until they
+ * arrive the choices are hidden and Launch is off, so defaults never show and then jump, while
+ * the name can already be typed. The server's refusal, such as a taken name, shows here and
+ * keeps the other choices. The dialog doesn't check which model and advisor go together:
+ * Claude Code does, at launch.
  */
 export function NewClaudeDialog({
   workspace,
@@ -44,13 +48,26 @@ export function NewClaudeDialog({
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
-  const [options, setOptions] = useState<LaunchOptions>(DEFAULT_LAUNCH_OPTIONS);
+  const [options, setOptions] = useState<LaunchOptions>();
   const [error, setError] = useState<string>();
   const [launching, setLaunching] = useState(false);
   const idPrefix = useId();
   const focusViewId = `${idPrefix}-focusView`;
 
+  useEffect(() => {
+    let current = true;
+    api
+      .lastLaunchOptions()
+      // Without the Host's answer, launch with everything Default rather than not at all.
+      .catch(() => DEFAULT_LAUNCH_OPTIONS)
+      .then((last) => current && setOptions(last));
+    return () => {
+      current = false;
+    };
+  }, []);
+
   const submit = async () => {
+    if (!options) return;
     setLaunching(true);
     try {
       await onLaunch({ name: name.trim(), claude: options });
@@ -89,47 +106,53 @@ export function NewClaudeDialog({
             }}
             autoFocus
           />
-          {FIELDS.map(({ field, label }) => (
-            <div key={field} className="grid gap-1.5">
-              <label htmlFor={`${idPrefix}-${field}`} className="text-sm font-medium">
-                {label}
-              </label>
-              <Select
-                id={`${idPrefix}-${field}`}
-                value={options[field]}
+          <fieldset
+            disabled={!options}
+            aria-busy={!options}
+            className={`grid min-w-0 gap-4 ${options ? "" : "invisible"}`}
+          >
+            {FIELDS.map(({ field, label }) => (
+              <div key={field} className="grid gap-1.5">
+                <label htmlFor={`${idPrefix}-${field}`} className="text-sm font-medium">
+                  {label}
+                </label>
+                <Select
+                  id={`${idPrefix}-${field}`}
+                  value={options?.[field] ?? "default"}
+                  onChange={(event) =>
+                    options && setOptions({ ...options, [field]: event.target.value })
+                  }
+                >
+                  {LAUNCH_CHOICES[field].map((choice) => (
+                    <option key={choice} value={choice}>
+                      {choiceLabel(choice)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <input
+                id={focusViewId}
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={options?.focusView ?? false}
                 onChange={(event) =>
-                  setOptions({ ...options, [field]: event.target.value })
+                  options && setOptions({ ...options, focusView: event.target.checked })
                 }
-              >
-                {LAUNCH_CHOICES[field].map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choiceLabel(choice)}
-                  </option>
-                ))}
-              </Select>
+              />
+              <label htmlFor={focusViewId} className="text-sm font-medium">
+                Focus view
+              </label>
             </div>
-          ))}
-          <div className="flex items-center gap-2">
-            <input
-              id={focusViewId}
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={options.focusView}
-              onChange={(event) =>
-                setOptions({ ...options, focusView: event.target.checked })
-              }
-            />
-            <label htmlFor={focusViewId} className="text-sm font-medium">
-              Focus view
-            </label>
-          </div>
+          </fieldset>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={launching}>
+            <Button type="submit" disabled={launching || !options}>
               Launch
             </Button>
           </DialogFooter>
