@@ -43,10 +43,19 @@ async function openCat(
   return { terminal, field };
 }
 
+/** What a freshly cleared field holds: only the invisible filler (U+200B) Smart typing puts before the caret. */
+const FRESH = /^\u200b*$/;
+
+/** What the field holds after `typed` was typed into a freshly cleared one. */
+function afterTyping(typed: string): RegExp {
+  return new RegExp(`^\\u200b*${typed}$`);
+}
+
 /**
  * What the keyboard does to the field: replaces the text between `start` and `end` with
- * `text` (inserting when they are equal, deleting when `text` is empty). The range is in
- * the field's own text, and the field must be the one with focus.
+ * `text` (inserting when they are equal, deleting when `text` is empty). The range is
+ * counted in the text typed since the field was cleared, that is after the filler, and the
+ * field must be the one with focus.
  */
 async function keyboardEdit(
   app: AppPage,
@@ -57,7 +66,8 @@ async function keyboardEdit(
   // The tests' TypeScript has no DOM types, so the page code is a string.
   await app.page.evaluate(`((start, end, replacement) => {
     const field = document.activeElement;
-    field.setSelectionRange(start, end);
+    const filler = field.value.length - field.value.replace(/^\\u200b+/, "").length;
+    field.setSelectionRange(filler + start, filler + end);
     document.execCommand(replacement === "" ? "delete" : "insertText", false, replacement);
   })(${start}, ${end}, ${JSON.stringify(text)})`);
 }
@@ -135,7 +145,7 @@ test("a key that isn't text goes to the program and empties the field, from a ha
     await app.page.keyboard.type(letter);
     await app.page.keyboard.press(key);
     await expect(terminal).toContainText(`${letter}${shown}`);
-    await expect(field).toHaveValue("");
+    await expect(field).toHaveValue(FRESH);
   }
 });
 
@@ -156,12 +166,12 @@ test("every Extra key empties the field and still reaches the program", async ({
     await app.page.keyboard.type(letter);
     await app.extraKey(key).tap();
     await expect(terminal).toContainText(`${letter}${shown}`);
-    await expect(field).toHaveValue("");
+    await expect(field).toHaveValue(FRESH);
   }
   // Arming Ctrl ends the line too.
   await app.page.keyboard.type("G");
   await app.extraKey("Ctrl").tap();
-  await expect(field).toHaveValue("");
+  await expect(field).toHaveValue(FRESH);
 });
 
 test("every key in the overlay shown while the keyboard is up empties the field", async ({
@@ -188,7 +198,7 @@ test("every key in the overlay shown while the keyboard is up empties the field"
     await app.page.keyboard.type(letter);
     await app.overlayKey(key).tap();
     await expect(terminal).toContainText(`${letter}${shown}`);
-    await expect(field).toHaveValue("");
+    await expect(field).toHaveValue(FRESH);
   }
 });
 
@@ -201,10 +211,10 @@ test("the field is emptied when the keyboard closes, and program output does not
   await app.page.keyboard.type("ab");
   // cat has printed what was typed: the program's output arrived, and the field kept its text.
   await expect(terminal).toContainText("ab");
-  await expect(field).toHaveValue("ab");
+  await expect(field).toHaveValue(afterTyping("ab"));
 
   await field.blur();
-  await expect(field).toHaveValue("");
+  await expect(field).toHaveValue(FRESH);
   // The next line starts afresh: nothing of the old one is deleted.
   await field.focus();
   await app.page.keyboard.type("c");
@@ -214,7 +224,7 @@ test("the field is emptied when the keyboard closes, and program output does not
 test("the field is emptied when the terminal reconnects", async ({ app, kbench }) => {
   const { terminal, field } = await openCat(app, kbench);
   await app.page.keyboard.type("ab");
-  await expect(field).toHaveValue("ab");
+  await expect(field).toHaveValue(afterTyping("ab"));
 
   const reconnected = app.page.waitForEvent("websocket", (ws) =>
     ws.url().includes("/terminal"),
@@ -223,7 +233,7 @@ test("the field is emptied when the terminal reconnects", async ({ app, kbench }
   await kbench.startServer();
   await (await reconnected).waitForEvent("framesent");
 
-  await expect(field).toHaveValue("");
+  await expect(field).toHaveValue(FRESH);
   await app.page.keyboard.type("c");
   await expect(terminal).toContainText("abc");
 });
@@ -242,7 +252,7 @@ test("Return with a pending correction sends the correction, then Enter, and no 
   await app.page.evaluate(`document.execCommand("insertLineBreak")`);
 
   await expect(terminal).toContainText("teh^?^?he^M");
-  await expect(field).toHaveValue("");
+  await expect(field).toHaveValue(FRESH);
   // cat -e would show a line feed as $.
   await expect(terminal).not.toContainText("he$");
   await expect(terminal).not.toContainText("^M$");
@@ -269,7 +279,7 @@ test("a paste goes through the terminal's paste, bracketed when the program aske
 
   // The pasted lines are not typed one by one, and a newline in them is a carriage return.
   await expect(terminal).toContainText("ab^[[200~one^Mtwo^[[201~");
-  await expect(field).toHaveValue("");
+  await expect(field).toHaveValue(FRESH);
 });
 
 test("a letter typed with Ctrl armed arrives as that Ctrl key", async ({
@@ -286,7 +296,7 @@ test("a letter typed with Ctrl armed arrives as that Ctrl key", async ({
 
   await expect(terminal).toContainText("a^C");
   await expect(ctrl).toHaveAttribute("aria-pressed", "false");
-  await expect(field).toHaveValue("");
+  await expect(field).toHaveValue(FRESH);
 });
 
 test("the hidden field's keyboard settings depend on the kind of Session", async ({
@@ -312,6 +322,105 @@ test("the hidden field's keyboard settings depend on the kind of Session", async
   await expect(claudeField).toHaveAttribute("autocorrect", "on");
   await expect(claudeField).toHaveAttribute("autocapitalize", "sentences");
   await expect(claudeField).toHaveAttribute("spellcheck", "true");
+});
+
+test("deleting past the typed text keeps deleting what the program put on the line", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+  await app.runCommand(
+    terminal,
+    "touch zq-completed-name; echo made-$((6*7))",
+    "made-42",
+  );
+
+  // Tab completes the name in the shell, which ends the line the keyboard knows about.
+  await app.page.keyboard.type("echo zq-comp");
+  await app.extraKey("Tab").tap();
+  await expect(terminal).toContainText("echo zq-completed-name");
+
+  // Each Backspace deletes one character the shell put on the line (the completed `-name`
+  // and the space after it), though the keyboard has nothing of the owner's typing to delete.
+  for (let deleted = 0; deleted < 6; deleted++)
+    await app.page.keyboard.press("Backspace");
+  await app.page.keyboard.type("x");
+  // They were deleted from the field's filler, which the program counts as its own text.
+  await expect(
+    app.terminal("session 1").getByRole("textbox", { name: "Terminal input" }),
+  ).toHaveValue(/^​{50,}x$/);
+  await app.page.keyboard.press("Enter");
+
+  // The command that ran is `echo zq-completedx`, so its output is that name alone.
+  await expect(terminal).toContainText("zq-completedx");
+  await expect(terminal).not.toContainText("zq-completed-namex");
+});
+
+test("the filler never reaches the Session as text", async ({ app, kbench }) => {
+  const { terminal } = await openCat(app, kbench);
+
+  await app.page.keyboard.press("Enter");
+  await app.page.keyboard.type("x");
+  await app.extraKey("Tab").tap();
+  await app.page.keyboard.type("y");
+
+  // `cat -v` would show a zero-width space as `M-bM-^@M-^K`.
+  await expect(terminal).toContainText("^Mx^Iy");
+  await expect(terminal).not.toContainText("M-");
+});
+
+test("with no text left in the field, each Backspace still reaches the program", async ({
+  app,
+  kbench,
+}) => {
+  const { terminal, field } = await openCat(app, kbench);
+
+  // Delete all there is in the field, one character at a time.
+  let pressed = 0;
+  while ((await field.inputValue()) !== "") {
+    await app.page.keyboard.press("Backspace");
+    pressed++;
+  }
+  expect(pressed).toBeGreaterThan(50);
+  // Nothing is left to delete, and the program still gets one Backspace per press.
+  await app.page.keyboard.press("Backspace");
+  await app.page.keyboard.press("Backspace");
+  await app.page.keyboard.type("z");
+
+  await expect
+    .poll(async () => {
+      const shown = (await terminal.textContent()) ?? "";
+      return [shown.split("^?").length - 1, shown.includes("^?z")];
+    })
+    .toEqual([pressed + 2, true]);
+});
+
+test("a caret moved without typing goes back to the end, and typing still arrives", async ({
+  app,
+  kbench,
+}) => {
+  const { terminal, field } = await openCat(app, kbench);
+
+  await app.page.keyboard.type("ab");
+  await expect(terminal).toContainText("ab");
+  // A spacebar drag moves the caret to the start of the field.
+  await app.page.evaluate(`document.activeElement.setSelectionRange(0, 0)`);
+  await expect
+    .poll(() =>
+      field.evaluate(
+        (el) => (el as unknown as { selectionStart: number }).selectionStart,
+      ),
+    )
+    .toBe((await field.inputValue()).length);
+  await app.page.keyboard.type("c");
+
+  await expect(terminal).toContainText("abc");
+  // Nothing was deleted or retyped to make room for it.
+  await expect(terminal).not.toContainText("^?");
 });
 
 /** What the hidden field's keyboard settings are with Smart typing off: xterm.js's own. */

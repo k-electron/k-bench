@@ -47,6 +47,14 @@ const KEYBOARD_SETTINGS: Record<SessionKind, Record<string, string>> = {
   claude: { autocorrect: "on", autocapitalize: "sentences", spellcheck: "true" },
 };
 
+/**
+ * Invisible characters (zero-width spaces) a freshly cleared field starts with, before the
+ * caret. They count as text already in the program, so deleting one sends a Backspace and a
+ * held ⌫ keeps repeating, and speeds up, past what the owner typed: iOS never repeats
+ * Backspace in an empty field, and reports the key released at once.
+ */
+const FILLER = "\u200b".repeat(120);
+
 /** The settings xterm.js gives its field, for putting them back. */
 const XTERM_SETTINGS: Record<string, string> = {
   autocorrect: "off",
@@ -90,6 +98,8 @@ export function mirrorTypedLine(
   function clear() {
     // WebKit only forgets the keyboard's idea of the text when a page empties the field.
     field.value = "";
+    field.value = FILLER;
+    field.setSelectionRange(FILLER.length, FILLER.length);
     typed = field.value;
   }
 
@@ -143,8 +153,11 @@ export function mirrorTypedLine(
   };
 
   // Composition arrives as input events too, so xterm.js's own handling of it is kept off.
+  let composing = false;
   const onComposition = (event: Event) => {
-    if (event.target === field) event.stopPropagation();
+    if (event.target !== field) return;
+    composing = event.type !== "compositionend";
+    event.stopPropagation();
   };
   // xterm.js sends a paste itself, bracketed when the program asked for it; the field is
   // then cleared so the pasted text is not mistaken for typing.
@@ -152,6 +165,17 @@ export function mirrorTypedLine(
     if (event.target === field) clear();
   };
   const onBlur = () => clear();
+
+  // A spacebar drag moves the field's caret without typing, and a letter typed at the start
+  // of the field would not arrive as typed. The caret is put back at the end, unless the
+  // keyboard is composing, whose text the caret then sits in.
+  const onSelectionChange = () => {
+    if (composing || document.activeElement !== field) return;
+    const { selectionStart, selectionEnd, value } = field;
+    if (selectionStart === selectionEnd && selectionStart !== value.length) {
+      field.setSelectionRange(value.length, value.length);
+    }
+  };
 
   const listenFor = (type: string, listener: (event: Event) => void) =>
     element.addEventListener(type, listener, true);
@@ -161,6 +185,7 @@ export function mirrorTypedLine(
   listenFor("compositionend", onComposition);
   listenFor("paste", onPaste);
   field.addEventListener("blur", onBlur);
+  document.addEventListener("selectionchange", onSelectionChange);
 
   setAttributes(field, KEYBOARD_SETTINGS[kind]);
   clear();
@@ -178,6 +203,7 @@ export function mirrorTypedLine(
         element.removeEventListener(type, listener, true);
       }
       field.removeEventListener("blur", onBlur);
+      document.removeEventListener("selectionchange", onSelectionChange);
       terminal.attachCustomKeyEventHandler(() => true);
       setAttributes(field, XTERM_SETTINGS);
       field.value = "";
