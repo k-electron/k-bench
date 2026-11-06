@@ -13,11 +13,20 @@ export { expect };
 const PLAYER = fileURLToPath(new URL("./play.ts", import.meta.url));
 const LOGIN = "owner@example.com";
 
+interface ClaudeSessionSpec {
+  name: string;
+  claude: Record<string, unknown>;
+}
+
 interface Demo {
   /** The fake home folder. */
   home: string;
-  /** Creates a Workspace on `~/code/<name>` with these Sessions; the sidebar updates itself. */
-  workspace(name: string, sessions: string[]): Promise<void>;
+  /**
+   * Creates a Workspace on `~/code/<name>` with these Sessions; the sidebar updates itself.
+   * A Session given as `{ name, claude }` is a Claude Session with those Launch options (it
+   * runs the test stub, not Claude Code, so its terminal is never shown in an image).
+   */
+  workspace(name: string, sessions: Array<string | ClaudeSessionSpec>): Promise<void>;
   /**
    * Makes a command on the fake PATH that plays `recording` back in the terminal it runs
    * in, so what is typed into the Session is short and names no real path.
@@ -27,8 +36,14 @@ interface Demo {
   play(app: AppPage, terminal: Locator, recording: string): Promise<void>;
   /** Fails if the page's text has anything of the real machine in it. */
   assertNothingPrivate(): Promise<void>;
-  /** Saves a screenshot into docs/images, after checking nothing private is on the page. */
-  shoot(name: ImageName): Promise<void>;
+  /**
+   * Saves a screenshot into docs/images, after checking nothing private is on the page. With
+   * `area` the image is only that part of the page: an element, or a rectangle in page pixels.
+   */
+  shoot(
+    name: ImageName,
+    area?: Locator | { x: number; y: number; width: number; height: number },
+  ): Promise<void>;
 }
 
 export const test = base.extend<{ demo: Demo }>({
@@ -76,7 +91,10 @@ export const test = base.extend<{ demo: Demo }>({
         });
         const { id } = (await created.json()) as { id: string };
         for (const session of sessions) {
-          await post(`/api/workspaces/${id}/sessions`, { name: session });
+          await post(
+            `/api/workspaces/${id}/sessions`,
+            typeof session === "string" ? { name: session } : session,
+          );
         }
       },
       playerCommand: (recording) => {
@@ -106,10 +124,12 @@ export const test = base.extend<{ demo: Demo }>({
         const findings = findPrivate(text);
         expect(findings, describeFindings(findings)).toEqual([]);
       },
-      shoot: async (name) => {
+      shoot: async (name, area) => {
         await demo.assertNothingPrivate();
         mkdirSync(IMAGES_DIR, { recursive: true });
-        await page.screenshot({ path: join(IMAGES_DIR, name) });
+        const path = join(IMAGES_DIR, name);
+        if (area && "screenshot" in area) await area.screenshot({ path });
+        else await page.screenshot({ path, clip: area });
       },
     };
     await use(demo);

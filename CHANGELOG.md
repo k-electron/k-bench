@@ -12,6 +12,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Changed
 
+- The README and the guides now describe Claude Sessions: the New Claude dialog, Focus view, the Claude glyph and restart-to-resume, with screenshots of the dialog and the glyph.
 - The server's dependencies (`hono`, `@hono/node-server`, `ws` and `node-pty`) are now pinned to exact versions, so `npm i -g @k-electron/k-bench` and `k-bench install` run the versions k-bench was tested with instead of resolving newer ones on the day you install. Updated `@hono/node-server` to 2.1.6.
 
 ### Fixed
