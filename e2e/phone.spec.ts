@@ -131,6 +131,10 @@ test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", asyn
     "Enter",
   ];
   for (const name of names) await expect(app.extraKey(name)).toBeVisible();
+  // Smart typing is offered on an iPhone only (see `smart-typing.spec.ts`), so the row has
+  // nine keys here and no switch.
+  await expect(row.getByRole("button")).toHaveCount(names.length);
+  await expect(app.extraKey("Smart typing")).toHaveCount(0);
 
   const overflow = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -146,9 +150,6 @@ test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", asyn
     top ??= box.y;
     expect(box.y).toBe(top);
     expect(box.x + box.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
-    // Narrow enough to leave the tenth slot (the Smart typing switch) free: 10 keys
-    // share the row, so no key may take more than a tenth plus a gap's worth.
-    expect(box.width).toBeLessThanOrEqual(rowBox.width / 10 + 2);
   }
 });
 

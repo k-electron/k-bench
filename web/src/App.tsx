@@ -131,7 +131,9 @@ export function App() {
             />
             {keyboardUp && panes.focusedSessionId && <TypingKeys />}
           </div>
-          {phone && !keyboardUp && panes.focusedSessionId && <ExtraKeys />}
+          {phone && !keyboardUp && panes.focusedSessionId && (
+            <ExtraKeys sessionId={panes.focusedSessionId} />
+          )}
         </main>
       </div>
     </ActionsProvider>

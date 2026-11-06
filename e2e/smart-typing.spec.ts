@@ -176,6 +176,8 @@ test("every key in the overlay shown while the keyboard is up empties the field"
     height: viewport.height - 300,
   });
   await expect(app.overlayKey("Enter")).toBeVisible();
+  // The switch is only on the full row, with the keyboard down.
+  await expect(app.overlayKey("Smart typing")).toHaveCount(0);
 
   for (const [letter, key, shown] of [
     ["A", "Esc", "^["],
@@ -310,4 +312,146 @@ test("the hidden field's keyboard settings depend on the kind of Session", async
   await expect(claudeField).toHaveAttribute("autocorrect", "on");
   await expect(claudeField).toHaveAttribute("autocapitalize", "sentences");
   await expect(claudeField).toHaveAttribute("spellcheck", "true");
+});
+
+/** What the hidden field's keyboard settings are with Smart typing off: xterm.js's own. */
+async function expectXtermSettings(field: Locator): Promise<void> {
+  await expect(field).toHaveAttribute("autocorrect", "off");
+  await expect(field).toHaveAttribute("autocapitalize", "off");
+  await expect(field).toHaveAttribute("spellcheck", "false");
+}
+
+test("the Smart typing switch is pressed for a new Session, and turning it off restores today's input for that Session only", async ({
+  app,
+  kbench,
+}) => {
+  const { terminal, field } = await openCat(app, kbench);
+  const smartTyping = app.extraKey("Smart typing");
+  await expect(smartTyping).toHaveAttribute("aria-pressed", "true");
+  await expect(field).toHaveAttribute("autocorrect", "off");
+  await expect(field).toHaveAttribute("autocapitalize", "none");
+
+  await smartTyping.tap();
+  await expect(smartTyping).toHaveAttribute("aria-pressed", "false");
+  await expectXtermSettings(field);
+  // xterm.js keeps its field empty, and typing still arrives, Backspace included.
+  await app.page.keyboard.type("ab");
+  await app.page.keyboard.press("Backspace");
+  await app.page.keyboard.type("c");
+  await expect(terminal).toContainText("ab^?c");
+  await expect(field).toHaveValue("");
+
+  // Another Session has its own choice: on, for a new one.
+  await app.openDrawer();
+  await app.createSession("project");
+  const other = app
+    .terminal("session 2")
+    .getByRole("textbox", { name: "Terminal input" });
+  await expect(smartTyping).toHaveAttribute("aria-pressed", "true");
+  await expect(other).toHaveAttribute("autocapitalize", "none");
+
+  // And the first one is still off.
+  await app.openDrawer();
+  await app.session("session 1").tap();
+  await expect(smartTyping).toHaveAttribute("aria-pressed", "false");
+  await expectXtermSettings(
+    app.terminal("session 1").getByRole("textbox", { name: "Terminal input" }),
+  );
+});
+
+test("the choice survives a page reload", async ({ app, kbench }) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  await app.openDrawer();
+  await app.createSession("project");
+  await app.extraKey("Smart typing").tap();
+  await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
+
+  await app.page.reload();
+  const field = app
+    .terminal("session 2")
+    .getByRole("textbox", { name: "Terminal input" });
+  await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
+  await expectXtermSettings(field);
+
+  // Session 1 was never switched, so it is still on.
+  await app.openDrawer();
+  await app.session("session 1").tap();
+  await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("deleting a Session forgets its choice", async ({ app, kbench }) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  await expect(app.terminal("session 1")).toBeVisible();
+  await app.extraKey("Smart typing").tap();
+  await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
+
+  // The choice is kept on this device, next to the Pane layout, under the Session's id.
+  const id = await app.page.evaluate(
+    `JSON.parse(localStorage.getItem("k-bench.layout")).sessions[0]`,
+  );
+  const keeps = () =>
+    app.page.evaluate(
+      `(localStorage.getItem("k-bench.smart-typing") ?? "").includes(${JSON.stringify(id)})`,
+    );
+  expect(await keeps()).toBe(true);
+
+  await app.openDrawer();
+  await app.sessionMenu("session 1", "Delete");
+  await app.page
+    .getByRole("alertdialog", { name: "Delete session 1?" })
+    .getByRole("button", { name: "Delete session" })
+    .click();
+  await expect(app.session("session 1")).toBeHidden();
+
+  await expect.poll(keeps).toBe(false);
+});
+
+test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40px tall", async ({
+  app,
+  kbench,
+}) => {
+  await app.page.setViewportSize({ width: 375, height: 700 });
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  await expect(app.terminal("session 1")).toBeVisible();
+
+  const row = app.page.getByRole("group", { name: "Extra keys", exact: true });
+  const names = [
+    "Esc",
+    "Tab",
+    "Shift Tab",
+    "Ctrl",
+    "Left",
+    "Up",
+    "Down",
+    "Right",
+    "Enter",
+    "Smart typing",
+  ];
+  await expect(row.getByRole("button")).toHaveCount(names.length);
+  for (const name of names) await expect(app.extraKey(name)).toBeVisible();
+
+  const overflow = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  const rowBox = await row.boundingBox();
+  if (!rowBox) throw new Error("The Extra keys row should show");
+  let top: number | undefined;
+  let previousRight = 0;
+  for (const name of names) {
+    const box = await app.extraKey(name).boundingBox();
+    if (!box) throw new Error(`${name} should show`);
+    expect(box.height).toBe(40);
+    top ??= box.y;
+    expect(box.y).toBe(top);
+    // In order, left to right, and inside the row.
+    expect(box.x).toBeGreaterThanOrEqual(previousRight);
+    previousRight = box.x + box.width;
+    expect(previousRight).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+  }
 });
