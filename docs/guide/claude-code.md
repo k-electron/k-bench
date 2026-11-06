@@ -111,12 +111,12 @@ On a wide screen, put Claude Code in one [Pane](using-k-bench.md#panes) and a de
 
 ## Driving Claude Code from your phone
 
-The dialog works in the phone layout, so you can launch Claude Code from anywhere. Once it is running, the [extra keys](using-k-bench.md#the-phone-layout) cover the keys Claude Code uses that a phone keyboard lacks. [Claude Code's keyboard shortcuts](https://code.claude.com/docs/en/interactive-mode) list them all. The ones you will reach for:
+The dialog works in the phone layout, so you can launch Claude Code from anywhere. Once it is running, the [extra keys](using-k-bench.md#the-phone-layout) cover the keys Claude Code uses that a phone keyboard lacks. [Claude Code's keyboard shortcuts](https://code.claude.com/docs/en/interactive-mode) list them all. The ones you will reach for (on the phone's extra keys, ⎋ is Esc, ⇥ is Tab and ⇤ is Shift-Tab):
 
 | Key                        | What it does in Claude Code                                                                                                                                                                          |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Esc**                    | Interrupts Claude mid-response so you can redirect it, closes a dialog, and declines a permission prompt. Tap it twice, quickly, to clear your draft or, with an empty prompt, open the rewind menu. |
-| **⇧Tab**                   | Cycles Claude Code's permission modes.                                                                                                                                                               |
+| **Shift-Tab**              | Cycles Claude Code's permission modes.                                                                                                                                                               |
 | **Ctrl**, then `c`         | Interrupts a running operation (Ctrl is one-shot: tap it, then press `c`). With nothing running, the first press clears your prompt and a second one exits Claude Code, so don't repeat it by habit. |
 | **Ctrl**, then `o`         | In a Focus view Session, shows everything Claude Code is hiding.                                                                                                                                     |
 | **Tab** and the arrow keys | Tab accepts an autocomplete suggestion. The arrow keys move through menus and your prompt history.                                                                                                   |

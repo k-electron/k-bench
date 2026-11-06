@@ -92,6 +92,66 @@ test("the extra keys reach the shell", async ({ app, kbench }) => {
   await expect(terminal).toContainText("^[[AD^[[BE^[[DF^[[CG");
 });
 
+test("the extra keys' Enter runs the line the owner typed", async ({ app, kbench }) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+
+  await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+  // The shell prints 42 only when it computes the line, so the typed text can't pass for it.
+  await app.page.keyboard.type("echo entered-$((6*7))");
+  await app.extraKey("Enter").tap();
+  await expect(terminal).toContainText("entered-42");
+  // The terminal kept focus, so the on-screen keyboard would have stayed up.
+  await expect(terminal.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
+});
+
+test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", async ({
+  app,
+  kbench,
+}) => {
+  await app.page.setViewportSize({ width: 375, height: 700 });
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  await expect(app.terminal("session 1")).toBeVisible();
+
+  const row = app.page.getByRole("group", { name: "Extra keys", exact: true });
+  const names = [
+    "Esc",
+    "Tab",
+    "Shift Tab",
+    "Ctrl",
+    "Left",
+    "Up",
+    "Down",
+    "Right",
+    "Enter",
+  ];
+  for (const name of names) await expect(app.extraKey(name)).toBeVisible();
+
+  const overflow = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  const rowBox = await row.boundingBox();
+  if (!rowBox) throw new Error("The Extra keys row should show");
+  let top: number | undefined;
+  for (const name of names) {
+    const box = await app.extraKey(name).boundingBox();
+    if (!box) throw new Error(`${name} should show`);
+    expect(box.height).toBe(40);
+    // One row: every key starts at the same height.
+    top ??= box.y;
+    expect(box.y).toBe(top);
+    expect(box.x + box.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+    // Narrow enough to leave the tenth slot (the Smart typing switch) free: 10 keys
+    // share the row, so no key may take more than a tenth plus a gap's worth.
+    expect(box.width).toBeLessThanOrEqual(rowBox.width / 10 + 2);
+  }
+});
+
 test("Ctrl applies to the next key only, including keys typed on the keyboard", async ({
   app,
   kbench,
