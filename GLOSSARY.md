@@ -61,7 +61,7 @@ On a phone, the keys a terminal needs that the on-screen keyboard lacks, such as
 _Avoid_: shortcut bar, toolbar, key row, typing keys
 
 **Smart typing**:
-On a phone, letting the on-screen keyboard's own typing aids (autocorrect, suggestions, double-space for a period, hold to delete words) work while typing into a Session. It is on or off per Session, on for a new Session, and switched from the Extra keys.
+On an iPhone, letting the on-screen keyboard's own typing aids (autocorrect, suggestions, double-space for a period, hold to delete words) work while typing into a Session. It is on or off per Session, on for a new Session, and switched from the Extra keys.
 _Avoid_: autocorrect mode, IME mode, keyboard mode
 
 ## Running k-bench

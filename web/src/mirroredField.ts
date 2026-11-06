@@ -1,6 +1,6 @@
 import type { Terminal } from "@xterm/xterm";
 import type { SessionKind } from "../../src/shared/state-protocol.ts";
-import { sessionEdit } from "./smartTypingEdit";
+import { FILLER_CHAR, sessionEdit } from "./smartTypingEdit";
 import { isCtrlArmed } from "./terminalInput";
 
 /**
@@ -9,11 +9,6 @@ import { isCtrlArmed } from "./terminalInput";
  * reaches the Session as Backspaces and new text. This module is the DOM and xterm.js side;
  * `smartTypingEdit.ts` is the comparison.
  */
-
-/** Smart typing is offered on an iPhone (iOS WebKit, whatever the browser), not an iPad or Android. */
-export function isIPhone(): boolean {
-  return /iPhone/.test(navigator.userAgent);
-}
 
 export interface MirroredField {
   /** Empties the field: the next keyboard edit starts a fresh line. */
@@ -53,7 +48,7 @@ const KEYBOARD_SETTINGS: Record<SessionKind, Record<string, string>> = {
  * held ⌫ keeps repeating, and speeds up, past what the owner typed: iOS never repeats
  * Backspace in an empty field, and reports the key released at once.
  */
-const FILLER = "\u200b".repeat(120);
+const FILLER = FILLER_CHAR.repeat(120);
 
 /** The settings xterm.js gives its field, for putting them back. */
 const XTERM_SETTINGS: Record<string, string> = {
@@ -144,11 +139,13 @@ export function mirrorTypedLine(
       clear();
     } else {
       const after = field.value;
-      const { backspaces, text } = sessionEdit(typed, after);
+      const { backspaces, text, fillerLeft } = sessionEdit(typed, after);
       typed = after;
       // A line break typed as text is Enter, never a `\n`.
       const data = "\x7f".repeat(backspaces) + text.replace(/\r?\n/g, "\r");
       if (data) send(data);
+      // Filler left after the change no longer stands for text in the program: start afresh.
+      if (fillerLeft) clear();
     }
   };
 
@@ -177,13 +174,17 @@ export function mirrorTypedLine(
     }
   };
 
-  const listenFor = (type: string, listener: (event: Event) => void) =>
+  // Capture-phase listeners on the terminal, ahead of xterm.js's own on the field.
+  const listeners: [string, (event: Event) => void][] = [
+    ["input", onInput],
+    ["compositionstart", onComposition],
+    ["compositionupdate", onComposition],
+    ["compositionend", onComposition],
+    ["paste", onPaste],
+  ];
+  for (const [type, listener] of listeners) {
     element.addEventListener(type, listener, true);
-  listenFor("input", onInput);
-  listenFor("compositionstart", onComposition);
-  listenFor("compositionupdate", onComposition);
-  listenFor("compositionend", onComposition);
-  listenFor("paste", onPaste);
+  }
   field.addEventListener("blur", onBlur);
   document.addEventListener("selectionchange", onSelectionChange);
 
@@ -193,18 +194,15 @@ export function mirrorTypedLine(
   return {
     clear,
     dispose() {
-      for (const [type, listener] of [
-        ["input", onInput],
-        ["compositionstart", onComposition],
-        ["compositionupdate", onComposition],
-        ["compositionend", onComposition],
-        ["paste", onPaste],
-      ] as const) {
+      for (const [type, listener] of listeners) {
         element.removeEventListener(type, listener, true);
       }
       field.removeEventListener("blur", onBlur);
       document.removeEventListener("selectionchange", onSelectionChange);
-      terminal.attachCustomKeyEventHandler(() => true);
+      // xterm.js has no way to remove its custom key handler, only to replace it, and its
+      // own default is none; a handler that lets every key through is the same. A disposed
+      // terminal (its element is gone from the page) has nothing left to restore.
+      if (element.isConnected) terminal.attachCustomKeyEventHandler(() => true);
       setAttributes(field, XTERM_SETTINGS);
       field.value = "";
     },

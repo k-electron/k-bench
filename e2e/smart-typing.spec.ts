@@ -43,12 +43,15 @@ async function openCat(
   return { terminal, field };
 }
 
-/** What a freshly cleared field holds: only the invisible filler (U+200B) Smart typing puts before the caret. */
-const FRESH = /^\u200b*$/;
+/** The invisible zero-width space (U+200B) Smart typing fills a cleared field with. */
+const ZWSP = "\u200b";
+
+/** What a freshly cleared field holds: only the invisible filler Smart typing puts before the caret. */
+const FRESH = new RegExp(`^${ZWSP}*$`);
 
 /** What the field holds after `typed` was typed into a freshly cleared one. */
 function afterTyping(typed: string): RegExp {
-  return new RegExp(`^\\u200b*${typed}$`);
+  return new RegExp(`^${ZWSP}*${typed}$`);
 }
 
 /**
@@ -238,6 +241,33 @@ test("the field is emptied when the terminal reconnects", async ({ app, kbench }
   await expect(terminal).toContainText("abc");
 });
 
+test("text typed in one Session is not carried into the next: only the new text reaches it", async ({
+  app,
+  kbench,
+}) => {
+  const { terminal } = await openCat(app, kbench);
+  await app.page.keyboard.type("ab");
+  await expect(terminal).toContainText("ab");
+
+  // Another Session takes the Focused Pane, and runs the same program.
+  await app.openDrawer();
+  await app.createSession("project");
+  const other = app.terminal("session 2");
+  await app.runMarker(other, "shellready");
+  await app.runCommand(
+    other,
+    "stty raw -echo opost onlcr; echo cat-$((6*7)); cat -vet",
+    "cat-42",
+  );
+  await app.page.keyboard.type("c");
+  // The keyboard replaces the "c", which is all the typed text this Session's field holds:
+  // nothing of the first Session's "ab" is deleted or retyped here.
+  await keyboardEdit(app, 0, 1, "d");
+
+  await expect(other).toContainText("c^?d");
+  await expect(other).not.toContainText("ab");
+});
+
 test("Return with a pending correction sends the correction, then Enter, and no line feed", async ({
   app,
   kbench,
@@ -352,7 +382,7 @@ test("deleting past the typed text keeps deleting what the program put on the li
   // They were deleted from the field's filler, which the program counts as its own text.
   await expect(
     app.terminal("session 1").getByRole("textbox", { name: "Terminal input" }),
-  ).toHaveValue(/^​{50,}x$/);
+  ).toHaveValue(new RegExp(`^${ZWSP}{50,}x$`));
   await app.page.keyboard.press("Enter");
 
   // The command that ran is `echo zq-completedx`, so its output is that name alone.
@@ -371,6 +401,25 @@ test("the filler never reaches the Session as text", async ({ app, kbench }) => 
   // `cat -v` would show a zero-width space as `M-bM-^@M-^K`.
   await expect(terminal).toContainText("^Mx^Iy");
   await expect(terminal).not.toContainText("M-");
+});
+
+test("a replacement that spans the filler sends Backspaces and the new text, never the filler", async ({
+  app,
+  kbench,
+}) => {
+  const { terminal, field } = await openCat(app, kbench);
+
+  await app.page.keyboard.type("ab");
+  await expect(terminal).toContainText("ab");
+  // The keyboard replaces five of the filler's characters (which the program counts as its
+  // own text) with "yy", leaving filler after them.
+  await keyboardEdit(app, -10, -5, "yy");
+
+  // Backspaces back to the first change (ten filler characters and "ab"), then the new
+  // text. `cat -v` would show a zero-width space as `M-bM-^@M-^K`.
+  await expect(terminal).toContainText(`ab${"^?".repeat(12)}yyab`);
+  await expect(terminal).not.toContainText("M-");
+  await expect(field).toHaveValue(FRESH);
 });
 
 test("with no text left in the field, each Backspace still reaches the program", async ({
