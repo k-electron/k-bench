@@ -1,5 +1,6 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
+import type { LaunchOptions } from "../../src/shared/launch-options.ts";
 import { revisionOf } from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
@@ -66,7 +67,10 @@ export const api = {
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   /** An ordinary shell Session, or with `claude` a Claude Session. */
-  createSession: (workspaceId: string, input: { name?: string; claude?: object } = {}) =>
+  createSession: (
+    workspaceId: string,
+    input: { name?: string; claude?: LaunchOptions } = {},
+  ) =>
     send<{ id: string; name: string }>(
       "POST",
       `/api/workspaces/${workspaceId}/sessions`,

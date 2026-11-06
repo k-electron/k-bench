@@ -38,6 +38,38 @@ test("New Claude… launches Claude Code in a new Session, marked with a glyph o
   await expect(app.claudeGlyph("session 1")).toHaveCount(0);
 });
 
+test("the Claude dialog opens with every option Default, and a choice reaches Claude Code", async ({
+  app,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+
+  await app.openClaudeDialog("project");
+  for (const field of ["Model", "Effort", "Advisor"]) {
+    await expect(app.claudeDialog.getByLabel(field, { exact: true })).toHaveValue(
+      "default",
+    );
+  }
+  await expect(
+    app.claudeDialog.getByRole("checkbox", { name: "Focus view" }),
+  ).not.toBeChecked();
+  await app.launchClaude({
+    model: "Opus",
+    effort: "XHigh",
+    advisor: "Off",
+    focusView: true,
+  });
+
+  const terminal = app.terminal("session 1");
+  await expect(terminal).toContainText("claude-stub ready");
+  await expect(terminal).toContainText("claude-stub arg: --model");
+  await expect(terminal).toContainText("claude-stub arg: opus");
+  await expect(terminal).toContainText("claude-stub arg: xhigh");
+  await expect(terminal).toContainText("claude-stub advisor tool disabled: 1");
+  await expect(terminal).toContainText("claude-stub arg: --settings");
+  await expect(terminal).not.toContainText("claude-stub arg: --advisor");
+});
+
 test("the Claude dialog takes an optional name and refuses a taken one without closing", async ({
   app,
   kbench,

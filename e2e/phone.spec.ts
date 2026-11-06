@@ -263,7 +263,10 @@ test("the phone launches a Claude Session from the + menu and the dialog", async
   await app.openDrawer();
   await app.createWorkspace(kbench.instance.makeFolder("project"));
 
-  await app.createClaudeSession("project");
+  await app.openClaudeDialog("project");
+  // Every option fits the phone's screen, with Launch within reach.
+  await expect(app.claudeDialog.getByRole("button", { name: "Launch" })).toBeInViewport();
+  await app.launchClaude({ model: "Sonnet", focusView: true });
 
   await expect(app.claudeDialog).toBeHidden();
   await expect(app.drawer).toBeHidden();

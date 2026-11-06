@@ -5,18 +5,84 @@
  * script that runs it.
  */
 
+import {
+  DEFAULT_LAUNCH_OPTIONS,
+  LAUNCH_CHOICES,
+  type LaunchOptions,
+} from "../shared/launch-options.ts";
+
+/**
+ * Reads Launch options from a request. A field left out is Default; a value that is not one
+ * of the choices is refused, naming the field (`claude.model`).
+ */
+export function parseLaunchOptions(
+  value: unknown,
+): { options: LaunchOptions } | { error: string } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { error: "claude must be an object" };
+  }
+  const given = value as Record<string, unknown>;
+  const options: LaunchOptions = { ...DEFAULT_LAUNCH_OPTIONS };
+  for (const field of ["model", "effort", "advisor"] as const) {
+    const choice = given[field];
+    if (choice === undefined) continue;
+    const choices: readonly unknown[] = LAUNCH_CHOICES[field];
+    if (!choices.includes(choice)) {
+      return {
+        error: `claude.${field} must be one of ${LAUNCH_CHOICES[field].join(", ")}`,
+      };
+    }
+    (options as unknown as Record<string, unknown>)[field] = choice;
+  }
+  if (given.focusView !== undefined) {
+    if (typeof given.focusView !== "boolean") {
+      return { error: "claude.focusView must be true or false" };
+    }
+    options.focusView = given.focusView;
+  }
+  return { options };
+}
+
 /** What a Claude Session is started with. */
 export interface ClaudeLaunch {
   /** The Claude conversation the Session runs: a UUID k-bench generated at creation. */
   conversationId: string;
+  options: LaunchOptions;
 }
 
 /**
+ * Both keys are needed: focus view does nothing without the fullscreen renderer, and
+ * fullscreen is not the default on every machine. `--settings` applies to that launch only
+ * and leaves the owner's settings files unchanged.
+ */
+const FOCUS_VIEW_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
+
+/**
  * The flags that follow the program's name. This is where Launch options become flags:
- * a Default option adds nothing.
+ * a Default option adds nothing. Advisor Off is not a flag (there is none): see
+ * `claudeEnvironment`.
  */
 export function claudeArguments(launch: ClaudeLaunch): string[] {
-  return ["--session-id", launch.conversationId];
+  const { model, effort, advisor, focusView } = launch.options;
+  return [
+    "--session-id",
+    launch.conversationId,
+    ...(model === "default" ? [] : ["--model", model]),
+    ...(effort === "default" ? [] : ["--effort", effort]),
+    ...(advisor === "default" || advisor === "off" ? [] : ["--advisor", advisor]),
+    ...(focusView ? ["--settings", FOCUS_VIEW_SETTINGS] : []),
+  ];
+}
+
+/**
+ * What goes in front of the program to set its environment for this launch only: advisor Off
+ * is `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`, because leaving out `--advisor` is not enough when
+ * the owner's settings turn the advisor on.
+ */
+function claudeEnvironment(launch: ClaudeLaunch): string[] {
+  return launch.options.advisor === "off"
+    ? ["env", "CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1"]
+    : [];
 }
 
 /** Printed, and waited on, when Claude Code exits with an error. */
@@ -87,6 +153,7 @@ export function claudeCommand(input: {
     LAUNCHER,
     "kb-launcher",
     folder,
+    ...claudeEnvironment(launch),
     program,
     ...claudeArguments(launch),
   ];

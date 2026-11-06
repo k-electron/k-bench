@@ -8,7 +8,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Added
 
-- Claude Sessions: a Workspace's **+** is now a menu with **New shell** (as before) and **New Claude…**, which opens a dialog with an optional name and a Launch button. A Claude Session runs Claude Code itself in the Workspace's folder, through your login shell, and opens in the Focused Pane. The sidebar marks it with a small Claude glyph. Quitting Claude Code makes the Session Stopped; if Claude Code exits with an error, the Session keeps the error on screen until you press a key.
+- Claude Sessions: a Workspace's **+** is now a menu with **New shell** (as before) and **New Claude…**, which opens a dialog with an optional name, the Launch options and a Launch button. The Launch options are Model (Default, Fable, Opus, Sonnet or Haiku), Effort (Default, Low, Medium, High, XHigh or Max), Advisor (Default, Off, Fable, Opus or Sonnet) and a Focus view checkbox. Default leaves a setting to your own Claude Code configuration, and Focus view applies to that launch only, without touching your Claude Code settings. A Claude Session runs Claude Code itself in the Workspace's folder, through your login shell, and opens in the Focused Pane. The sidebar marks it with a small Claude glyph. Quitting Claude Code makes the Session Stopped; if Claude Code exits with an error, the Session keeps the error on screen until you press a key.
 
 ### Changed
 

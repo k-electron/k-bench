@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import type { LaunchOptions } from "../shared/launch-options.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
@@ -29,6 +30,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shell';
   ALTER TABLE sessions ADD COLUMN conversation_id TEXT;
   `,
+  // A Claude Session's Launch options, as JSON, so a restart can pass them again.
+  `
+  ALTER TABLE sessions ADD COLUMN launch_options TEXT;
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -45,6 +50,20 @@ export interface SessionRow {
   kind: SessionKind;
   /** The Claude conversation a Claude Session runs; null for a shell Session. */
   conversationId: string | null;
+  /** The Launch options a Claude Session was created with; null for a shell Session. */
+  launchOptions: LaunchOptions | null;
+}
+
+/** A session row as SQLite returns it: the Launch options are still JSON text. */
+type RawSessionRow = Omit<SessionRow, "launchOptions"> & { launchOptions: string | null };
+
+function sessionRow<T extends RawSessionRow>(
+  raw: T,
+): Omit<T, "launchOptions"> & { launchOptions: LaunchOptions | null } {
+  return {
+    ...raw,
+    launchOptions: raw.launchOptions === null ? null : JSON.parse(raw.launchOptions),
+  };
 }
 
 export class Store {
@@ -133,23 +152,26 @@ export class Store {
   }
 
   listSessions(workspaceId: string): SessionRow[] {
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT id, workspace_id AS workspaceId, name, kind,
-                conversation_id AS conversationId FROM sessions
-         WHERE workspace_id = ? ORDER BY created_at, rowid`,
+                conversation_id AS conversationId, launch_options AS launchOptions
+         FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid`,
       )
-      .all(workspaceId) as unknown as SessionRow[];
+      .all(workspaceId) as unknown as RawSessionRow[];
+    return rows.map(sessionRow);
   }
 
   getSession(id: string): (SessionRow & { folder: string }) | undefined {
-    return this.db
+    const row = this.db
       .prepare(
         `SELECT s.id, s.workspace_id AS workspaceId, s.name, s.kind,
-                s.conversation_id AS conversationId, w.folder
+                s.conversation_id AS conversationId,
+                s.launch_options AS launchOptions, w.folder
          FROM sessions s JOIN workspaces w ON w.id = s.workspace_id WHERE s.id = ?`,
       )
-      .get(id) as unknown as (SessionRow & { folder: string }) | undefined;
+      .get(id) as unknown as (RawSessionRow & { folder: string }) | undefined;
+    return row && sessionRow(row);
   }
 
   renameSession(id: string, name: string): void {
@@ -166,21 +188,34 @@ export class Store {
     name: string;
     /** Makes it a Claude Session running this conversation. */
     conversationId?: string;
+    /** The Launch options of a Claude Session. */
+    launchOptions?: LaunchOptions;
   }): SessionRow {
     const conversationId = input.conversationId ?? null;
+    const launchOptions = conversationId === null ? null : (input.launchOptions ?? null);
     const kind = conversationId === null ? "shell" : "claude";
     this.db
       .prepare(
-        `INSERT INTO sessions (id, workspace_id, name, created_at, kind, conversation_id)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions
+           (id, workspace_id, name, created_at, kind, conversation_id, launch_options)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(input.id, input.workspaceId, input.name, Date.now(), kind, conversationId);
+      .run(
+        input.id,
+        input.workspaceId,
+        input.name,
+        Date.now(),
+        kind,
+        conversationId,
+        launchOptions && JSON.stringify(launchOptions),
+      );
     return {
       id: input.id,
       workspaceId: input.workspaceId,
       name: input.name,
       kind,
       conversationId,
+      launchOptions,
     };
   }
 }

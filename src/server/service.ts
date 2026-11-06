@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { State } from "../shared/state-protocol.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
@@ -125,11 +126,11 @@ export class Service {
   createSession(
     workspaceId: string,
     requestedName?: string,
-    /** Makes it a Claude Session; its Launch options will go here. */
-    claude?: Record<string, never>,
+    /** Makes it a Claude Session started with these Launch options. */
+    launchOptions?: LaunchOptions,
   ) {
     const result = this.sessionCreations.then(() =>
-      this.createSessionNow(workspaceId, requestedName, claude !== undefined),
+      this.createSessionNow(workspaceId, requestedName, launchOptions),
     );
     this.sessionCreations = result.catch(() => undefined);
     return result;
@@ -138,7 +139,7 @@ export class Service {
   private async createSessionNow(
     workspaceId: string,
     requestedName: string | undefined,
-    isClaude: boolean,
+    launchOptions: LaunchOptions | undefined,
   ) {
     const workspace = this.store.getWorkspace(workspaceId);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
@@ -156,15 +157,17 @@ export class Service {
     }
     const id = randomUUID();
     // k-bench chooses the Claude conversation's ID, so a restart can name it (ADR-0005).
-    const conversationId = isClaude ? randomUUID() : undefined;
+    const conversationId = launchOptions ? randomUUID() : undefined;
     await this.reconciler.whileStarting(id, async () => {
       await this.tmux.createSession(
         id,
         workspace.folder,
-        conversationId === undefined ? undefined : { conversationId },
+        launchOptions && conversationId !== undefined
+          ? { conversationId, options: launchOptions }
+          : undefined,
       );
       try {
-        this.store.addSession({ id, workspaceId, name, conversationId });
+        this.store.addSession({ id, workspaceId, name, conversationId, launchOptions });
       } catch (error) {
         await this.tmux.killSession(id);
         throw error;
@@ -236,6 +239,7 @@ export class Service {
     id: string;
     folder: string;
     conversationId: string | null;
+    launchOptions: LaunchOptions | null;
   }): Promise<void> {
     if ((await this.tmux.listSessions()).some((live) => live.id === session.id)) return;
     if (!isDirectory(session.folder)) {
@@ -247,7 +251,11 @@ export class Service {
         session.folder,
         session.conversationId === null
           ? undefined
-          : { conversationId: session.conversationId },
+          : {
+              conversationId: session.conversationId,
+              // Every Option is passed again each time (ADR-0005).
+              options: session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
+            },
       ),
     );
   }

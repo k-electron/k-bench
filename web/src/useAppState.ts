@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { LaunchOptions } from "../../src/shared/launch-options.ts";
 import { EVENTS_PATH, type State } from "../../src/shared/state-protocol.ts";
 import { ApiError, api, type Change } from "./api";
 import { createStateClient, type StateClient } from "./stateClient";
@@ -35,7 +36,7 @@ export interface Actions {
    */
   createClaudeSession(
     workspaceId: string,
-    input: { name?: string },
+    input: { name?: string; claude: LaunchOptions },
   ): Promise<string | undefined>;
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
@@ -115,7 +116,7 @@ export function useAppState(): {
           return (await whenShown(change)) ? change.value.id : undefined;
         }),
       createClaudeSession: async (workspaceId, input) => {
-        const change = await api.createSession(workspaceId, { ...input, claude: {} });
+        const change = await api.createSession(workspaceId, input);
         return (await whenShown(change)) ? change.value.id : undefined;
       },
       renameSession: (sessionId, name) => act(api.renameSession(sessionId, name)),

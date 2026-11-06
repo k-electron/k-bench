@@ -287,12 +287,34 @@ export class AppPage {
     await expect(this.claudeDialog).toBeVisible();
   }
 
-  /** Fills in the open New Claude dialog (the name is optional) and presses Launch. */
-  async launchClaude(options: { name?: string } = {}): Promise<void> {
+  /**
+   * Fills in the open New Claude dialog and presses Launch. Everything is optional: the name,
+   * and each Launch option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
+   */
+  async launchClaude(
+    options: {
+      name?: string;
+      model?: string;
+      effort?: string;
+      advisor?: string;
+      focusView?: boolean;
+    } = {},
+  ): Promise<void> {
     if (options.name !== undefined) {
       await this.claudeDialog
         .getByRole("textbox", { name: "Session name" })
         .fill(options.name);
+    }
+    for (const field of ["Model", "Effort", "Advisor"] as const) {
+      const choice = options[field.toLowerCase() as "model" | "effort" | "advisor"];
+      if (choice !== undefined) {
+        await this.claudeDialog.getByLabel(field, { exact: true }).selectOption(choice);
+      }
+    }
+    if (options.focusView !== undefined) {
+      await this.claudeDialog
+        .getByRole("checkbox", { name: "Focus view" })
+        .setChecked(options.focusView);
     }
     await this.claudeDialog.getByRole("button", { name: "Launch", exact: true }).click();
   }
@@ -300,7 +322,7 @@ export class AppPage {
   /** Launches a Claude Session in the Workspace from the **+** menu and the dialog. */
   async createClaudeSession(
     workspaceName: string,
-    options: { name?: string } = {},
+    options: Parameters<AppPage["launchClaude"]>[0] = {},
   ): Promise<void> {
     await this.openClaudeDialog(workspaceName);
     await this.launchClaude(options);
