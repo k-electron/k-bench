@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { State } from "../shared/state-protocol.ts";
+import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
@@ -157,17 +158,21 @@ export class Service {
     }
     const id = randomUUID();
     // k-bench chooses the Claude conversation's ID, so a restart can name it (ADR-0005).
-    const conversationId = launchOptions ? randomUUID() : undefined;
+    const claude: ClaudeLaunch | undefined = launchOptions && {
+      conversationId: randomUUID(),
+      options: launchOptions,
+      mode: "start",
+    };
     await this.reconciler.whileStarting(id, async () => {
-      await this.tmux.createSession(
-        id,
-        workspace.folder,
-        launchOptions && conversationId !== undefined
-          ? { conversationId, options: launchOptions, mode: "start" }
-          : undefined,
-      );
+      await this.tmux.createSession(id, workspace.folder, claude);
       try {
-        this.store.addSession({ id, workspaceId, name, conversationId, launchOptions });
+        this.store.addSession({
+          id,
+          workspaceId,
+          name,
+          conversationId: claude?.conversationId,
+          launchOptions: claude?.options,
+        });
       } catch (error) {
         await this.tmux.killSession(id);
         throw error;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { bootWithWorkspace as boot } from "./harness/boot.ts";
 import { fakeClaudeArgs } from "./harness/fake-claude.ts";
-import { createTestInstance, type TestServer } from "./harness/instance.ts";
+import type { TestServer } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 
 // What reaches Claude Code is the contract with it (ADR-0005), so these tests read the flags
@@ -8,13 +9,11 @@ import { pollUntil } from "./harness/poll.ts";
 
 const FOCUS_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
 
-async function boot() {
-  const instance = createTestInstance();
-  const server = await instance.start();
-  const workspace = await server.createWorkspace({
-    folder: instance.makeFolder("project"),
-  });
-  return { instance, server, workspace };
+/** The stub's arguments begin `--session-id <conversation ID>`; the flags are what follows. */
+const SESSION_ID_ARGS = 2;
+
+function flagsAfterSessionId(args: string[]): string[] {
+  return args.slice(SESSION_ID_ARGS);
 }
 
 /** Launches a Claude Session with the options and returns what the stub was started with. */
@@ -29,8 +28,7 @@ async function launch(
   return {
     session,
     terminal,
-    /** The arguments after `--session-id <conversation ID>`. */
-    flags: args.slice(2),
+    flags: flagsAfterSessionId(args),
     advisorDisabled: terminal.output.includes("advisor tool disabled: 1"),
   };
 }
@@ -143,7 +141,7 @@ describe("Launch options", () => {
     expect(response.status).toBe(200);
     // Nothing was typed, so the resume found no conversation and a fresh start followed.
     const again = await restarted.openTerminal(first.session.id);
-    expect((await fakeClaudeArgs(again)).slice(2)).toEqual([
+    expect(flagsAfterSessionId(await fakeClaudeArgs(again))).toEqual([
       "--model",
       "haiku",
       "--effort",

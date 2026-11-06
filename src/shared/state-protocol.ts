@@ -8,13 +8,15 @@
  * Imported by the browser too, so this file has no imports and no Node APIs.
  */
 
+/** What a Session runs: the owner's shell, or Claude Code (a Claude Session). */
+export type SessionKind = "shell" | "claude";
+
 export interface SessionState {
   id: string;
   name: string;
-  /** What the Session runs: the owner's shell, or Claude Code (a Claude Session). */
-  kind: "shell" | "claude";
+  kind: SessionKind;
   status: "running" | "stopped";
-  /** The Session's shell rang the terminal bell and nobody has seen it since. */
+  /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
 }
 export interface WorkspaceState {

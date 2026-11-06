@@ -41,7 +41,7 @@ A Session's earlier output, beyond what fits on screen, that the owner can scrol
 _Avoid_: scrollback, buffer
 
 **Bell**:
-A Session's request for attention, raised when its shell rings the terminal bell and cleared once the owner views that Session.
+A Session's request for attention, raised when the Session's program rings the terminal bell and cleared once the owner views that Session.
 _Avoid_: notification, alert, activity
 
 **Claude conversation**:

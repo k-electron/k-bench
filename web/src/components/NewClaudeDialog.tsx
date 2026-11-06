@@ -5,7 +5,7 @@ import {
   type LaunchOptions,
 } from "../../../src/shared/launch-options.ts";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -34,8 +34,8 @@ function choiceLabel(choice: string): string {
  * Launches a Claude Session in a Workspace. The name is optional (blank gives "session N") and
  * is never remembered; the Launch options open as last used, which the Host keeps. Until they
  * arrive the choices are hidden and Launch is off, so defaults never show and then jump, while
- * the name can already be typed. The server's refusal, such as a taken name, shows here and
- * keeps the other choices. The dialog doesn't check which model and advisor go together:
+ * the name can already be typed. The server's refusal shows here and keeps the other choices;
+ * a taken name shows beneath the name field, any other refusal above Launch. The dialog doesn't check which model and advisor go together:
  * Claude Code does, at launch.
  */
 export function NewClaudeDialog({
@@ -49,10 +49,11 @@ export function NewClaudeDialog({
 }) {
   const [name, setName] = useState("");
   const [options, setOptions] = useState<LaunchOptions>();
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<{ message: string; nameTaken: boolean }>();
   const [launching, setLaunching] = useState(false);
   const idPrefix = useId();
   const focusViewId = `${idPrefix}-focusView`;
+  const nameErrorId = `${idPrefix}-nameError`;
 
   useEffect(() => {
     let current = true;
@@ -73,7 +74,10 @@ export function NewClaudeDialog({
       await onLaunch({ name: name.trim(), claude: options });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError({
+        message: e instanceof Error ? e.message : String(e),
+        nameTaken: e instanceof ApiError && e.status === 409,
+      });
       setLaunching(false);
     }
   };
@@ -96,16 +100,25 @@ export function NewClaudeDialog({
               to your own Claude Code configuration.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            aria-label="Session name"
-            placeholder="Name (optional)"
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              setError(undefined);
-            }}
-            autoFocus
-          />
+          <div className="grid gap-1.5">
+            <Input
+              aria-label="Session name"
+              aria-invalid={error?.nameTaken || undefined}
+              aria-describedby={error?.nameTaken ? nameErrorId : undefined}
+              placeholder="Name (optional)"
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError(undefined);
+              }}
+              autoFocus
+            />
+            {error?.nameTaken && (
+              <p id={nameErrorId} role="alert" className="text-sm text-destructive">
+                {error.message}
+              </p>
+            )}
+          </div>
           <fieldset
             disabled={!options}
             aria-busy={!options}
@@ -146,9 +159,9 @@ export function NewClaudeDialog({
               </label>
             </div>
           </fieldset>
-          {error && (
+          {error && !error.nameTaken && (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {error.message}
             </p>
           )}
           <DialogFooter>

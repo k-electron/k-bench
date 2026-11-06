@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTestInstance, type TestServer } from "./harness/instance.ts";
+import { bootWithWorkspace as boot } from "./harness/boot.ts";
+import type { TestServer } from "./harness/instance.ts";
 
 const ALL_DEFAULT = {
   model: "default",
@@ -13,15 +14,6 @@ async function lastUsed(server: TestServer) {
   const response = await server.request("/api/claude/launch-options");
   expect(response.status).toBe(200);
   return response.json();
-}
-
-async function boot() {
-  const instance = createTestInstance();
-  const server = await instance.start();
-  const workspace = await server.createWorkspace({
-    folder: instance.makeFolder("project"),
-  });
-  return { instance, server, workspace };
 }
 
 describe("the last-used Launch options", () => {

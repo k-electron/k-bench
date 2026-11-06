@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { LaunchOptions } from "../shared/launch-options.ts";
+import type { SessionKind } from "../shared/state-protocol.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
@@ -50,7 +51,6 @@ export interface WorkspaceRow {
   folder: string;
   position: number;
 }
-export type SessionKind = "shell" | "claude";
 export interface SessionRow {
   id: string;
   workspaceId: string;

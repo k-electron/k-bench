@@ -9,7 +9,15 @@ export interface DirectoryListing {
   directories: Array<{ name: string; path: string }>;
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** The HTTP status the server answered with. */
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /**
  * What a change request answered: its body, and the state revision from which the events
@@ -25,7 +33,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const response = await fetch(path, init);
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok)
-    throw new ApiError(body.error ?? `Request failed (${response.status})`);
+    throw new ApiError(
+      body.error ?? `Request failed (${response.status})`,
+      response.status,
+    );
   return { value: body as T, revision: revisionOf(response.headers) };
 }
 

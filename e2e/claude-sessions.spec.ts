@@ -81,7 +81,10 @@ test("the Claude dialog takes an optional name and refuses a taken one without c
   await app.openClaudeDialog("project");
   await app.launchClaude({ name: "refactor" });
 
-  await expect(app.claudeDialog.getByRole("alert")).toContainText("already exists");
+  // The refusal belongs to the name: it is the name field's description, and the field is invalid.
+  const nameField = app.claudeDialog.getByRole("textbox", { name: "Session name" });
+  await expect(nameField).toHaveAccessibleDescription(/already exists/);
+  await expect(nameField).toHaveAttribute("aria-invalid", "true");
   await expect(app.claudeDialog).toBeVisible();
   await app.launchClaude({ name: "" });
   await expect(app.claudeDialog).toBeHidden();
