@@ -72,7 +72,7 @@ jobs:
           brew install tmux
           pnpm install --frozen-lockfile
           pnpm check
-          pnpm exec playwright install chromium
+          pnpm exec playwright install chromium webkit
           pnpm test:e2e
 
       - name: Check that npm supports trusted publishing
