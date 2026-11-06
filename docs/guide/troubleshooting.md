@@ -61,7 +61,7 @@ Open the Workspace's **...** menu, choose **Change folder** and point it at the 
 
 ## Every Session says Stopped
 
-After you log out of your Mac or restart it, that is expected: k-bench comes back on its own when you log in, everything is still listed, and you restart each Session from its **...** menu. See [Stopped Sessions](using-k-bench.md#stopped-sessions-logging-out-and-restarting). If you did neither and every Session is Stopped, tmux, which holds the shells, was stopped, so run `k-bench status` and look in [the log](#where-the-logs-are).
+After you log out of your Mac or restart it, that is expected: k-bench comes back on its own when you log in, everything is still listed, and you restart each Session from its **...** menu. See [Stopped Sessions](using-k-bench.md#stopped-sessions-logging-out-and-restarting). If you did neither and every Session is Stopped, tmux, which holds the Sessions' programs, was stopped, so run `k-bench status` and look in [the log](#where-the-logs-are).
 
 ## A Session never shows a Bell
 

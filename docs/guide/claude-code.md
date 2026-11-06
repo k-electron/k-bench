@@ -26,13 +26,15 @@ The first time Claude Code runs in a folder it asks whether you trust it, and **
 | **Advisor**    | Default, Off, Fable, Opus, Sonnet                                                                                                                      |
 | **Focus view** | A checkbox                                                                                                                                             |
 
+The dialog's Model, Effort, Advisor and Focus view are the Session's **Launch options**.
+
 - **Default** leaves that setting to your own Claude Code configuration, so your `~/.claude` settings still apply unless you choose something else.
 - **Off** (for the advisor) turns the advisor off for this conversation, even when your settings turn it on.
 - k-bench does not check which model can advise which. Claude Code does, when it starts: if it refuses a pairing, you see why (see [When Claude Code exits](#when-claude-code-exits)).
 
-The dialog opens with the choices you launched with last time, on whichever device, because your Mac remembers them. The name is never remembered. Before your first Claude Session every choice is Default and Focus view is off.
+The dialog opens with the Launch options you used last time, on whichever device, because your Mac remembers them. The name is never remembered. Before your first Claude Session every option is Default and Focus view is off.
 
-The choices are fixed for the Session's life. To change the model or the view in the middle of a conversation, use Claude Code's own `/model` and `/focus`. A restart passes the original choices again.
+The Launch options are fixed for the Session's life. To change the model or the view in the middle of a conversation, use Claude Code's own `/model` and `/focus`. A restart passes the original Launch options again.
 
 ### Focus view
 
@@ -56,9 +58,9 @@ If Claude Code exits with an error, such as a model and advisor it won't pair, o
 
 ### Restarting resumes the conversation
 
-A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**. There is no dialog. Claude Code resumes the same conversation, with the same model, effort, advisor and Focus view the Session was launched with. That includes after you log out of your Mac or restart it, so you do not need Claude Code's `/resume`, and you cannot pick the wrong conversation when several share a folder.
+A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**. There is no dialog. Claude Code resumes the same conversation, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench gave the conversation its ID when it launched the Session, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
 
-Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with the same choices.
+Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with the same Launch options.
 
 Deleting a Claude Session ends it but leaves its conversation alone, so you can still find it with `claude --resume` in a terminal.
 
@@ -73,7 +75,7 @@ An ordinary Session, from **New shell**, is a shell. If you type `claude` in it,
 
 ## Make Claude Code ring the Bell when it is waiting
 
-k-bench raises a [Bell](using-k-bench.md#bells) when a Session's shell rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and a Bell shows on that Session in the sidebar.
+k-bench raises a [Bell](using-k-bench.md#bells) when the program in a Session rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and a Bell shows on that Session in the sidebar.
 
 Add this to `~/.claude/settings.json` on the Host (merging it with any settings already in the file):
 

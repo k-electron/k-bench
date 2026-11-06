@@ -71,7 +71,7 @@ Your layout is remembered per browser, so your phone and your laptop can differ.
 
 ![A Bell on the "tests" Session in the sidebar](../images/bell.png)
 
-A Session raises a **Bell** when its shell rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
+A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
 
 To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first shows a Bell.
 
