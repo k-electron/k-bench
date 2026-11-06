@@ -6,31 +6,30 @@ import { useSyncExternalStore } from "react";
  * Ctrl modifier below applies to both.
  */
 
-let sender: ((data: string) => void) | null = null;
+interface RegisteredTerminal {
+  send: (data: string) => void;
+  blur: () => void;
+  /** Ends the line Smart typing mirrors in the terminal's hidden field; a no-op when it is off. */
+  clearTypedLine: () => void;
+}
 
-let blurrer: (() => void) | null = null;
+let registered: RegisteredTerminal | null = null;
 
 /**
- * Registers the terminal that extra keys go to (the one in the Focused Pane), and how to
- * take keyboard focus off it.
+ * Registers the terminal that extra keys go to (the one in the Focused Pane), how to take
+ * keyboard focus off it, and how to end the line Smart typing mirrors: every Extra key is a
+ * key that isn't text, so it ends that line.
  */
-export function registerTerminal(
-  send: (data: string) => void,
-  blur: () => void,
-): () => void {
-  sender = send;
-  blurrer = blur;
+export function registerTerminal(terminal: RegisteredTerminal): () => void {
+  registered = terminal;
   return () => {
-    if (sender === send) {
-      sender = null;
-      blurrer = null;
-    }
+    if (registered === terminal) registered = null;
   };
 }
 
 /** Takes focus off the registered terminal, which closes the on-screen keyboard. */
 export function closeKeyboard(): void {
-  blurrer?.();
+  registered?.blur();
 }
 
 /** The keys of the Extra keys and the compact keys over the terminal, as the terminal gets them. */
@@ -47,7 +46,8 @@ export const KEYS = {
 
 /** Sends `data` to the registered terminal as if it had been typed. */
 export function sendKey(data: string): void {
-  sender?.(data);
+  registered?.send(data);
+  registered?.clearTypedLine();
 }
 
 let ctrlArmed = false;
@@ -70,7 +70,13 @@ export function useCtrlArmed(): boolean {
   );
 }
 
+/** Whether Ctrl is armed, for the next key to be sent with it. */
+export function isCtrlArmed(): boolean {
+  return ctrlArmed;
+}
+
 export function toggleCtrl(): void {
+  registered?.clearTypedLine();
   setCtrl(!ctrlArmed);
 }
 

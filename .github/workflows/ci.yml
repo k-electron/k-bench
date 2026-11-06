@@ -24,7 +24,7 @@ jobs:
       - run: brew install tmux
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - run: pnpm exec playwright install chromium
+      - run: pnpm exec playwright install chromium webkit
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()

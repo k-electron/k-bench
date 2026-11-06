@@ -397,7 +397,7 @@ function sessionIdNamed(instance: TestInstance, name: string): string {
   }
 }
 
-interface Kbench {
+export interface Kbench {
   instance: TestInstance;
   url: string;
   /** Stops the server like a crash or restart would; Sessions keep running in tmux. */

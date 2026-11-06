@@ -15,7 +15,7 @@ export function Pane({ session, focused }: PaneProps) {
       className="h-full min-h-0 bg-black p-2"
     >
       {session.status === "running" ? (
-        <TerminalView sessionId={session.id} focused={focused} />
+        <TerminalView sessionId={session.id} kind={session.kind} focused={focused} />
       ) : (
         <p className="p-4 text-sm text-muted-foreground">
           This Session is Stopped. Restart it from the sidebar to get a fresh shell.
