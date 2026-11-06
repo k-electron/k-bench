@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
+
 ## [0.2.0] - 2026-11-05
 
 ### Added
