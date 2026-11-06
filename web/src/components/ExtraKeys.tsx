@@ -19,7 +19,7 @@ function Key({
     <Button
       variant="secondary"
       aria-label={name}
-      className="h-10 min-w-0 flex-1 px-2"
+      className="h-10 min-w-0 flex-1 px-0"
       onMouseDown={keepFocus}
       onClick={() => sendKey(data)}
     >
@@ -43,18 +43,18 @@ export function ExtraKeys() {
       className="flex shrink-0 gap-1 border-t bg-card p-1"
     >
       <Key name="Esc" data={KEYS.esc}>
-        Esc
+        ⎋
       </Key>
       <Key name="Tab" data={KEYS.tab}>
-        Tab
+        ⇥
       </Key>
       <Key name="Shift Tab" data={KEYS.shiftTab}>
-        ⇧Tab
+        ⇤
       </Key>
       <Button
         variant={ctrl ? "default" : "secondary"}
         aria-pressed={ctrl}
-        className="h-10 min-w-0 flex-1 px-2"
+        className="h-10 min-w-0 flex-1 px-0"
         onMouseDown={keepFocus}
         onClick={toggleCtrl}
       >
@@ -71,6 +71,9 @@ export function ExtraKeys() {
       </Key>
       <Key name="Right" data={KEYS.right}>
         <ArrowRightIcon />
+      </Key>
+      <Key name="Enter" data={KEYS.enter}>
+        ⏎
       </Key>
     </div>
   );
