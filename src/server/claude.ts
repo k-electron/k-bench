@@ -48,6 +48,12 @@ export interface ClaudeLaunch {
   /** The Claude conversation the Session runs: a UUID k-bench generated at creation. */
   conversationId: string;
   options: LaunchOptions;
+  /**
+   * `start` is the first launch, which names the conversation (`--session-id`). `resume` is a
+   * restart, which resumes it (`--resume`) and, when there is nothing to resume, starts it
+   * with that same ID.
+   */
+  mode: "start" | "resume";
 }
 
 /**
@@ -58,15 +64,13 @@ export interface ClaudeLaunch {
 const FOCUS_VIEW_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
 
 /**
- * The flags that follow the program's name. This is where Launch options become flags:
- * a Default option adds nothing. Advisor Off is not a flag (there is none): see
- * `claudeEnvironment`.
+ * The flags that follow the one naming the conversation. This is where Launch options become
+ * flags: a Default option adds nothing. Advisor Off is not a flag (there is none): the
+ * launcher sets `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` for it.
  */
-export function claudeArguments(launch: ClaudeLaunch): string[] {
-  const { model, effort, advisor, focusView } = launch.options;
+function launchOptionArguments(options: LaunchOptions): string[] {
+  const { model, effort, advisor, focusView } = options;
   return [
-    "--session-id",
-    launch.conversationId,
     ...(model === "default" ? [] : ["--model", model]),
     ...(effort === "default" ? [] : ["--effort", effort]),
     ...(advisor === "default" || advisor === "off" ? [] : ["--advisor", advisor]),
@@ -74,34 +78,43 @@ export function claudeArguments(launch: ClaudeLaunch): string[] {
   ];
 }
 
-/**
- * What goes in front of the program to set its environment for this launch only: advisor Off
- * is `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`, because leaving out `--advisor` is not enough when
- * the owner's settings turn the advisor on.
- */
-function claudeEnvironment(launch: ClaudeLaunch): string[] {
-  return launch.options.advisor === "off"
-    ? ["env", "CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1"]
-    : [];
-}
-
 /** Printed, and waited on, when Claude Code exits with an error. */
 const ERROR_MESSAGE = "Claude Code exited with an error. Press any key to close.";
 
 /**
- * Runs the command it is given in the folder, then ends the pane on status 0. On any other
- * status it holds the screen, so the error above it can be read, until a key is pressed.
- * There is no shell underneath: whichever way it ends, the pane ends with it.
+ * Runs Claude Code in the folder, then ends the pane on status 0. On any other status it holds
+ * the screen, so the error above it can be read, until a key is pressed. There is no shell
+ * underneath: whichever way it ends, the pane ends with it.
  *
- * Arguments, never script text: `$1` is the folder, the rest is the command. It is plain
- * POSIX `sh` (the wait for a key uses `stty` and `dd`, not `read -n`, which zsh spells
- * differently), so it runs the same under macOS's bash-as-sh and any `sh`. The `cd` is
- * repeated because the owner's login startup files may change directory.
+ * A restart (mode "resume") tries `--resume <conversation ID>` first. Claude Code saves a
+ * conversation only after its first message, so with nothing to resume that fails with exit 1
+ * and the launcher tries once more with `--session-id <conversation ID>`. This is safe
+ * without looking at Claude Code's files (ADR-0005): `--session-id` fails with exit 1 on an
+ * ID that already has a conversation, so the two attempts can never both run one conversation
+ * and neither can fork or overwrite it. Both attempts get every Launch option, because
+ * `--resume` does not restore `--settings`. Advisor Off sets
+ * `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` for both, because leaving out `--advisor` is not
+ * enough when the owner's settings turn the advisor on.
+ *
+ * Arguments, never script text: the folder, the program, whether the advisor is off (1 or 0),
+ * the mode, the conversation ID, then the option flags. It is plain POSIX `sh` (the wait for
+ * a key uses `stty` and `dd`, not `read -n`, which zsh spells differently), so it runs the
+ * same under macOS's bash-as-sh and any `sh`. The `cd` is repeated because the owner's login
+ * startup files may change directory.
  */
 const LAUNCHER = `
 cd -- "$1"
-shift
-"$@"
+program=$2
+advisor_off=$3
+mode=$4
+conversation=$5
+shift 5
+[ "$advisor_off" = 1 ] && export CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1
+if [ "$mode" = resume ]; then
+  "$program" --resume "$conversation" "$@"
+  [ "$?" -eq 0 ] && exit 0
+fi
+"$program" --session-id "$conversation" "$@"
 status=$?
 [ "$status" -eq 0 ] && exit 0
 printf '\\n%s\\n' '${ERROR_MESSAGE}'
@@ -153,8 +166,10 @@ export function claudeCommand(input: {
     LAUNCHER,
     "kb-launcher",
     folder,
-    ...claudeEnvironment(launch),
     program,
-    ...claudeArguments(launch),
+    launch.options.advisor === "off" ? "1" : "0",
+    launch.mode,
+    launch.conversationId,
+    ...launchOptionArguments(launch.options),
   ];
 }

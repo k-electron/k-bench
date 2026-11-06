@@ -141,6 +141,7 @@ describe("Launch options", () => {
     const response = await restarted.post(`/api/sessions/${first.session.id}/restart`);
 
     expect(response.status).toBe(200);
+    // Nothing was typed, so the resume found no conversation and a fresh start followed.
     const again = await restarted.openTerminal(first.session.id);
     expect((await fakeClaudeArgs(again)).slice(2)).toEqual([
       "--model",

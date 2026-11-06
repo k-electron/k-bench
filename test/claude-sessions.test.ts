@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import { pollUntil } from "./harness/poll.ts";
 import { typeIntoSession } from "./harness/tmux.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const FOCUS_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
 const ERROR_HELD = "Claude Code exited with an error. Press any key to close.";
 
 async function boot() {
@@ -138,11 +139,15 @@ describe("Claude Sessions", () => {
     expect((await sessionState(server, claude.id))?.status).toBe("running");
   });
 
-  it("restarts as Claude Code again, not as a shell", async () => {
+  it("resumes its conversation when restarted after a message was sent, with every Launch option again", async () => {
     const { server, workspace } = await boot();
-    const claude = await server.createClaudeSession(workspace.id);
+    const claude = await server.createClaudeSession(workspace.id, {
+      claude: { model: "opus", advisor: "off", focusView: true },
+    });
     const first = await server.openTerminal(claude.id);
-    const [flag, conversationId] = await fakeClaudeArgs(first);
+    const [, conversationId] = await fakeClaudeArgs(first);
+    first.run("what is in this folder");
+    await first.waitForOutput("claude-stub heard: what is in this folder");
     first.run("exit 0");
     await untilStopped(server, claude.id);
 
@@ -153,8 +158,77 @@ describe("Claude Sessions", () => {
       kind: "claude",
       status: "running",
     });
-    const again = await fakeClaudeArgs(await server.openTerminal(claude.id));
-    expect(again).toEqual([flag, conversationId]);
+    const again = await server.openTerminal(claude.id);
+    expect(await fakeClaudeArgs(again)).toEqual([
+      "--resume",
+      conversationId,
+      "--model",
+      "opus",
+      "--settings",
+      FOCUS_SETTINGS,
+    ]);
+    expect(again.output).toContain("advisor tool disabled: 1");
+    expect(again.output).not.toContain("No conversation found");
+  });
+
+  it("starts a fresh conversation with the same ID and options when nothing was ever sent", async () => {
+    const { server, workspace } = await boot();
+    const claude = await server.createClaudeSession(workspace.id, {
+      claude: { effort: "high", advisor: "off" },
+    });
+    const first = await server.openTerminal(claude.id);
+    const launched = await fakeClaudeArgs(first);
+    first.run("exit 0");
+    await untilStopped(server, claude.id);
+
+    await server.post(`/api/sessions/${claude.id}/restart`);
+
+    const again = await server.openTerminal(claude.id);
+    expect(await fakeClaudeArgs(again)).toEqual(launched);
+    expect(again.output).toContain("advisor tool disabled: 1");
+    // The resume was tried first and failed, and that is not shown as an error.
+    expect(again.output).toContain("No conversation found");
+    expect(again.output).not.toContain(ERROR_HELD);
+    expect((await sessionState(server, claude.id))?.status).toBe("running");
+  });
+
+  it("holds the error when both attempts fail, then is Stopped on a key", async () => {
+    const { server, workspace } = await boot();
+    const claude = await server.createClaudeSession(workspace.id);
+    const first = await server.openTerminal(claude.id);
+    first.run("a message, so there is a conversation");
+    await first.waitForOutput("claude-stub heard:");
+    first.run("exit 0");
+    await untilStopped(server, claude.id);
+    await server.post(`/api/sessions/${claude.id}/restart`);
+    // The resume works, then Claude Code fails. A fresh start of a conversation that
+    // exists fails as well, so both attempts have failed.
+    const terminal = await server.openTerminal(claude.id);
+    await terminal.waitForOutput("claude-stub ready");
+    terminal.run("exit 3");
+
+    await terminal.waitForOutput(ERROR_HELD);
+    expect(terminal.output).toContain("is already in use");
+    expect((await sessionState(server, claude.id))?.status).toBe("running");
+    terminal.type("q");
+    await terminal.waitForEnded();
+    await untilStopped(server, claude.id);
+  });
+
+  it("refuses to restart in a Missing Workspace, as any Session does", async () => {
+    const { server, folder, workspace } = await boot();
+    const claude = await server.createClaudeSession(workspace.id);
+    const terminal = await server.openTerminal(claude.id);
+    await terminal.waitForOutput("claude-stub ready");
+    terminal.run("exit 0");
+    await untilStopped(server, claude.id);
+    rmSync(folder, { recursive: true });
+
+    const response = await server.post(`/api/sessions/${claude.id}/restart`);
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toContain(folder);
+    expect((await sessionState(server, claude.id))?.status).toBe("stopped");
   });
 
   it("is renamed, rings a Bell and is deleted like any Session", async () => {

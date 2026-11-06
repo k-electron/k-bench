@@ -163,7 +163,7 @@ export class Service {
         id,
         workspace.folder,
         launchOptions && conversationId !== undefined
-          ? { conversationId, options: launchOptions }
+          ? { conversationId, options: launchOptions, mode: "start" }
           : undefined,
       );
       try {
@@ -253,7 +253,8 @@ export class Service {
           ? undefined
           : {
               conversationId: session.conversationId,
-              // Every Option is passed again each time (ADR-0005).
+              mode: "resume",
+              // Every Launch option is passed again each time (ADR-0005).
               options: session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
             },
       ),

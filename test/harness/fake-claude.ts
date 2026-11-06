@@ -19,10 +19,16 @@ export function installFakeClaude(root: string): string {
   return program;
 }
 
-/** The arguments the fake Claude Code printed, in order, once it has started. */
+/**
+ * The arguments the fake Claude Code printed, in order, once it has started. A restart may
+ * try twice (resume, then a fresh start), and the screen shows both: this is the attempt
+ * that started, the last one.
+ */
 export async function fakeClaudeArgs(terminal: TerminalClient): Promise<string[]> {
   await terminal.waitForOutput("claude-stub ready");
-  return [...terminal.output.matchAll(/claude-stub arg: ([^\r\n]+)/g)].map(
+  const starts = terminal.output.split("claude-stub cwd:");
+  const last = starts[starts.length - 1] ?? "";
+  return [...last.matchAll(/claude-stub arg: ([^\r\n]+)/g)].map(
     (match) => match[1] as string,
   );
 }
