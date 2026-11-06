@@ -1,5 +1,6 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
+import type { LaunchOptions } from "../../src/shared/launch-options.ts";
 import { revisionOf } from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
@@ -8,7 +9,15 @@ export interface DirectoryListing {
   directories: Array<{ name: string; path: string }>;
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** The HTTP status the server answered with. */
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /**
  * What a change request answered: its body, and the state revision from which the events
@@ -24,7 +33,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const response = await fetch(path, init);
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok)
-    throw new ApiError(body.error ?? `Request failed (${response.status})`);
+    throw new ApiError(
+      body.error ?? `Request failed (${response.status})`,
+      response.status,
+    );
   return { value: body as T, revision: revisionOf(response.headers) };
 }
 
@@ -65,11 +77,17 @@ export const api = {
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
-  createSession: (workspaceId: string, name?: string) =>
+  /** The Launch options last used for a Claude Session; all Default if none has been. */
+  lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),
+  /** An ordinary shell Session, or with `claude` a Claude Session. */
+  createSession: (
+    workspaceId: string,
+    input: { name?: string; claude?: LaunchOptions } = {},
+  ) =>
     send<{ id: string; name: string }>(
       "POST",
       `/api/workspaces/${workspaceId}/sessions`,
-      { name },
+      input,
     ),
   renameSession: (sessionId: string, name: string) =>
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),

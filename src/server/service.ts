@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { State } from "../shared/state-protocol.ts";
+import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
@@ -122,15 +124,24 @@ export class Service {
    * One at a time: choosing the name and storing the Session are separated by starting
    * the shell, so overlapping creations would otherwise pick the same default name.
    */
-  createSession(workspaceId: string, requestedName?: string) {
+  createSession(
+    workspaceId: string,
+    requestedName?: string,
+    /** Makes it a Claude Session started with these Launch options. */
+    launchOptions?: LaunchOptions,
+  ) {
     const result = this.sessionCreations.then(() =>
-      this.createSessionNow(workspaceId, requestedName),
+      this.createSessionNow(workspaceId, requestedName, launchOptions),
     );
     this.sessionCreations = result.catch(() => undefined);
     return result;
   }
 
-  private async createSessionNow(workspaceId: string, requestedName?: string) {
+  private async createSessionNow(
+    workspaceId: string,
+    requestedName: string | undefined,
+    launchOptions: LaunchOptions | undefined,
+  ) {
     const workspace = this.store.getWorkspace(workspaceId);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
     if (!isDirectory(workspace.folder)) {
@@ -146,16 +157,35 @@ export class Service {
       throw new ServiceError("conflict", `A Session named "${name}" already exists`);
     }
     const id = randomUUID();
+    // k-bench chooses the Claude conversation's ID, so a restart can name it (ADR-0005).
+    const claude: ClaudeLaunch | undefined = launchOptions && {
+      conversationId: randomUUID(),
+      options: launchOptions,
+      mode: "start",
+    };
     await this.reconciler.whileStarting(id, async () => {
-      await this.tmux.createSession(id, workspace.folder);
+      await this.tmux.createSession(id, workspace.folder, claude);
       try {
-        this.store.addSession({ id, workspaceId, name });
+        this.store.addSession({
+          id,
+          workspaceId,
+          name,
+          conversationId: claude?.conversationId,
+          launchOptions: claude?.options,
+        });
       } catch (error) {
         await this.tmux.killSession(id);
         throw error;
       }
     });
+    // Remembered for the next New Claude dialog, on any device.
+    if (launchOptions) this.store.setLastLaunchOptions(launchOptions);
     return { id, name };
+  }
+
+  /** The Launch options last used for a Claude Session; all Default, Focus view off, if none. */
+  lastLaunchOptions(): LaunchOptions {
+    return this.store.getLastLaunchOptions() ?? DEFAULT_LAUNCH_OPTIONS;
   }
 
   renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
@@ -191,6 +221,7 @@ export class Service {
         sessions: this.store.listSessions(workspace.id).map((session) => ({
           id: session.id,
           name: session.name,
+          kind: session.kind,
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
         })),
@@ -199,7 +230,8 @@ export class Service {
   }
 
   /**
-   * Gives a Stopped Session a fresh shell in its Workspace folder, keeping its id and name.
+   * Gives a Stopped Session a fresh program in its Workspace folder, keeping its id and name:
+   * a shell, or Claude Code for a Claude Session.
    * A Session that is already running is left alone.
    */
   async restartSession(sessionId: string): Promise<{ id: string; name: string }> {
@@ -215,13 +247,29 @@ export class Service {
     return { id: session.id, name: session.name };
   }
 
-  private async startStopped(session: { id: string; folder: string }): Promise<void> {
+  private async startStopped(session: {
+    id: string;
+    folder: string;
+    conversationId: string | null;
+    launchOptions: LaunchOptions | null;
+  }): Promise<void> {
     if ((await this.tmux.listSessions()).some((live) => live.id === session.id)) return;
     if (!isDirectory(session.folder)) {
       throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
     }
     await this.reconciler.whileStarting(session.id, () =>
-      this.tmux.createSession(session.id, session.folder),
+      this.tmux.createSession(
+        session.id,
+        session.folder,
+        session.conversationId === null
+          ? undefined
+          : {
+              conversationId: session.conversationId,
+              mode: "resume",
+              // Every Launch option is passed again each time (ADR-0005).
+              options: session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
+            },
+      ),
     );
   }
 

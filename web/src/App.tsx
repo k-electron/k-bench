@@ -71,6 +71,13 @@ export function App() {
             panes.openInFocusedPane(id);
             setDrawerOpen(false);
           }}
+          onCreateClaudeSession={async (workspaceId, input) => {
+            // A refusal rejects, so the dialog can show it; it stays open.
+            const id = await actions.createClaudeSession(workspaceId, input);
+            if (id === undefined) return;
+            panes.openInFocusedPane(id);
+            setDrawerOpen(false);
+          }}
           error={error}
         />
         <main className="flex min-w-0 flex-1 flex-col">

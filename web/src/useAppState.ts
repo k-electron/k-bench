@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { LaunchOptions } from "../../src/shared/launch-options.ts";
 import { EVENTS_PATH, type State } from "../../src/shared/state-protocol.ts";
 import { ApiError, api, type Change } from "./api";
 import { createStateClient, type StateClient } from "./stateClient";
@@ -28,6 +29,15 @@ export interface Actions {
    * did not show in time.
    */
   createSession(workspaceId: string): Promise<string | undefined>;
+  /**
+   * Launches a Claude Session and resolves with its id once it is in state (undefined if it
+   * did not show in time). Its dialog shows why it was refused, so a refusal rejects with an
+   * `ApiError` instead of going in `error`.
+   */
+  createClaudeSession(
+    workspaceId: string,
+    input: { name?: string; claude: LaunchOptions },
+  ): Promise<string | undefined>;
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   restartSession(sessionId: string): Promise<void>;
@@ -105,6 +115,10 @@ export function useAppState(): {
           const change = await api.createSession(workspaceId);
           return (await whenShown(change)) ? change.value.id : undefined;
         }),
+      createClaudeSession: async (workspaceId, input) => {
+        const change = await api.createSession(workspaceId, input);
+        return (await whenShown(change)) ? change.value.id : undefined;
+      },
       renameSession: (sessionId, name) => act(api.renameSession(sessionId, name)),
       deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {

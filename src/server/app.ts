@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import type { LaunchOptions } from "../shared/launch-options.ts";
 import { REVISION_HEADER } from "../shared/state-protocol.ts";
+import { parseLaunchOptions } from "./claude.ts";
 import { DirectoryError, listDirectories } from "./directories.ts";
 import { type Service, ServiceError } from "./service.ts";
 import { mountStatic } from "./static.ts";
@@ -123,12 +125,22 @@ export function createApp(
 
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
+    // `claude` makes it a Claude Session; its Launch options are checked before anything starts.
+    let launchOptions: LaunchOptions | undefined;
+    if (body.claude !== undefined) {
+      const parsed = parseLaunchOptions(body.claude);
+      if ("error" in parsed) throw new ServiceError("invalid", parsed.error);
+      launchOptions = parsed.options;
+    }
     const session = await service.createSession(
       c.req.param("id"),
       optionalString(body.name),
+      launchOptions,
     );
     return c.json(session, 201);
   });
+
+  app.get("/api/claude/launch-options", (c) => c.json(service.lastLaunchOptions()));
 
   app.patch("/api/sessions/:id", async (c) => {
     const body = await jsonBody(c.req.raw);

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import type { LaunchOptions } from "../shared/launch-options.ts";
+import type { SessionKind } from "../shared/state-protocol.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
@@ -23,6 +25,24 @@ const MIGRATIONS: string[] = [
     UNIQUE (workspace_id, name)
   );
   `,
+  // A Session's kind (every row so far is a shell Session) and, for a Claude Session, the
+  // conversation ID k-bench generated for it.
+  `
+  ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shell';
+  ALTER TABLE sessions ADD COLUMN conversation_id TEXT;
+  `,
+  // A Claude Session's Launch options, as JSON, so a restart can pass them again.
+  `
+  ALTER TABLE sessions ADD COLUMN launch_options TEXT;
+  `,
+  // The Host's one record of the Launch options last used to create a Claude Session; the id
+  // check keeps it to one row.
+  `
+  CREATE TABLE claude_last_launch_options (
+    id      INTEGER PRIMARY KEY CHECK (id = 1),
+    options TEXT NOT NULL
+  );
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -35,6 +55,23 @@ export interface SessionRow {
   id: string;
   workspaceId: string;
   name: string;
+  kind: SessionKind;
+  /** The Claude conversation a Claude Session runs; null for a shell Session. */
+  conversationId: string | null;
+  /** The Launch options a Claude Session was created with; null for a shell Session. */
+  launchOptions: LaunchOptions | null;
+}
+
+/** A session row as SQLite returns it: the Launch options are still JSON text. */
+type RawSessionRow = Omit<SessionRow, "launchOptions"> & { launchOptions: string | null };
+
+function sessionRow<T extends RawSessionRow>(
+  raw: T,
+): Omit<T, "launchOptions"> & { launchOptions: LaunchOptions | null } {
+  return {
+    ...raw,
+    launchOptions: raw.launchOptions === null ? null : JSON.parse(raw.launchOptions),
+  };
 }
 
 export class Store {
@@ -123,21 +160,43 @@ export class Store {
   }
 
   listSessions(workspaceId: string): SessionRow[] {
-    return this.db
+    const rows = this.db
       .prepare(
-        `SELECT id, workspace_id AS workspaceId, name FROM sessions
-         WHERE workspace_id = ? ORDER BY created_at, rowid`,
+        `SELECT id, workspace_id AS workspaceId, name, kind,
+                conversation_id AS conversationId, launch_options AS launchOptions
+         FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid`,
       )
-      .all(workspaceId) as unknown as SessionRow[];
+      .all(workspaceId) as unknown as RawSessionRow[];
+    return rows.map(sessionRow);
   }
 
   getSession(id: string): (SessionRow & { folder: string }) | undefined {
-    return this.db
+    const row = this.db
       .prepare(
-        `SELECT s.id, s.workspace_id AS workspaceId, s.name, w.folder
+        `SELECT s.id, s.workspace_id AS workspaceId, s.name, s.kind,
+                s.conversation_id AS conversationId,
+                s.launch_options AS launchOptions, w.folder
          FROM sessions s JOIN workspaces w ON w.id = s.workspace_id WHERE s.id = ?`,
       )
-      .get(id) as unknown as (SessionRow & { folder: string }) | undefined;
+      .get(id) as unknown as (RawSessionRow & { folder: string }) | undefined;
+    return row && sessionRow(row);
+  }
+
+  /** The Launch options last used to create a Claude Session, if any has been created. */
+  getLastLaunchOptions(): LaunchOptions | undefined {
+    const row = this.db
+      .prepare("SELECT options FROM claude_last_launch_options WHERE id = 1")
+      .get() as { options: string } | undefined;
+    return row && JSON.parse(row.options);
+  }
+
+  setLastLaunchOptions(options: LaunchOptions): void {
+    this.db
+      .prepare(
+        `INSERT INTO claude_last_launch_options (id, options) VALUES (1, ?)
+         ON CONFLICT (id) DO UPDATE SET options = excluded.options`,
+      )
+      .run(JSON.stringify(options));
   }
 
   renameSession(id: string, name: string): void {
@@ -148,12 +207,40 @@ export class Store {
     this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
   }
 
-  addSession(input: { id: string; workspaceId: string; name: string }): SessionRow {
+  addSession(input: {
+    id: string;
+    workspaceId: string;
+    name: string;
+    /** Makes it a Claude Session running this conversation. */
+    conversationId?: string;
+    /** The Launch options of a Claude Session. */
+    launchOptions?: LaunchOptions;
+  }): SessionRow {
+    const conversationId = input.conversationId ?? null;
+    const launchOptions = conversationId === null ? null : (input.launchOptions ?? null);
+    const kind = conversationId === null ? "shell" : "claude";
     this.db
       .prepare(
-        "INSERT INTO sessions (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?)",
+        `INSERT INTO sessions
+           (id, workspace_id, name, created_at, kind, conversation_id, launch_options)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(input.id, input.workspaceId, input.name, Date.now());
-    return input;
+      .run(
+        input.id,
+        input.workspaceId,
+        input.name,
+        Date.now(),
+        kind,
+        conversationId,
+        launchOptions && JSON.stringify(launchOptions),
+      );
+    return {
+      id: input.id,
+      workspaceId: input.workspaceId,
+      name: input.name,
+      kind,
+      conversationId,
+      launchOptions,
+    };
   }
 }

@@ -6,8 +6,19 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Added
+
+- Claude Sessions: launch Claude Code from k-bench and resume it on restart.
+  - A Workspace's **+** is now a menu with **New shell** (as before) and **New Claude…**. The dialog takes an optional name, the Launch options and a Launch button, and the new Claude Session opens in the Focused Pane. The sidebar marks it with a small Claude glyph.
+  - The Launch options are Model (Default, Fable, Opus, Sonnet or Haiku), Effort (Default, Low, Medium, High, XHigh or Max), Advisor (Default, Off, Fable, Opus or Sonnet) and a Focus view checkbox. Default leaves a setting to your own Claude Code configuration, and Focus view applies to that launch only, without touching your Claude Code settings.
+  - The dialog opens with the Launch options you last launched with, on any device, because the Host remembers them. The name is never remembered, and before any Claude Session every option is Default and Focus view is off.
+  - A Claude Session runs Claude Code itself in the Workspace's folder, through your login shell, with no shell underneath. Quitting Claude Code makes the Session Stopped; if Claude Code exits with an error, the Session keeps the error on screen until you press a key.
+  - Restarting a Stopped Claude Session resumes its Claude conversation with the same Launch options, with no dialog. If you quit before sending a message there is nothing to resume, so it starts a fresh conversation with the same options instead.
+  - Existing Sessions stay shell Sessions, and typing `claude` in one still just runs a program: no glyph and no resume.
+
 ### Changed
 
+- The README and the guides now describe Claude Sessions: the New Claude dialog, Focus view, the Claude glyph and restart-to-resume, with screenshots of the dialog and the glyph.
 - The server's dependencies (`hono`, `@hono/node-server`, `ws` and `node-pty`) are now pinned to exact versions, so `npm i -g @k-electron/k-bench` and `k-bench install` run the versions k-bench was tested with instead of resolving newer ones on the day you install. Updated `@hono/node-server` to 2.1.6.
 
 ### Fixed

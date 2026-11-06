@@ -4,28 +4,36 @@ Open the URL that `k-bench install` printed. The sidebar lists your Workspaces a
 
 ## Workspaces and Sessions
 
-A **Workspace** is a named entry that points at a project folder on your Mac. A **Session** is a named, persistent shell inside a Workspace, started in that Workspace's folder.
+A **Workspace** is a named entry that points at a project folder on your Mac. A **Session** is a named, persistent program inside a Workspace, started in that Workspace's folder: your shell, or, for a **Claude Session**, Claude Code itself.
 
 **Create a Workspace.** Choose **New Workspace**, then paste the path of a project folder on your Mac or choose **Browse folders** to pick it. The name defaults to the folder's name; give it another one if you like. Several Workspaces may point at the same folder.
 
-**Create a Session.** Choose the **+** next to a Workspace's name. The new Session is called "session 1", "session 2" and so on, opens in the Focused Pane, and starts in the Workspace's folder.
+**Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the Focused Pane and starts in the Workspace's folder.
+
+- **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
+- **New Claude…** opens a dialog where you choose a name (optional), the model, the effort, the advisor and Focus view, then launches a Claude Session. It runs Claude Code itself, and the sidebar marks it with a small orange glyph. A blank name gives "session N" too. [Using k-bench with Claude Code](claude-code.md) explains the dialog.
+
+![The sidebar: shell Sessions, and Claude Sessions marked with a glyph](../images/claude-sidebar.png)
 
 **Manage them.** Each row has a **...** menu.
 
 - A Workspace's menu has **Rename**, **Change folder** and **Delete**. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace by its grip to reorder it (on a phone, press and hold first), and use the chevron to collapse it.
-- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. Deleting a Session ends its shell and everything running in it.
+- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
 
-A green dot next to a Session means its shell is running. A hollow dot means it is Stopped.
+A green dot next to a Session means its program is running. A hollow dot means it is Stopped.
 
-**Sessions keep running.** A Session is a shell on your Mac, not a page in your browser. Close the tab, lock your phone, lose your connection, or restart k-bench to update it: the Session carries on, and your tabs reconnect on their own (a "reconnecting..." badge shows while they do). You can open the same Session on several devices at once. The terminal then takes the size of the device you used most recently.
+**Sessions keep running.** A Session is a program running on your Mac, not a page in your browser. Close the tab, lock your phone, lose your connection, or restart k-bench to update it: the Session carries on, and your tabs reconnect on their own (a "reconnecting..." badge shows while they do). You can open the same Session on several devices at once. The terminal then takes the size of the device you used most recently.
 
 Every open tab shows changes at once, so a Session you create on your phone appears on your laptop without a reload.
 
 ## Stopped Sessions: logging out and restarting
 
-A Session is Stopped when its shell no longer exists. That happens when the shell exits (you type `exit`), and it happens when you log out of your Mac or restart it, because that ends every program in your login session, shells included.
+A Session is Stopped when its program no longer exists. That happens when the program exits (you type `exit` in a shell, or quit Claude Code in a Claude Session), and it happens when you log out of your Mac or restart it, because that ends every program in your login session.
 
-After a logout or a restart, k-bench comes back on its own when you log in again. Everything is still listed: every Workspace and every Session. The Sessions show Stopped, and you restart each one yourself: open its **...** menu and choose **Restart**. You get a fresh shell in the same folder, with the same name. What was running in the old shell is gone, so a dev server needs starting again and a Claude Code conversation needs resuming.
+After a logout or a restart, k-bench comes back on its own when you log in again. Everything is still listed: every Workspace and every Session. The Sessions show Stopped, and you restart each one yourself: open its **...** menu and choose **Restart**. The Session keeps its name and folder, and what it starts depends on its kind:
+
+- A shell Session gets a fresh shell. What was running in the old shell is gone, so a dev server needs starting again, and so does a Claude Code you started by hand: bring that conversation back with Claude Code's own `/resume`.
+- A Claude Session resumes its Claude conversation, with the same Launch options it was created with, and needs no `/resume`. See [Quitting, errors and restarting](claude-code.md#quitting-errors-and-restarting).
 
 Two things to know:
 
@@ -39,7 +47,7 @@ A Workspace is **Missing** when its folder no longer exists on your Mac, because
 What that means in practice:
 
 - Sessions that were already running in it keep running.
-- Starting a new Session, or restarting a Stopped one, fails and the sidebar says "Folder does not exist".
+- Starting a new Session, or restarting a Stopped one (a Claude Session too), fails and the sidebar says "Folder does not exist".
 - Every other Workspace and Session keeps working.
 
 To fix it, open the Workspace's **...** menu, choose **Change folder** and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
@@ -63,7 +71,7 @@ Your layout is remembered per browser, so your phone and your laptop can differ.
 
 ![A Bell on the "tests" Session in the sidebar](../images/bell.png)
 
-A Session raises a **Bell** when its shell rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
+A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
 
 To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first shows a Bell.
 
