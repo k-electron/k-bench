@@ -1,6 +1,9 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { type IDisposable, type IEvent, Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
+import type { SessionKind } from "../../../src/shared/state-protocol.ts";
+import { type MirroredField, mirrorTypedLine } from "../mirroredField";
+import { useSmartTypingChoice, useSmartTypingOffered } from "../smartTyping";
 import { createTerminalConnection } from "../terminalConnection";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 import { touchScrolls } from "../touchScroll";
@@ -115,17 +118,29 @@ function shiftDragSelects(element: HTMLElement): () => void {
  */
 export function TerminalView({
   sessionId,
+  kind,
   focused,
 }: {
   sessionId: string;
+  /** What the Session runs; it chooses the keyboard's settings for Smart typing. */
+  kind: SessionKind;
   /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
   focused: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const terminalRef = useRef<Terminal>(null);
+  // The same terminal, for what must run again when it is replaced (the Session changed).
+  const [terminal, setTerminal] = useState<Terminal | null>(null);
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
+  // Smart typing (ADR 0006): offered on an iPhone in the phone layout, and there on or off
+  // per Session. A change is applied at once, but the keyboard only reads the field's
+  // settings when it opens, and the switch is only reachable with the keyboard down.
+  const offered = useSmartTypingOffered();
+  const chosen = useSmartTypingChoice(sessionId);
+  const smartTyping = offered && chosen;
+  const typedLine = useRef<MirroredField>(null);
 
   useEffect(() => {
     if (focused) terminalRef.current?.focus();
@@ -134,10 +149,11 @@ export function TerminalView({
   // The phone's extra keys go to the terminal in the Focused Pane, as if typed.
   useEffect(() => {
     if (!focused) return;
-    return registerTerminal(
-      (data) => terminalRef.current?.input(data, true),
-      () => terminalRef.current?.blur(),
-    );
+    return registerTerminal({
+      send: (data) => terminalRef.current?.input(data, true),
+      blur: () => terminalRef.current?.blur(),
+      clearTypedLine: () => typedLine.current?.clear(),
+    });
   }, [focused]);
 
   useEffect(() => {
@@ -176,6 +192,7 @@ export function TerminalView({
       output: (bytes) => terminal.write(bytes),
       reconnecting: (on) => {
         setReconnecting(on);
+        typedLine.current?.clear(); // a fresh line for the keyboard
         if (!on) terminal.reset(); // tmux is about to redraw the whole screen
       },
     });
@@ -188,10 +205,12 @@ export function TerminalView({
     const observer = new ResizeObserver(() => fit.fit());
     observer.observe(element);
     terminalRef.current = terminal;
+    setTerminal(terminal);
     if (focusedRef.current) terminal.focus();
 
     return () => {
       terminalRef.current = null;
+      setTerminal(null);
       observer.disconnect();
       input.dispose();
       resized.dispose();
@@ -204,6 +223,18 @@ export function TerminalView({
       terminal.dispose();
     };
   }, [sessionId]);
+
+  // Smart typing takes over the terminal's hidden field; a new terminal (the Session
+  // changed) starts with a fresh one.
+  useEffect(() => {
+    if (!smartTyping || !terminal) return;
+    const mirror = mirrorTypedLine(terminal, kind);
+    typedLine.current = mirror ?? null;
+    return () => {
+      typedLine.current = null;
+      mirror?.dispose();
+    };
+  }, [terminal, kind, smartTyping]);
 
   return (
     <div className="relative h-full w-full">

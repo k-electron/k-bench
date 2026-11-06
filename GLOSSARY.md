@@ -60,6 +60,10 @@ _Avoid_: active pane, current pane
 On a phone, the keys a terminal needs that the on-screen keyboard lacks, such as Esc, Tab and Ctrl. They type into the Session in the Focused Pane. While the on-screen keyboard is up, only a few of them show, as a small overlay on the terminal.
 _Avoid_: shortcut bar, toolbar, key row, typing keys
 
+**Smart typing**:
+On an iPhone, letting the on-screen keyboard's own typing aids (autocorrect, suggestions, double-space for a period, hold to delete words) work while typing into a Session. It is on or off per Session, on for a new Session, and switched from the Extra keys.
+_Avoid_: autocorrect mode, IME mode, keyboard mode
+
 ## Running k-bench
 
 **Installed instance**:

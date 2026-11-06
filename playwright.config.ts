@@ -16,16 +16,23 @@ export default defineConfig({
   outputDir: "test-results",
   projects: [
     // A spec runs on the desktop project, except `phone.spec.ts`, which runs only on the
-    // phone project (a touch device narrower than the layout breakpoint).
+    // phone project (a touch device narrower than the layout breakpoint), and
+    // `smart-typing.spec.ts`, which runs only on the iPhone project.
     {
       name: "desktop",
-      testIgnore: /phone\.spec\.ts/,
+      testIgnore: /(phone|smart-typing)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
     {
       name: "phone",
       testMatch: /phone\.spec\.ts/,
       use: { ...devices["Pixel 7"] },
+    },
+    // An iPhone, on WebKit: Smart typing is offered only there (see `web/src/mirroredField.ts`).
+    {
+      name: "iphone",
+      testMatch: /smart-typing\.spec\.ts/,
+      use: { ...devices["iPhone 15"] },
     },
   ],
 });

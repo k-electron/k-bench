@@ -12,7 +12,7 @@ Then, in your checkout:
 
 ```sh
 pnpm install                              # once, and after pulling dependency changes
-pnpm exec playwright install chromium     # once: Playwright needs its browser
+pnpm exec playwright install chromium webkit   # once: Playwright needs its browsers
 ```
 
 `pnpm install` also restores the execute bit on node-pty's `spawn-helper` and turns on the git hooks in `.githooks`.
@@ -66,7 +66,7 @@ The `installed` preset is port 7680, tmux socket `k-bench` and the data folder `
 ## Checks and CI
 
 - Every commit runs Biome on the staged files and the typecheck (`.githooks/pre-commit`).
-- `pnpm check` is lint, typecheck and the Vitest suite (which builds and packs the package for the packed-command tests, so it needs the network, tmux, and `pnpm` and `npm` on PATH); `pnpm test:e2e` is the Playwright suite. Playwright needs its browser once: `pnpm exec playwright install chromium`.
+- `pnpm check` is lint, typecheck and the Vitest suite (which builds and packs the package for the packed-command tests, so it needs the network, tmux, and `pnpm` and `npm` on PATH); `pnpm test:e2e` is the Playwright suite. Playwright needs its browsers once: `pnpm exec playwright install chromium webkit`.
 - CI (`.github/workflows/ci.yml`, macOS) runs `pnpm check` and `pnpm test:e2e` on every push to `main` and every pull request.
 - OSV-Scanner (`.github/workflows/osv-scanner.yml`) scans `pnpm-lock.yaml` for known vulnerabilities. On a pull request it fails only if the PR introduces a vulnerability compared with its base; on every push to `main`, weekly and on manual runs it scans the whole lockfile and never fails. Findings from both appear under Security → Code scanning.
 - How to write tests, and what a good one is, is in [docs/testing.md](docs/testing.md). The harnesses are described in [Test seams](docs/internals/test-seams.md).

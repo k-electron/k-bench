@@ -1,5 +1,16 @@
-import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowUpIcon,
+  SpellCheckIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
+import {
+  setSmartTyping,
+  useSmartTypingChoice,
+  useSmartTypingOffered,
+} from "../smartTyping";
 import { KEYS, sendKey, toggleCtrl, useCtrlArmed } from "../terminalInput";
 import { Button } from "./ui/button";
 
@@ -19,7 +30,7 @@ function Key({
     <Button
       variant="secondary"
       aria-label={name}
-      className="h-10 min-w-0 flex-1 px-2"
+      className="h-10 min-w-0 flex-1 px-0"
       onMouseDown={keepFocus}
       onClick={() => sendKey(data)}
     >
@@ -30,10 +41,13 @@ function Key({
 
 /**
  * The keys a terminal needs and a phone keyboard lacks. Ctrl is one-shot: it applies to the
- * next key, whether tapped here or typed on the on-screen keyboard.
+ * next key, whether tapped here or typed on the on-screen keyboard. Where Smart typing is
+ * offered (an iPhone) the row ends with its switch for the Session shown.
  */
-export function ExtraKeys() {
+export function ExtraKeys({ sessionId }: { sessionId: string }) {
   const ctrl = useCtrlArmed();
+  const smartTypingOffered = useSmartTypingOffered();
+  const smartTyping = useSmartTypingChoice(sessionId);
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings form styling; this only names the row
@@ -43,18 +57,18 @@ export function ExtraKeys() {
       className="flex shrink-0 gap-1 border-t bg-card p-1"
     >
       <Key name="Esc" data={KEYS.esc}>
-        Esc
+        ⎋
       </Key>
       <Key name="Tab" data={KEYS.tab}>
-        Tab
+        ⇥
       </Key>
       <Key name="Shift Tab" data={KEYS.shiftTab}>
-        ⇧Tab
+        ⇤
       </Key>
       <Button
         variant={ctrl ? "default" : "secondary"}
         aria-pressed={ctrl}
-        className="h-10 min-w-0 flex-1 px-2"
+        className="h-10 min-w-0 flex-1 px-0"
         onMouseDown={keepFocus}
         onClick={toggleCtrl}
       >
@@ -72,6 +86,21 @@ export function ExtraKeys() {
       <Key name="Right" data={KEYS.right}>
         <ArrowRightIcon />
       </Key>
+      <Key name="Enter" data={KEYS.enter}>
+        ⏎
+      </Key>
+      {smartTypingOffered && (
+        <Button
+          variant={smartTyping ? "default" : "secondary"}
+          aria-label="Smart typing"
+          aria-pressed={smartTyping}
+          className="h-10 min-w-0 flex-1 px-0"
+          onMouseDown={keepFocus}
+          onClick={() => setSmartTyping(sessionId, !smartTyping)}
+        >
+          <SpellCheckIcon />
+        </Button>
+      )}
     </div>
   );
 }
