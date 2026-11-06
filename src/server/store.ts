@@ -23,6 +23,12 @@ const MIGRATIONS: string[] = [
     UNIQUE (workspace_id, name)
   );
   `,
+  // A Session's kind (every row so far is a shell Session) and, for a Claude Session, the
+  // conversation ID k-bench generated for it.
+  `
+  ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shell';
+  ALTER TABLE sessions ADD COLUMN conversation_id TEXT;
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -31,10 +37,14 @@ export interface WorkspaceRow {
   folder: string;
   position: number;
 }
+export type SessionKind = "shell" | "claude";
 export interface SessionRow {
   id: string;
   workspaceId: string;
   name: string;
+  kind: SessionKind;
+  /** The Claude conversation a Claude Session runs; null for a shell Session. */
+  conversationId: string | null;
 }
 
 export class Store {
@@ -125,7 +135,8 @@ export class Store {
   listSessions(workspaceId: string): SessionRow[] {
     return this.db
       .prepare(
-        `SELECT id, workspace_id AS workspaceId, name FROM sessions
+        `SELECT id, workspace_id AS workspaceId, name, kind,
+                conversation_id AS conversationId FROM sessions
          WHERE workspace_id = ? ORDER BY created_at, rowid`,
       )
       .all(workspaceId) as unknown as SessionRow[];
@@ -134,7 +145,8 @@ export class Store {
   getSession(id: string): (SessionRow & { folder: string }) | undefined {
     return this.db
       .prepare(
-        `SELECT s.id, s.workspace_id AS workspaceId, s.name, w.folder
+        `SELECT s.id, s.workspace_id AS workspaceId, s.name, s.kind,
+                s.conversation_id AS conversationId, w.folder
          FROM sessions s JOIN workspaces w ON w.id = s.workspace_id WHERE s.id = ?`,
       )
       .get(id) as unknown as (SessionRow & { folder: string }) | undefined;
@@ -148,12 +160,27 @@ export class Store {
     this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
   }
 
-  addSession(input: { id: string; workspaceId: string; name: string }): SessionRow {
+  addSession(input: {
+    id: string;
+    workspaceId: string;
+    name: string;
+    /** Makes it a Claude Session running this conversation. */
+    conversationId?: string;
+  }): SessionRow {
+    const conversationId = input.conversationId ?? null;
+    const kind = conversationId === null ? "shell" : "claude";
     this.db
       .prepare(
-        "INSERT INTO sessions (id, workspace_id, name, created_at) VALUES (?, ?, ?, ?)",
+        `INSERT INTO sessions (id, workspace_id, name, created_at, kind, conversation_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(input.id, input.workspaceId, input.name, Date.now());
-    return input;
+      .run(input.id, input.workspaceId, input.name, Date.now(), kind, conversationId);
+    return {
+      id: input.id,
+      workspaceId: input.workspaceId,
+      name: input.name,
+      kind,
+      conversationId,
+    };
   }
 }

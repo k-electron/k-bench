@@ -28,6 +28,15 @@ export interface Actions {
    * did not show in time.
    */
   createSession(workspaceId: string): Promise<string | undefined>;
+  /**
+   * Launches a Claude Session and resolves with its id once it is in state (undefined if it
+   * did not show in time). Its dialog shows why it was refused, so a refusal rejects with an
+   * `ApiError` instead of going in `error`.
+   */
+  createClaudeSession(
+    workspaceId: string,
+    input: { name?: string },
+  ): Promise<string | undefined>;
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   restartSession(sessionId: string): Promise<void>;
@@ -105,6 +114,10 @@ export function useAppState(): {
           const change = await api.createSession(workspaceId);
           return (await whenShown(change)) ? change.value.id : undefined;
         }),
+      createClaudeSession: async (workspaceId, input) => {
+        const change = await api.createSession(workspaceId, { ...input, claude: {} });
+        return (await whenShown(change)) ? change.value.id : undefined;
+      },
       renameSession: (sessionId, name) => act(api.renameSession(sessionId, name)),
       deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {

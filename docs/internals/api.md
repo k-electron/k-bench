@@ -3,10 +3,11 @@
 The API so far. Every request needs the login described in [Access](access.md).
 
 - `GET /api/health`: `{ "status": "ok" }`. What `k-bench status` asks; guarded like every other route (it needs the owner's login).
-- `GET /api/state`: Workspaces with their Sessions (`running` or `stopped`, and `bell`).
-- `POST /api/sessions/:id/restart`: starts a fresh shell for a Stopped Session in its Workspace folder, same id and name (a running Session is left alone; 422 when the folder is gone).
+- `GET /api/state`: Workspaces with their Sessions (`kind`, `"shell"` or `"claude"`; `running` or `stopped`; and `bell`). The Launch options and the conversation ID of a Claude Session are not in it.
+- `POST /api/sessions/:id/restart`: starts a Stopped Session again in its Workspace folder, same id and name: a fresh shell, or for a Claude Session Claude Code again (a running Session is left alone; 422 when the folder is gone).
 - `GET /api/directories?path=`: the subfolders of `path` (default: the configured picker root) for the folder picker; 422 if the path is not an existing absolute folder.
-- `POST /api/workspaces` `{folder, name?}`: the name defaults to the folder name, with a "(2)"-style suffix when taken; an explicit name that is taken gets 409, a missing folder 422. And `POST /api/workspaces/:id/sessions` `{name?}`.
+- `POST /api/workspaces` `{folder, name?}`: the name defaults to the folder name, with a "(2)"-style suffix when taken; an explicit name that is taken gets 409, a missing folder 422.
+- `POST /api/workspaces/:id/sessions` `{name?, claude?}`: creates a Session (201 `{id, name}`). Without `claude` it is a shell Session. With `claude` (an object; 422 otherwise) it is a Claude Session: k-bench generates its conversation ID and starts Claude Code in the Workspace folder through the owner's login shell with `--session-id <conversation ID>`. The Launch options inside `claude` are not read yet. Claude Code quitting with status 0 makes the Session Stopped; with another status the pane keeps the error on screen ("Claude Code exited with an error. Press any key to close.") until a key is pressed, then the Session is Stopped. A blank name gives "session N", a taken name 409, a Missing Workspace 422.
 - `PATCH /api/workspaces/:id` `{name?, folder?}`: rename and/or change the folder; 409 for a taken name, 422 for a blank name or a folder that does not exist (neither change is made if one is refused), 404 for an unknown Workspace.
 - `PUT /api/workspaces/order` `{ids}`: the full ordered list of Workspace ids (422 unless it is every Workspace exactly once).
 - `DELETE /api/workspaces/:id`: ends every Session's shell, then removes the Workspace (204). The folder on disk is never touched.

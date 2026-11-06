@@ -17,6 +17,7 @@ import {
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
 import { EventsClient } from "./events.ts";
+import { installFakeClaude } from "./fake-claude.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
 import { TerminalConnectionProbe } from "./terminal-connection.ts";
@@ -32,6 +33,8 @@ export interface SessionInfo {
   id: string;
   name: string;
 }
+/** The Launch options a Claude Session is created with (see docs/internals/api.md). */
+export type ClaudeLaunch = Record<string, unknown>;
 /** The header `tailscale serve` adds to every request it proxies. */
 export const LOGIN_HEADER = "Tailscale-User-Login";
 
@@ -141,6 +144,23 @@ export class TestServer {
     return (await response.json()) as SessionInfo;
   }
 
+  /** Creates a Claude Session (`claude` is its Launch options); fails unless it is created. */
+  async createClaudeSession(
+    workspaceId: string,
+    input: { name?: string; claude?: ClaudeLaunch } = {},
+  ): Promise<SessionInfo> {
+    const response = await this.post(`/api/workspaces/${workspaceId}/sessions`, {
+      claude: {},
+      ...input,
+    });
+    if (response.status !== 201) {
+      throw new Error(
+        `create Claude Session failed: ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as SessionInfo;
+  }
+
   /** Renames a Session. Returns the raw response so tests can check the status. */
   renameSession(sessionId: string, name: string): Promise<Response> {
     return this.request(`/api/sessions/${sessionId}`, {
@@ -226,6 +246,8 @@ export class TestInstance {
       port: 0,
       allowedLogin: "owner@example.com",
       pickerRoot: this.root,
+      // Never the real `claude`: the Claude Code boundary is a stub (test/harness/fake-claude.sh).
+      claudeProgram: installFakeClaude(this.root),
       ...overrides,
     };
   }

@@ -13,6 +13,11 @@ export interface InstanceConfig {
   allowedLogin: string;
   /** Folder the folder picker starts at. */
   pickerRoot: string;
+  /**
+   * The program a Claude Session runs as Claude Code: a name resolved through the owner's
+   * login shell, or a path. It exists so tests can point it at a stub; it is not a setting.
+   */
+  claudeProgram: string;
 }
 
 const PRESETS = {
@@ -58,5 +63,6 @@ export function resolveConfig(
     port: parsePort(env.K_BENCH_PORT) ?? preset.port,
     allowedLogin: env.K_BENCH_ALLOWED_LOGIN ?? "",
     pickerRoot: resolve(env.K_BENCH_PICKER_ROOT ?? homedir()),
+    claudeProgram: "claude",
   };
 }

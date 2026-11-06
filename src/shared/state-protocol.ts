@@ -11,6 +11,8 @@
 export interface SessionState {
   id: string;
   name: string;
+  /** What the Session runs: the owner's shell, or Claude Code (a Claude Session). */
+  kind: "shell" | "claude";
   status: "running" | "stopped";
   /** The Session's shell rang the terminal bell and nobody has seen it since. */
   bell: boolean;

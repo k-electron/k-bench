@@ -29,6 +29,10 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** The JSON HTTP API. */
 export function createApp(
   service: Service,
@@ -123,9 +127,14 @@ export function createApp(
 
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
+    // `claude` makes it a Claude Session. Its Launch options are not read yet.
+    if (body.claude !== undefined && !isObject(body.claude)) {
+      throw new ServiceError("invalid", "claude must be an object");
+    }
     const session = await service.createSession(
       c.req.param("id"),
       optionalString(body.name),
+      body.claude === undefined ? undefined : {},
     );
     return c.json(session, 201);
   });

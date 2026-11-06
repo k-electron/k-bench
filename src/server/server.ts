@@ -34,7 +34,7 @@ export async function startServer(
   options: ServerOptions = {},
 ): Promise<RunningServer> {
   const store = new Store(config.dataDir);
-  const tmux = new TmuxDriver(config.tmuxSocket);
+  const tmux = new TmuxDriver(config.tmuxSocket, config.claudeProgram);
   const service = new Service(store, tmux);
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();

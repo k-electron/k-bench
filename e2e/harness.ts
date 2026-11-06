@@ -257,10 +257,61 @@ export class AppPage {
     await mouse.up();
   }
 
-  async createSession(workspaceName: string): Promise<void> {
+  /** Opens the **+** menu on a Workspace's row; it offers New shell and New Claude…. */
+  async openNewSessionMenu(workspaceName: string): Promise<void> {
     await this.sidebar
-      .getByRole("button", { name: `New session in ${workspaceName}` })
+      .getByRole("button", { name: `New session in ${workspaceName}`, exact: true })
       .click();
+  }
+
+  /** The **+** menu's entries, once it is open. */
+  get newSessionMenuItems(): Locator {
+    return this.page.getByRole("menuitem");
+  }
+
+  /** Creates an ordinary shell Session from the **+** menu. */
+  async createSession(workspaceName: string): Promise<void> {
+    await this.openNewSessionMenu(workspaceName);
+    await this.page.getByRole("menuitem", { name: "New shell", exact: true }).click();
+  }
+
+  /** The New Claude dialog, once **New Claude…** was picked. */
+  get claudeDialog(): Locator {
+    return this.page.getByRole("dialog", { name: "New Claude Session" });
+  }
+
+  /** Opens the New Claude dialog from the **+** menu. */
+  async openClaudeDialog(workspaceName: string): Promise<void> {
+    await this.openNewSessionMenu(workspaceName);
+    await this.page.getByRole("menuitem", { name: "New Claude…", exact: true }).click();
+    await expect(this.claudeDialog).toBeVisible();
+  }
+
+  /** Fills in the open New Claude dialog (the name is optional) and presses Launch. */
+  async launchClaude(options: { name?: string } = {}): Promise<void> {
+    if (options.name !== undefined) {
+      await this.claudeDialog
+        .getByRole("textbox", { name: "Session name" })
+        .fill(options.name);
+    }
+    await this.claudeDialog.getByRole("button", { name: "Launch", exact: true }).click();
+  }
+
+  /** Launches a Claude Session in the Workspace from the **+** menu and the dialog. */
+  async createClaudeSession(
+    workspaceName: string,
+    options: { name?: string } = {},
+  ): Promise<void> {
+    await this.openClaudeDialog(workspaceName);
+    await this.launchClaude(options);
+  }
+
+  /** The Claude glyph on a Session's row; present on Claude Sessions only. */
+  claudeGlyph(sessionName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${sessionName} is a Claude Session`,
+      exact: true,
+    });
   }
 
   /**

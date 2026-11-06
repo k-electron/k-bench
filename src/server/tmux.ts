@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
+import { type ClaudeLaunch, claudeCommand } from "./claude.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -132,8 +133,12 @@ export class TmuxDriver {
   /** Bell watches, which a new tmux server must wake (see `watchBells`). */
   private readonly bellWatches = new Set<BellWatcher>();
 
-  constructor(socket: string) {
+  /** The program a Claude Session runs (`InstanceConfig.claudeProgram`). */
+  private readonly claudeProgram: string;
+
+  constructor(socket: string, claudeProgram = "claude") {
     this.socket = socket;
+    this.claudeProgram = claudeProgram;
   }
 
   private env(): NodeJS.ProcessEnv {
@@ -156,8 +161,19 @@ export class TmuxDriver {
     return stdout;
   }
 
-  /** Starts a shell for the Session in `folder`, configuring the tmux server as needed. */
-  async createSession(id: string, folder: string): Promise<void> {
+  /**
+   * Starts the Session in `folder`, configuring the tmux server as needed: the owner's shell,
+   * or, given `claude`, Claude Code.
+   */
+  async createSession(id: string, folder: string, claude?: ClaudeLaunch): Promise<void> {
+    const command = claude
+      ? claudeCommand({
+          folder,
+          shell: ownerShell(),
+          program: this.claudeProgram,
+          launch: claude,
+        })
+      : sessionCommand(folder);
     await this.run(...serverConfiguration(), [
       "new-session",
       "-d",
@@ -166,7 +182,7 @@ export class TmuxDriver {
       "-c",
       folder,
       "--",
-      ...sessionCommand(folder),
+      ...command,
     ]);
     // This may have started the tmux server, which a Bell watch idles without.
     for (const watch of this.bellWatches) watch.serverStarted();

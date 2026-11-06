@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
 import { BellBadge } from "./BellBadge";
+import { ClaudeGlyph } from "./ClaudeGlyph";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
 import { Button } from "./ui/button";
@@ -69,6 +70,10 @@ export function SessionRow({
         <TerminalIcon />
         <span className="truncate">{session.name}</span>
       </Button>
+      {/* Beside the row's button, not inside it, so it stays out of the button's name. */}
+      {session.kind === "claude" && (
+        <ClaudeGlyph label={`${session.name} is a Claude Session`} />
+      )}
       {session.bell && <BellBadge label={`${session.name} rang the bell`} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

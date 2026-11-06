@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Added
+
+- Claude Sessions: a Workspace's **+** is now a menu with **New shell** (as before) and **New Claude…**, which opens a dialog with an optional name and a Launch button. A Claude Session runs Claude Code itself in the Workspace's folder, through your login shell, and opens in the Focused Pane. The sidebar marks it with a small Claude glyph. Quitting Claude Code makes the Session Stopped; if Claude Code exits with an error, the Session keeps the error on screen until you press a key.
+
 ### Changed
 
 - The server's dependencies (`hono`, `@hono/node-server`, `ws` and `node-pty`) are now pinned to exact versions, so `npm i -g @k-electron/k-bench` and `k-bench install` run the versions k-bench was tested with instead of resolving newer ones on the day you install. Updated `@hono/node-server` to 2.1.6.

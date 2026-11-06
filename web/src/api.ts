@@ -65,11 +65,12 @@ export const api = {
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
-  createSession: (workspaceId: string, name?: string) =>
+  /** An ordinary shell Session, or with `claude` a Claude Session. */
+  createSession: (workspaceId: string, input: { name?: string; claude?: object } = {}) =>
     send<{ id: string; name: string }>(
       "POST",
       `/api/workspaces/${workspaceId}/sessions`,
-      { name },
+      input,
     ),
   renameSession: (sessionId: string, name: string) =>
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),

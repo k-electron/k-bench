@@ -19,6 +19,7 @@ import { useActions } from "@/useAppState";
 import type { State, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
+import { NewClaudeDialog } from "./NewClaudeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { SessionRow } from "./SessionRow";
 import { WorkspaceRow } from "./WorkspaceRow";
@@ -31,6 +32,8 @@ interface SidebarProps {
   onOpenInOtherPane: (sessionId: string) => void;
   /** Creates a Session and opens it. */
   onCreateSession: (workspaceId: string) => Promise<void>;
+  /** Launches a Claude Session and opens it; rejects with the server's refusal. */
+  onCreateClaudeSession: (workspaceId: string, input: { name: string }) => Promise<void>;
   /** Why the last Session create or restart was refused, if it was. */
   error?: string;
   /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */
@@ -47,10 +50,12 @@ export function Sidebar({
   onOpen,
   onOpenInOtherPane,
   onCreateSession,
+  onCreateClaudeSession,
   error,
   className,
 }: SidebarProps) {
   const actions = useActions();
+  const [launching, setLaunching] = useState<WorkspaceState>();
   const [dialog, setDialog] = useState<{
     workspace: WorkspaceState;
     action: WorkspaceEdit | "delete";
@@ -93,6 +98,7 @@ export function Sidebar({
                 key={workspace.id}
                 workspace={workspace}
                 onCreateSession={() => void onCreateSession(workspace.id)}
+                onCreateClaude={() => setLaunching(workspace)}
                 onAction={(action) => setDialog({ workspace, action })}
               >
                 <ul>
@@ -112,6 +118,13 @@ export function Sidebar({
           </ul>
         </SortableContext>
       </DndContext>
+      {launching && (
+        <NewClaudeDialog
+          workspace={launching}
+          onLaunch={(input) => onCreateClaudeSession(launching.id, input)}
+          onClose={() => setLaunching(undefined)}
+        />
+      )}
       {dialog && dialog.action !== "delete" && (
         <EditWorkspaceDialog
           workspace={dialog.workspace}
