@@ -66,6 +66,8 @@ export const api = {
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
+  /** The Launch options last used for a Claude Session; all Default if none has been. */
+  lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),
   /** An ordinary shell Session, or with `claude` a Claude Session. */
   createSession: (
     workspaceId: string,

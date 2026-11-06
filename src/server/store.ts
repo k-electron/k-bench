@@ -34,6 +34,14 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE sessions ADD COLUMN launch_options TEXT;
   `,
+  // The Host's one record of the Launch options last used to create a Claude Session; the id
+  // check keeps it to one row.
+  `
+  CREATE TABLE claude_last_launch_options (
+    id      INTEGER PRIMARY KEY CHECK (id = 1),
+    options TEXT NOT NULL
+  );
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -172,6 +180,23 @@ export class Store {
       )
       .get(id) as unknown as (RawSessionRow & { folder: string }) | undefined;
     return row && sessionRow(row);
+  }
+
+  /** The Launch options last used to create a Claude Session, if any has been created. */
+  getLastLaunchOptions(): LaunchOptions | undefined {
+    const row = this.db
+      .prepare("SELECT options FROM claude_last_launch_options WHERE id = 1")
+      .get() as { options: string } | undefined;
+    return row && JSON.parse(row.options);
+  }
+
+  setLastLaunchOptions(options: LaunchOptions): void {
+    this.db
+      .prepare(
+        `INSERT INTO claude_last_launch_options (id, options) VALUES (1, ?)
+         ON CONFLICT (id) DO UPDATE SET options = excluded.options`,
+      )
+      .run(JSON.stringify(options));
   }
 
   renameSession(id: string, name: string): void {

@@ -173,7 +173,14 @@ export class Service {
         throw error;
       }
     });
+    // Remembered for the next New Claude dialog, on any device.
+    if (launchOptions) this.store.setLastLaunchOptions(launchOptions);
     return { id, name };
+  }
+
+  /** The Launch options last used for a Claude Session; all Default, Focus view off, if none. */
+  lastLaunchOptions(): LaunchOptions {
+    return this.store.getLastLaunchOptions() ?? DEFAULT_LAUNCH_OPTIONS;
   }
 
   renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
