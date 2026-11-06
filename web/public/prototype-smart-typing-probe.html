@@ -159,7 +159,7 @@
       };
 
       function show(value) {
-        return JSON.stringify(value).replace(/\\u200b/g, "·");
+        return JSON.stringify(value).replace(/\u200b/g, "·");
       }
 
       /** Wires a field so every event it gets is logged into `test.log` and shown. */
