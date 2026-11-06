@@ -1,6 +1,6 @@
 # The Bell
 
-A Session raises a Bell when its shell rings the terminal bell, whether or not any browser is attached. It shows as a badge on the Session row, and as a hint on a collapsed Workspace (the chevron by a Workspace name collapses it). Viewing the Session clears it, and viewing means a terminal attached to it: opening the Session in a Pane, or a Pane's terminal reconnecting. The front end has no Bell logic of its own.
+A Session raises a Bell when its program rings the terminal bell, whether or not any browser is attached. It shows as a badge on the Session row, and as a hint on a collapsed Workspace (the chevron by a Workspace name collapses it). Viewing the Session clears it, and viewing means a terminal attached to it: opening the Session in a Pane, or a Pane's terminal reconnecting. The front end has no Bell logic of its own.
 
 ## Mechanism
 
@@ -24,4 +24,4 @@ Both also signal the tmux `wait-for` channel `kb-bell-changed`. The server keeps
 
 ## The events socket's poll
 
-The events socket's 400ms poll runs `getState()` (one `tmux list-sessions`, a `stat` per Workspace, the orphan check) only while some browser is subscribed. That is a deliberate cost of noticing shells that exit, which nothing announces; it is cheap at this scale and has not been tuned.
+The events socket's 400ms poll runs `getState()` (one `tmux list-sessions`, a `stat` per Workspace, the orphan check) only while some browser is subscribed. That is a deliberate cost of noticing programs that exit, which nothing announces; it is cheap at this scale and has not been tuned.
