@@ -9,6 +9,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 ### Added
 
 - Smart typing on iPhone: in the phone layout, the on-screen keyboard's typing aids now work when typing into a Session: autocorrect, tapping a suggestion to swap a word, swipe typing, automatic spacing, double-space for a period and hold to delete. Whatever the keyboard changes reaches the program as Backspaces followed by the new text, so Claude Code's `/` menu and your shell's Tab completion keep working, and nothing new takes room on screen. Curly quotes, long dashes and non-breaking spaces arrive as plain `'`, `"`, `--` and spaces. Shell Sessions get suggestions but no automatic word replacement or capitals (so `ls` stays `ls`); Claude Sessions get all the keyboard's aids. Holding ⌫ keeps deleting, and speeds up, past what you typed, so you can delete text the program put on the line (a Tab-completed path, a recalled command), and a spacebar-drag caret move leaves typing working. Desktop and Android are unchanged.
+- A **Smart typing** switch, the last key of the phone's Extra keys row on iPhone, turns Smart typing on or off for the Session you are in. Every new Session starts with it on; turn it off for a Session running vim or less to get plain terminal typing back. Each Session's choice is remembered on that phone and forgotten when the Session is deleted. It takes effect the next time the keyboard opens.
 
 ### Changed
 

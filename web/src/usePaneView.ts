@@ -11,6 +11,7 @@ import {
   togglePaneCount,
   useLayout,
 } from "./layout";
+import { forgetSmartTypingOfMissing } from "./smartTyping";
 
 /** What a visible Pane shows. */
 export type PaneContent =
@@ -71,6 +72,7 @@ export function usePaneView(state: State | undefined, phone: boolean): PaneViewM
       id === null ? notice : gone(id);
     setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
     update((l) => forgetMissingSessions(l, existing));
+    forgetSmartTypingOfMissing(existing);
   }, [state, a, b, update]);
 
   // On a phone the one Pane is the saved Focused Pane, wherever it sits in the saved layout.

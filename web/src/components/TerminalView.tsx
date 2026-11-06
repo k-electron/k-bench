@@ -2,11 +2,11 @@ import { FitAddon } from "@xterm/addon-fit";
 import { type IDisposable, type IEvent, Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import type { SessionKind } from "../../../src/shared/state-protocol.ts";
-import { isIPhone, type MirroredField, mirrorTypedLine } from "../mirroredField";
+import { type MirroredField, mirrorTypedLine } from "../mirroredField";
+import { useSmartTypingChoice, useSmartTypingOffered } from "../smartTyping";
 import { createTerminalConnection } from "../terminalConnection";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 import { touchScrolls } from "../touchScroll";
-import { useIsPhone } from "../useIsPhone";
 import { wheelReports } from "../wheelReports";
 
 /** The terminal WebSocket URL for a path from `terminalPath`. */
@@ -134,8 +134,12 @@ export function TerminalView({
   const [terminal, setTerminal] = useState<Terminal | null>(null);
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
-  // Smart typing (ADR 0006) is on for every Session on an iPhone in the phone layout.
-  const smartTyping = useIsPhone() && isIPhone();
+  // Smart typing (ADR 0006): offered on an iPhone in the phone layout, and there on or off
+  // per Session. A change is applied at once, but the keyboard only reads the field's
+  // settings when it opens, and the switch is only reachable with the keyboard down.
+  const offered = useSmartTypingOffered();
+  const chosen = useSmartTypingChoice(sessionId);
+  const smartTyping = offered && chosen;
   const typedLine = useRef<MirroredField>(null);
 
   useEffect(() => {
