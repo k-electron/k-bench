@@ -1,0 +1,417 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Lives only on the prototype/smart-typing-probe branch.
+  Answers the device questions behind Smart typing (Q14) before the implementation issues
+  are written. Open it on the iPhone at /prototype-smart-typing-probe.html.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+    <title>Smart typing probe</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --card: #181b21;
+        --line: #2a2f38;
+        --text: #e6e8eb;
+        --muted: #9aa1ab;
+        --accent: #7aa2f7;
+        --good: #9ece6a;
+        --bad: #f7768e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.45 -apple-system, system-ui, sans-serif;
+        padding: 12px 16px 120px;
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p { margin: 6px 0; }
+      .muted { color: var(--muted); font-size: 13px; }
+      nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+      button {
+        font: inherit;
+        color: var(--text);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      button.on { background: var(--accent); color: #111; border-color: var(--accent); }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; }
+      ol { padding-left: 20px; margin: 6px 0; }
+      textarea.visible {
+        width: 100%;
+        height: 64px;
+        font: 16px ui-monospace, Menlo, monospace;
+        background: #000;
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px;
+      }
+      .fake-terminal {
+        position: relative;
+        height: 90px;
+        background: #000;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font: 14px ui-monospace, Menlo, monospace;
+        padding: 6px;
+        overflow: hidden;
+      }
+      /* Shaped like xterm.js's helper textarea: invisible, tiny, over the terminal. */
+      .fake-terminal textarea {
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        resize: none;
+        white-space: nowrap;
+        overflow: hidden;
+        padding: 0;
+        border: 0;
+      }
+      .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+      .state { font: 12px ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
+      .log {
+        font: 11px ui-monospace, Menlo, monospace;
+        white-space: pre;
+        overflow-x: auto;
+        max-height: 180px;
+        overflow-y: auto;
+        background: #000;
+        border-radius: 6px;
+        padding: 6px;
+        color: var(--muted);
+      }
+      .answer { color: var(--good); }
+      #copybar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+        background: var(--card);
+        border-top: 1px solid var(--line);
+        display: flex;
+        gap: 8px;
+      }
+      nav button { flex: 1 0 auto; }
+      #copybar button { flex: 1; }
+      #dump { width: 100%; height: 120px; font: 11px ui-monospace, monospace; display: none; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Smart typing probe (prototype)</h1>
+    <p class="muted">
+      A throwaway page that checks how the iPhone keyboard behaves in the kind of hidden field
+      Smart typing will use. Work through the tabs in order, using the iPhone's own keyboard,
+      then tap <b>Copy results</b> and paste them into the chat with Claude.
+    </p>
+
+    <nav id="tabs"></nav>
+    <main id="panel"></main>
+    <textarea id="dump" readonly></textarea>
+
+    <div id="copybar">
+      <button type="button" id="copy">Copy results</button>
+      <button type="button" id="clear">Start over</button>
+    </div>
+
+    <!-- The liftable part: what the Session would receive for a change to the field. -->
+    <script>
+      const PLAIN = {
+        "‘": "'",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "—": "--",
+        "–": "-",
+        "…": "...",
+      };
+      /** The field's text as the Session should get it: plain quotes and dashes. */
+      function plain(text) {
+        return text.replace(/[‘’“”—–…]/g, (c) => PLAIN[c]);
+      }
+      /** The edit that turns `before` into `after`: deletes from the end, then new text. */
+      function sessionEdit(before, after) {
+        const a = plain(before);
+        const b = plain(after);
+        let same = 0;
+        while (same < a.length && same < b.length && a[same] === b[same]) same++;
+        return { backspaces: a.length - same, text: b.slice(same) };
+      }
+    </script>
+
+    <script>
+      const results = {
+        when: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        homeScreenApp: navigator.standalone === true,
+        viewport: `${innerWidth}x${innerHeight}`,
+        tests: {},
+      };
+
+      function show(value) {
+        return JSON.stringify(value).replace(/\\u200b/g, "·");
+      }
+
+      /** Wires a field so every event it gets is logged into `test.log` and shown. */
+      function probe(field, test, render) {
+        const t0 = performance.now();
+        const at = () => Math.round(performance.now() - t0);
+        const log = (entry) => {
+          test.log.push({ t: at(), ...entry, value: field.value, sel: [field.selectionStart, field.selectionEnd] });
+          if (test.log.length > 400) test.log.shift();
+          render();
+        };
+        field.addEventListener("keydown", (e) =>
+          log({ ev: "keydown", key: e.key, code: e.keyCode, repeat: e.repeat }),
+        );
+        field.addEventListener("keyup", (e) => log({ ev: "keyup", key: e.key, code: e.keyCode }));
+        field.addEventListener("beforeinput", (e) =>
+          log({ ev: "beforeinput", type: e.inputType, data: e.data }),
+        );
+        field.addEventListener("input", (e) => {
+          const edit = sessionEdit(test.last ?? "", field.value);
+          test.last = field.value;
+          log({ ev: "input", type: e.inputType, data: e.data, send: edit });
+        });
+        field.addEventListener("compositionstart", (e) => log({ ev: "compositionstart", data: e.data }));
+        field.addEventListener("compositionend", (e) => log({ ev: "compositionend", data: e.data }));
+        field.addEventListener("selectionchange", () => log({ ev: "selectionchange(field)" }));
+        document.addEventListener("selectionchange", () => {
+          if (document.activeElement === field) log({ ev: "selectionchange(document)" });
+        });
+        return log;
+      }
+
+      function logText(test) {
+        return test.log
+          .map((e) => {
+            const { t, ev, value, sel, ...rest } = e;
+            return `${String(t).padStart(6)} ${ev} ${show(rest)} value=${show(value)} sel=${sel}`;
+          })
+          .join("\n");
+      }
+
+      const TESTS = [
+        {
+          id: "emptyBackspace",
+          title: "1 Delete when empty",
+          attrs: { autocorrect: "on", autocapitalize: "none", spellcheck: "true" },
+          steps: [
+            "Tap the field. It is empty.",
+            "Tap ⌫ three times, slowly.",
+            "Then hold ⌫ down for about three seconds and let go.",
+          ],
+          question: "Did anything at all seem to happen?",
+          options: ["Nothing visible", "Something odd"],
+          summary: (test) => {
+            const downs = test.log.filter((e) => e.ev === "keydown" && e.key === "Backspace");
+            return `Backspace keydowns: ${downs.length}, of which repeats: ${downs.filter((e) => e.repeat).length}. Input events: ${test.log.filter((e) => e.ev === "input").length}.`;
+          },
+        },
+        {
+          id: "shellField",
+          title: "2 Shell settings",
+          attrs: { autocorrect: "off", autocapitalize: "none", spellcheck: "true" },
+          steps: [
+            "This field has the shell settings: no automatic replacement, no capitals.",
+            "Type hello and then tap space twice quickly.",
+            "Type teh and watch the bar above the keyboard, then tap space.",
+            "Type wor and look at the bar again.",
+          ],
+          question: "What did the bar above the keyboard show while typing wor?",
+          options: ["Word suggestions", "Only the typed word / spelling", "No bar"],
+          summary: (test) =>
+            `Field now: ${show(test.last ?? "")}. Double-space period: ${/hello\. /.test(test.last ?? "") ? "yes" : "no"}. teh replaced: ${/\bthe\b/.test(test.last ?? "") ? "yes" : "no"}.`,
+        },
+        {
+          id: "claudeField",
+          title: "3 Claude settings",
+          attrs: { autocorrect: "on", autocapitalize: "sentences", spellcheck: "true" },
+          steps: [
+            "This field has the Claude settings: replacement and sentence capitals on.",
+            "Type teh and tap return (on the keyboard, not a button).",
+            "Type it's \"quoted\" -- fine and tap space.",
+            "Hold ⌫ until most of the text has gone, then let go.",
+          ],
+          question: "Did hold-to-delete speed up to whole words?",
+          options: ["Yes, whole words", "No, letter by letter"],
+          summary: (test) => {
+            const kinds = [...new Set(test.log.filter((e) => e.ev === "input").map((e) => e.type))];
+            return `Input kinds seen: ${kinds.join(", ")}.`;
+          },
+        },
+        {
+          id: "hiddenCaret",
+          title: "4 Hidden field caret",
+          hidden: true,
+          attrs: { autocorrect: "on", autocapitalize: "none", spellcheck: "true" },
+          steps: [
+            "Tap the black box. An invisible field shaped like the terminal's takes the keyboard; the box shows what it holds.",
+            "Type one two three.",
+            "Press and hold the space bar, drag left a few letters, and let go.",
+            "Type X.",
+          ],
+          question: "Did the space bar turn into a trackpad?",
+          options: ["Yes", "No"],
+          summary: (test) => {
+            const moves = test.log.filter((e) => e.ev.startsWith("selectionchange"));
+            return `Selection changes: on field ${moves.filter((e) => e.ev.includes("field")).length}, on document ${moves.filter((e) => e.ev.includes("document")).length}. Field now: ${show(test.last ?? "")}.`;
+          },
+        },
+        {
+          id: "scriptReset",
+          title: "5 Reset from script",
+          attrs: { autocorrect: "on", autocapitalize: "none", spellcheck: "true" },
+          resets: true,
+          steps: [
+            "Tap the field and type hello wor (no space at the end).",
+            "Tap Reset to empty below. The keyboard should stay up. Then type ld and a space.",
+            "Type more words, then tap Reset to filler. The field now holds two invisible filler characters.",
+            "Type teh and a space, then hold ⌫ until nothing visible is left and keep holding a second.",
+          ],
+          question: "Did old text ever come back, or did words get mangled?",
+          options: ["All looked right", "Old text came back", "Something else odd"],
+          summary: (test) => `Field now: ${show(test.last ?? "")}.`,
+        },
+      ];
+
+      let current = 0;
+      const tabs = document.getElementById("tabs");
+      const panel = document.getElementById("panel");
+
+      function renderTabs() {
+        tabs.replaceChildren(
+          ...TESTS.map((spec, i) => {
+            const b = document.createElement("button");
+            b.textContent = spec.title + (results.tests[spec.id]?.answer ? " ✓" : "");
+            if (i === current) b.className = "on";
+            b.onclick = () => {
+              current = i;
+              renderTabs();
+              renderPanel();
+            };
+            return b;
+          }),
+        );
+      }
+
+      function renderPanel() {
+        const spec = TESTS[current];
+        if (!results.tests[spec.id]) results.tests[spec.id] = { attrs: spec.attrs, log: [], last: "" };
+        const test = results.tests[spec.id];
+        panel.innerHTML = `
+          <div class="card">
+            <ol>${spec.steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+          </div>
+          <div class="card" id="fieldHost"></div>
+          <div class="card">
+            <div class="state" id="summary"></div>
+          </div>
+          <div class="card">
+            <p>${spec.question}</p>
+            <div class="row" id="answers"></div>
+            <p class="answer" id="answer"></p>
+          </div>
+          <div class="log" id="log"></div>`;
+
+        const field = document.createElement("textarea");
+        for (const [k, v] of Object.entries(spec.attrs)) field.setAttribute(k, v);
+        field.value = test.last;
+        const host = panel.querySelector("#fieldHost");
+        let mirror;
+        if (spec.hidden) {
+          const box = document.createElement("div");
+          box.className = "fake-terminal";
+          mirror = document.createElement("div");
+          mirror.className = "state";
+          box.append(mirror, field);
+          box.addEventListener("click", () => field.focus());
+          host.append(box);
+        } else {
+          field.className = "visible";
+          host.append(field);
+        }
+        if (spec.resets) {
+          const row = document.createElement("div");
+          row.className = "row";
+          const reset = (label, value) => {
+            const b = document.createElement("button");
+            b.textContent = label;
+            b.addEventListener("mousedown", (e) => e.preventDefault()); // keep the keyboard up
+            b.addEventListener("touchstart", () => {}, { passive: true });
+            b.onclick = () => {
+              field.value = "";
+              field.value = value;
+              field.setSelectionRange(value.length, value.length);
+              test.last = value;
+              log({ ev: `script set ${show(value)}` });
+            };
+            return b;
+          };
+          row.append(reset("Reset to empty", ""), reset("Reset to filler", "​​"));
+          host.append(row);
+        }
+
+        const render = () => {
+          panel.querySelector("#summary").textContent = spec.summary(test);
+          panel.querySelector("#log").textContent = logText(test);
+          panel.querySelector("#log").scrollTop = 1e9;
+          if (mirror) mirror.textContent = `${field.value}▏`;
+        };
+        const log = probe(field, test, render);
+
+        panel.querySelector("#answers").replaceChildren(
+          ...spec.options.map((option) => {
+            const b = document.createElement("button");
+            b.textContent = option;
+            b.onclick = () => {
+              test.answer = option;
+              panel.querySelector("#answer").textContent = `You said: ${option}`;
+              renderTabs();
+            };
+            return b;
+          }),
+        );
+        if (test.answer) panel.querySelector("#answer").textContent = `You said: ${test.answer}`;
+        render();
+      }
+
+      document.getElementById("copy").onclick = async () => {
+        for (const spec of TESTS) {
+          const test = results.tests[spec.id];
+          if (test) test.summary = spec.summary(test);
+        }
+        const text = JSON.stringify(results);
+        const dump = document.getElementById("dump");
+        try {
+          await navigator.clipboard.writeText(text);
+          document.getElementById("copy").textContent = "Copied ✓";
+        } catch {
+          dump.style.display = "block";
+          dump.value = text;
+          dump.select();
+          document.getElementById("copy").textContent = "Select all below and copy";
+        }
+      };
+      document.getElementById("clear").onclick = () => {
+        results.tests = {};
+        current = 0;
+        renderTabs();
+        renderPanel();
+      };
+
+      renderTabs();
+      renderPanel();
+    </script>
+  </body>
+</html>
