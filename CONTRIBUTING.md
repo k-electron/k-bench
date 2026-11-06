@@ -17,7 +17,7 @@ pnpm exec playwright install chromium     # once: Playwright needs its browser
 
 `pnpm install` also restores the execute bit on node-pty's `spawn-helper` and turns on the git hooks in `.githooks`.
 
-pnpm won't resolve a release younger than 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`), so `pnpm update` or `pnpm add` can skip the newest version of a package. That is deliberate: it gives a compromised release time to be noticed. The server's dependencies in `package.json` are pinned exactly, so bump one by editing its version and running `pnpm install`. The GitHub Actions in `.github/workflows` are pinned to commit SHAs, with the version in a trailing comment; when you bump one, look up the SHA of the new tag and keep both files in step. Dependabot (`.github/dependabot.yml`) opens a weekly PR for each of these, waiting 3 days after a release like the age gate does; add a CHANGELOG entry to the PR for a server dependency, since it changes what an owner's install resolves.
+pnpm won't resolve a release younger than 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`), so `pnpm update` or `pnpm add` can skip the newest version of a package. That is deliberate: it gives a compromised release time to be noticed. The server's dependencies in `package.json` are pinned exactly, so bump one by editing its version and running `pnpm install`. The GitHub Actions in `.github/workflows` are pinned to commit SHAs, with the version in a trailing comment; when you bump one, look up the SHA of the new tag and keep both files in step. Dependabot (`.github/dependabot.yml`) opens a weekly PR for each of these, waiting 3 days after a release like the age gate does; add a CHANGELOG entry to the PR for a server dependency, since it changes what an owner's install resolves. OSV-Scanner (`.github/workflows/osv-scanner.yml`) checks every dependency, dev dependencies included, against known vulnerabilities. To accept a finding you can't fix, add an ignore to `osv-scanner.toml` at the repo root, with a `reason` and an `ignoreUntil` date no more than 90 days out, so the risk comes back up for review.
 
 ## The two instances
 
@@ -68,6 +68,7 @@ The `installed` preset is port 7680, tmux socket `k-bench` and the data folder `
 - Every commit runs Biome on the staged files and the typecheck (`.githooks/pre-commit`).
 - `pnpm check` is lint, typecheck and the Vitest suite (which builds and packs the package for the packed-command tests, so it needs the network, tmux, and `pnpm` and `npm` on PATH); `pnpm test:e2e` is the Playwright suite. Playwright needs its browser once: `pnpm exec playwright install chromium`.
 - CI (`.github/workflows/ci.yml`, macOS) runs `pnpm check` and `pnpm test:e2e` on every push to `main` and every pull request.
+- OSV-Scanner (`.github/workflows/osv-scanner.yml`) scans `pnpm-lock.yaml` for known vulnerabilities. On a pull request it fails only if the PR introduces a vulnerability compared with its base; on every push to `main`, weekly and on manual runs it scans the whole lockfile and never fails. Findings from both appear under Security → Code scanning.
 - How to write tests, and what a good one is, is in [docs/testing.md](docs/testing.md). The harnesses are described in [Test seams](docs/internals/test-seams.md).
 
 ## Install from a checkout

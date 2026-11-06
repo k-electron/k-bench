@@ -1,0 +1,44 @@
+# Scans pnpm-lock.yaml (dev dependencies included) for known vulnerabilities with OSV-Scanner.
+# A pull request fails only if it *introduces* a vulnerability compared with its base, so one
+# already on main never turns an unrelated PR red. The full scan of the lockfile (on a push to
+# main, weekly, and on demand) never fails the run: a new advisory against an unchanged lockfile
+# is not anyone's PR to fix, so it raises an alert instead. Both send findings to Security >
+# Code scanning. Accepted findings go in osv-scanner.toml (see CONTRIBUTING.md).
+name: OSV-Scanner
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pull-request:
+    if: github.event_name == 'pull_request'
+    # Each job gets the narrowest permissions the reusable workflow needs; it cannot ask for more.
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+    with:
+      # Only the lockfile: the default recursive scan of ./ could pick up node_modules, dist or test-results.
+      scan-args: |-
+        --lockfile=pnpm-lock.yaml
+
+  full-scan:
+    if: github.event_name != 'pull_request'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+    with:
+      fail-on-vuln: false
+      scan-args: |-
+        --lockfile=pnpm-lock.yaml
