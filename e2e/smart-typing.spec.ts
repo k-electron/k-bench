@@ -151,6 +151,7 @@ test("every Extra key empties the field and still reaches the program", async ({
     ["C", "Shift Tab", "^[[Z"],
     ["D", "Up", "^[[A"],
     ["E", "Left", "^[[D"],
+    ["F", "Enter", "^M"],
   ] as const) {
     await app.page.keyboard.type(letter);
     await app.extraKey(key).tap();
@@ -158,7 +159,7 @@ test("every Extra key empties the field and still reaches the program", async ({
     await expect(field).toHaveValue("");
   }
   // Arming Ctrl ends the line too.
-  await app.page.keyboard.type("F");
+  await app.page.keyboard.type("G");
   await app.extraKey("Ctrl").tap();
   await expect(field).toHaveValue("");
 });
