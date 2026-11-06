@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import { isIPhone } from "./mirroredField";
 import { useIsPhone } from "./useIsPhone";
 
 /**
@@ -23,21 +22,21 @@ function load(): Set<string> {
   }
 }
 
-function save(off: Set<string>): void {
+function save(sessionsOff: Set<string>): void {
   try {
-    if (off.size === 0) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, JSON.stringify([...off]));
+    if (sessionsOff.size === 0) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, JSON.stringify([...sessionsOff]));
   } catch {
     // Storage unavailable: the choice just doesn't survive a reload.
   }
 }
 
-let off = load();
+let sessionsOff = load();
 const listeners = new Set<() => void>();
 
-function change(next: Set<string>) {
-  off = next;
-  save(off);
+function setSessionsOff(next: Set<string>) {
+  sessionsOff = next;
+  save(sessionsOff);
   for (const listener of listeners) listener();
 }
 
@@ -47,23 +46,28 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** Whether the Session has Smart typing on, as chosen (on unless switched off). */
-export function useSmartTypingChoice(sessionId: string | undefined): boolean {
-  return useSyncExternalStore(subscribe, () => !sessionId || !off.has(sessionId));
+export function useSmartTypingChoice(sessionId: string): boolean {
+  return useSyncExternalStore(subscribe, () => !sessionsOff.has(sessionId));
 }
 
 /** Switches Smart typing on or off for a Session. */
 export function setSmartTyping(sessionId: string, on: boolean): void {
-  if (off.has(sessionId) === !on) return;
-  const next = new Set(off);
+  if (sessionsOff.has(sessionId) === !on) return;
+  const next = new Set(sessionsOff);
   if (on) next.delete(sessionId);
   else next.add(sessionId);
-  change(next);
+  setSessionsOff(next);
 }
 
 /** Forgets the choice of every Session not in `existing` (deleted here or on another device). */
 export function forgetSmartTypingOfMissing(existing: Set<string>): void {
-  const kept = new Set([...off].filter((id) => existing.has(id)));
-  if (kept.size !== off.size) change(kept);
+  const kept = new Set([...sessionsOff].filter((id) => existing.has(id)));
+  if (kept.size !== sessionsOff.size) setSessionsOff(kept);
+}
+
+/** Smart typing is offered on an iPhone (iOS WebKit, whatever the browser), not an iPad or Android. */
+function isIPhone(): boolean {
+  return /iPhone/.test(navigator.userAgent);
 }
 
 /** Whether Smart typing is offered here at all: an iPhone, in the phone layout. */
