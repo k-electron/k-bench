@@ -1,3 +1,4 @@
+import { ClipboardPasteIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   canReadClipboard,
@@ -13,12 +14,10 @@ const keepFocus = (event: { preventDefault: () => void }) => event.preventDefaul
 function Key({
   name,
   onPress,
-  textSize = "text-sm",
   placement = "",
   children,
 }: {
   name: string;
-  textSize?: string;
   placement?: string;
   onPress: () => void;
   children: ReactNode;
@@ -27,7 +26,7 @@ function Key({
     <button
       type="button"
       aria-label={name}
-      className={`flex size-9 items-center justify-center rounded-md bg-secondary/60 ${textSize} text-secondary-foreground backdrop-blur-sm active:bg-primary active:text-primary-foreground pointer-events-auto ${placement}`}
+      className={`flex size-9 items-center justify-center rounded-md bg-secondary/60 text-sm text-secondary-foreground backdrop-blur-sm active:bg-primary active:text-primary-foreground pointer-events-auto ${placement}`}
       onMouseDown={keepFocus}
       // WebKit only applies :active when the element listens for touches.
       onTouchStart={() => {}}
@@ -65,8 +64,8 @@ export function TypingKeys() {
         ⏎
       </Key>
       {canPaste && (
-        <Key name="Paste" textSize="text-xs" onPress={() => void pasteFromClipboard()}>
-          Paste
+        <Key name="Paste" onPress={() => void pasteFromClipboard()}>
+          <ClipboardPasteIcon className="size-4" />
         </Key>
       )}
       <Key name="Left" onPress={send(KEYS.left)}>
