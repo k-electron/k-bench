@@ -8,6 +8,8 @@ import { useSyncExternalStore } from "react";
 
 interface RegisteredTerminal {
   send: (data: string) => void;
+  /** Pastes `text` as the terminal's own paste does: bracketed when the program asked for it. */
+  paste: (text: string) => void;
   blur: () => void;
   /** Ends the line Smart typing mirrors in the terminal's hidden field; a no-op when it is off. */
   clearTypedLine: () => void;
@@ -47,6 +49,34 @@ export const KEYS = {
 /** Sends `data` to the registered terminal as if it had been typed. */
 export function sendKey(data: string): void {
   registered?.send(data);
+  registered?.clearTypedLine();
+}
+
+/** Whether this browser can read the clipboard; WebKit and Chrome only offer it on a secure page. */
+export function canReadClipboard(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.clipboard?.readText === "function"
+  );
+}
+
+/**
+ * Pastes the clipboard's text into the registered terminal. Call it straight from the tap
+ * handler: the clipboard read has to start inside the gesture, or WebKit rejects it. A
+ * rejected read (permission denied, or the callout dismissed) and an empty clipboard do
+ * nothing, silently. An armed Ctrl is cleared first, so a pasted `c` is not Ctrl+C.
+ */
+export async function pasteFromClipboard(): Promise<void> {
+  if (!canReadClipboard()) return;
+  let text: string;
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    return;
+  }
+  if (!text) return;
+  setCtrl(false);
+  registered?.paste(text);
   registered?.clearTypedLine();
 }
 

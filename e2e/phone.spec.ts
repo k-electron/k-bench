@@ -1,4 +1,4 @@
-import { expect, test } from "./harness.ts";
+import { type AppPage, expect, type Kbench, test } from "./harness.ts";
 
 // These run on the `phone` project: a touch device narrower than the layout breakpoint.
 
@@ -334,4 +334,102 @@ test("the phone launches a Claude Session from the + menu and the dialog", async
   await expect(app.terminal("session 1")).toContainText("claude-stub ready");
   await app.openDrawer();
   await expect(app.claudeGlyph("session 1")).toBeVisible();
+});
+
+test.describe("Paste in the keyboard-up overlay", () => {
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+  /**
+   * Opens a shell Session running `cat -vet` in raw mode (it prints control characters in
+   * readable form), with the program having asked for bracketed paste, then puts the
+   * on-screen keyboard up: the field focused and the viewport shorter.
+   */
+  async function openCatWithKeyboardUp(
+    app: AppPage,
+    kbench: Kbench,
+    options: { bracketedPaste?: boolean } = { bracketedPaste: true },
+  ) {
+    await app.openDrawer();
+    await app.createWorkspace(kbench.instance.makeFolder("project"));
+    await app.createSession("project");
+    const terminal = app.terminal("session 1");
+    await app.runMarker(terminal, "shellready");
+    // The shell turns bracketed paste off while a command runs, so the program asks for it.
+    await app.runCommand(
+      terminal,
+      `${options.bracketedPaste ? "printf '\\e[?2004h'; " : ""}stty raw -echo opost onlcr; echo cat-$((6*7)); cat -vet`,
+      "cat-42",
+    );
+    const input = terminal.getByRole("textbox", { name: "Terminal input" });
+    await input.focus();
+    const viewport = app.page.viewportSize();
+    if (!viewport) throw new Error("no viewport");
+    await app.page.setViewportSize({
+      width: viewport.width,
+      height: viewport.height - 300,
+    });
+    await expect(app.overlayKey("Paste")).toBeVisible();
+    return { terminal, input };
+  }
+
+  test("Paste puts the clipboard into the Session as one paste and keeps the keyboard up", async ({
+    app,
+    kbench,
+  }) => {
+    const { terminal, input } = await openCatWithKeyboardUp(app, kbench);
+    await app.page.evaluate('navigator.clipboard.writeText("one\\ntwo")');
+
+    await app.overlayKey("Paste").tap();
+
+    // Bracketed, so the two lines are not run one by one; a newline arrives as a carriage return.
+    await expect(terminal).toContainText("^[[200~one^Mtwo^[[201~");
+    await expect(input).toBeFocused();
+  });
+
+  test("Paste with Ctrl armed sends the character as it is and disarms Ctrl", async ({
+    app,
+    kbench,
+  }) => {
+    // A single pasted character is the one an armed Ctrl would turn into a control key.
+    const { terminal, input } = await openCatWithKeyboardUp(app, kbench, {
+      bracketedPaste: false,
+    });
+    await app.page.evaluate('navigator.clipboard.writeText("c")');
+    // Ctrl is only on the full row, so arm it before the keyboard comes up.
+    const viewport = app.page.viewportSize();
+    if (!viewport) throw new Error("no viewport");
+    await app.page.setViewportSize({
+      width: viewport.width,
+      height: viewport.height + 300,
+    });
+    await app.extraKey("Ctrl").tap();
+    await expect(app.extraKey("Ctrl")).toHaveAttribute("aria-pressed", "true");
+    await input.focus();
+    await app.page.setViewportSize(viewport);
+    await expect(app.overlayKey("Paste")).toBeVisible();
+
+    await app.overlayKey("Paste").tap();
+    // The paste is asynchronous, so wait for it before typing the next letter.
+    await expect(terminal).toContainText(/cat-42\s*c/);
+    // Ctrl is used up: the next typed letter is a letter, not a control key.
+    await app.page.keyboard.type("d");
+    await expect(terminal).toContainText(/cat-42\s*cd/);
+    await expect(terminal).not.toContainText("^C");
+    await expect(terminal).not.toContainText("^D");
+  });
+
+  test("Close keyboard still closes the keyboard from its place under the arrows", async ({
+    app,
+    kbench,
+  }) => {
+    await openCatWithKeyboardUp(app, kbench);
+    const close = await app.overlayKey("Close keyboard").boundingBox();
+    const down = await app.overlayKey("Down").boundingBox();
+    if (!close || !down) throw new Error("the keys should show");
+    expect(close.y).toBeGreaterThan(down.y);
+
+    await app.overlayKey("Close keyboard").tap();
+    await expect(app.extraKey("Ctrl")).toBeVisible();
+    await expect(app.overlayKey("Paste")).toBeHidden();
+  });
 });
