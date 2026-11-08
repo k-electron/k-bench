@@ -10,9 +10,11 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 - Smart typing on iPhone: in the phone layout, the on-screen keyboard's typing aids now work when typing into a Session: autocorrect, tapping a suggestion to swap a word, swipe typing, automatic spacing, double-space for a period and hold to delete. Whatever the keyboard changes reaches the program as Backspaces followed by the new text, so Claude Code's `/` menu and your shell's Tab completion keep working, and nothing new takes room on screen. Curly quotes, long dashes and non-breaking spaces arrive as plain `'`, `"`, `--` and spaces. Shell Sessions get suggestions but no automatic word replacement or capitals (so `ls` stays `ls`); Claude Sessions get all the keyboard's aids. Holding ⌫ keeps deleting, and speeds up, past what you typed, so you can delete text the program put on the line (a Tab-completed path, a recalled command), and a spacebar-drag caret move leaves typing working. Desktop and Android are unchanged.
 - A **Smart typing** switch, the last key of the phone's Extra keys row on iPhone, turns Smart typing on or off for the Session you are in. Every new Session starts with it on; turn it off for a Session running vim or less to get plain terminal typing back. Each Session's choice is remembered on that phone and forgotten when the Session is deleted. It takes effect the next time the keyboard opens.
+- A **Paste** key in the phone's floating keys, while the on-screen keyboard is up, pastes your clipboard's text into the Session as a real paste (bracketed when the program asked for it, so a multi-line paste is not run line by line). Your phone shows its own "Paste" prompt to confirm; the keyboard stays up. It is hidden where the browser can't read the clipboard.
 
 ### Changed
 
+- While the keyboard is up, the phone's floating keys are three rows: **⌄** (close the keyboard) moved from the top row to a row of its own, below the arrows, to make room for Paste. A touch on the empty slots beside it reaches the terminal.
 - The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
 
 ### Fixed

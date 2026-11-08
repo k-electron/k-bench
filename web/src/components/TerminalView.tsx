@@ -151,6 +151,7 @@ export function TerminalView({
     if (!focused) return;
     return registerTerminal({
       send: (data) => terminalRef.current?.input(data, true),
+      paste: (text) => terminalRef.current?.paste(text),
       blur: () => terminalRef.current?.blur(),
       clearTypedLine: () => typedLine.current?.clear(),
     });

@@ -1,4 +1,7 @@
-import { expect, test } from "./harness.ts";
+import type { Locator } from "@playwright/test";
+import { type AppPage, expect, test } from "./harness.ts";
+
+test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
 // These run on the `phone` project: a touch device narrower than the layout breakpoint.
 
@@ -334,4 +337,115 @@ test("the phone launches a Claude Session from the + menu and the dialog", async
   await expect(app.terminal("session 1")).toContainText("claude-stub ready");
   await app.openDrawer();
   await expect(app.claudeGlyph("session 1")).toBeVisible();
+});
+
+/** Focuses the terminal and shrinks the viewport the way the on-screen keyboard coming up does. */
+async function raiseKeyboard(app: AppPage, terminal: Locator) {
+  const viewport = app.page.viewportSize();
+  if (!viewport) throw new Error("no viewport");
+  await terminal.getByRole("textbox", { name: "Terminal input" }).focus();
+  await app.page.setViewportSize({
+    width: viewport.width,
+    height: viewport.height - 300,
+  });
+  await expect(app.overlayKey("Paste")).toBeVisible();
+}
+
+test("with the keyboard up, Paste sends the clipboard's text to the Session as one bracketed paste", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+  const input = terminal.getByRole("textbox", { name: "Terminal input" });
+
+  // The program asks for bracketed paste, and `cat -vt` prints the bytes it then receives
+  // (^[ is Esc), so unbracketed text would show without the 200~ and 201~ markers.
+  await input.focus();
+  await app.page.keyboard.type("printf '\\e[?2004h'; cat -vt");
+  await app.page.keyboard.press("Enter");
+  await raiseKeyboard(app, terminal);
+
+  await app.page.evaluate('navigator.clipboard.writeText("alpha\\nbeta\\ngamma")');
+  await app.overlayKey("Paste").tap();
+  await expect(terminal).toContainText("^[[200~alpha");
+  await expect(terminal).toContainText("gamma^[[201~");
+  await expect(input).toBeFocused();
+});
+
+test("with Ctrl armed, pasting a single character sends that character and disarms Ctrl", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+
+  // The shell prints got-42-c only if the pasted c reached its line as a letter; Ctrl+C
+  // would have cancelled the line.
+  const input = terminal.getByRole("textbox", { name: "Terminal input" });
+  await input.focus();
+  await app.page.keyboard.type("echo got-$((6*7))-");
+  const ctrl = app.extraKey("Ctrl");
+  await ctrl.tap();
+  await expect(ctrl).toHaveAttribute("aria-pressed", "true");
+  await raiseKeyboard(app, terminal);
+
+  await app.page.evaluate('navigator.clipboard.writeText("c")');
+  await app.overlayKey("Paste").tap();
+  // Ctrl is only on the full row, so closing the keyboard shows whether it is still armed.
+  await app.overlayKey("Close keyboard").tap();
+  await expect(ctrl).toHaveAttribute("aria-pressed", "false");
+
+  await input.focus();
+  await app.page.keyboard.press("Enter");
+  await expect(terminal).toContainText("got-42-c");
+});
+
+test("the overlay's Close keyboard sits in its own third row, and the empty slots beside it reach the terminal", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+  await raiseKeyboard(app, terminal);
+
+  const box = async (name: string) => {
+    const found = await app.overlayKey(name).boundingBox();
+    if (!found) throw new Error(`${name} should show`);
+    return found;
+  };
+  const paste = await box("Paste");
+  const enter = await box("Enter");
+  const left = await box("Left");
+  const down = await box("Down");
+  const close = await box("Close keyboard");
+  expect(paste.y).toBe(enter.y);
+  expect(paste.x).toBe(close.x);
+  expect(close.y).toBeGreaterThan(down.y);
+
+  // A touch on an empty slot of the third row, or in a gap between keys, lands on the terminal.
+  const landsOnTerminal = (x: number, y: number) =>
+    app.page.evaluate<boolean>(`(() => {
+      const hit = document.elementFromPoint(${x}, ${y});
+      return !!hit?.closest(".xterm") && !hit.closest('[aria-label="Typing keys"]');
+    })()`);
+  expect(await landsOnTerminal(left.x + left.width / 2, close.y + close.height / 2)).toBe(
+    true,
+  );
+  expect(await landsOnTerminal(left.x + left.width + 2, left.y + left.height / 2)).toBe(
+    true,
+  );
+
+  await app.overlayKey("Close keyboard").tap();
+  await expect(app.extraKey("Ctrl")).toBeVisible();
+  await expect(app.overlayKey("Paste")).toBeHidden();
 });

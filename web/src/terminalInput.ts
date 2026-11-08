@@ -8,6 +8,8 @@ import { useSyncExternalStore } from "react";
 
 interface RegisteredTerminal {
   send: (data: string) => void;
+  /** Pastes `text` the way the terminal's own paste does: bracketed when the program asked for it. */
+  paste: (text: string) => void;
   blur: () => void;
   /** Ends the line Smart typing mirrors in the terminal's hidden field; a no-op when it is off. */
   clearTypedLine: () => void;
@@ -48,6 +50,37 @@ export const KEYS = {
 export function sendKey(data: string): void {
   registered?.send(data);
   registered?.clearTypedLine();
+}
+
+/** Whether this browser can read the clipboard at all; a page over plain http has no `navigator.clipboard`. */
+export function canReadClipboard(): boolean {
+  return typeof navigator.clipboard?.readText === "function";
+}
+
+/**
+ * Pastes the clipboard's text into the registered terminal. The read starts inside the
+ * caller's tap, with nothing before it: WebKit rejects a clipboard read made outside a user
+ * gesture. A read that is rejected (permission denied, or the iPhone's "Paste" callout
+ * dismissed) does nothing, silently.
+ */
+export function pasteFromClipboard(): void {
+  let read: Promise<string>;
+  try {
+    read = navigator.clipboard.readText();
+  } catch {
+    return;
+  }
+  read
+    .then((text) => {
+      if (!text) return;
+      // The paste passes through the terminal's input like typing does, where an armed Ctrl
+      // would turn a single pasted character into a control character.
+      setCtrl(false);
+      registered?.paste(text);
+      // The terminal's paste blanked the hidden field; this puts Smart typing's filler back.
+      registered?.clearTypedLine();
+    })
+    .catch(() => {});
 }
 
 let ctrlArmed = false;
