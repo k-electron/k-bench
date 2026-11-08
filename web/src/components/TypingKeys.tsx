@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { closeKeyboard, KEYS, sendKey } from "../terminalInput";
+import {
+  canReadClipboard,
+  closeKeyboard,
+  KEYS,
+  pasteFromClipboard,
+  sendKey,
+} from "../terminalInput";
 
 // Pressing a key must not take focus from the terminal, or the on-screen keyboard closes.
 const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault();
@@ -7,9 +13,13 @@ const keepFocus = (event: { preventDefault: () => void }) => event.preventDefaul
 function Key({
   name,
   onPress,
+  textSize = "text-sm",
+  placement = "",
   children,
 }: {
   name: string;
+  textSize?: string;
+  placement?: string;
   onPress: () => void;
   children: ReactNode;
 }) {
@@ -17,7 +27,7 @@ function Key({
     <button
       type="button"
       aria-label={name}
-      className="flex size-9 items-center justify-center rounded-md bg-secondary/60 text-sm text-secondary-foreground backdrop-blur-sm active:bg-primary active:text-primary-foreground"
+      className={`flex size-9 items-center justify-center rounded-md bg-secondary/60 ${textSize} text-secondary-foreground backdrop-blur-sm active:bg-primary active:text-primary-foreground pointer-events-auto ${placement}`}
       onMouseDown={keepFocus}
       // WebKit only applies :active when the element listens for touches.
       onTouchStart={() => {}}
@@ -35,12 +45,15 @@ function Key({
  */
 export function TypingKeys() {
   const send = (data: string) => () => sendKey(data);
+  // Without a clipboard read there is no Paste, and Close keyboard keeps the top row's slot.
+  const canPaste = canReadClipboard();
   return (
     // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings form styling; this only names the keys
     <div
       role="group"
       aria-label="Typing keys"
-      className="absolute top-1 right-1 z-10 grid grid-cols-4 gap-1"
+      // Empty slots in the grid let touches through to the terminal.
+      className="pointer-events-none absolute top-1 right-1 z-10 grid grid-cols-4 gap-1"
     >
       <Key name="Esc" onPress={send(KEYS.esc)}>
         ⎋
@@ -51,9 +64,11 @@ export function TypingKeys() {
       <Key name="Enter" onPress={send(KEYS.enter)}>
         ⏎
       </Key>
-      <Key name="Close keyboard" onPress={closeKeyboard}>
-        ⌄
-      </Key>
+      {canPaste && (
+        <Key name="Paste" textSize="text-xs" onPress={() => void pasteFromClipboard()}>
+          Paste
+        </Key>
+      )}
       <Key name="Left" onPress={send(KEYS.left)}>
         ←
       </Key>
@@ -65,6 +80,13 @@ export function TypingKeys() {
       </Key>
       <Key name="Right" onPress={send(KEYS.right)}>
         →
+      </Key>
+      <Key
+        name="Close keyboard"
+        placement={canPaste ? "col-start-4" : "col-start-4 row-start-1"}
+        onPress={closeKeyboard}
+      >
+        ⌄
       </Key>
     </div>
   );
