@@ -15,6 +15,11 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 - The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
 
+### Fixed
+
+- The state request no longer fails for a moment when the last running Session ends, which could make a client briefly miss the change.
+- A Dev instance started from inside Claude Code no longer passes Claude Code's own environment variables to its Sessions, which turned the advisor off in every Claude Session it launched.
+
 ## [0.2.0] - 2026-11-05
 
 ### Added

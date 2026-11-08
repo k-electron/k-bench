@@ -112,7 +112,9 @@ describe("Terminal WebSocket", () => {
     first.run(echoCommand("shell-up-6a1b"));
     await first.waitForOutput("shell-up-6a1b");
     // cat -v shows any control byte it receives, such as a stray NUL as ^@.
-    first.run("cat -v");
+    // Type only once cat runs: zsh's line editor would read typeahead for itself.
+    first.run(`${echoCommand("cat-up-6a1b")}; cat -v`);
+    await first.waitForOutput("cat-up-6a1b");
     first.type("ready\r");
     await first.waitForOutput(/^ready\r?\nready$/m);
 
