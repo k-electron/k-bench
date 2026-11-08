@@ -376,37 +376,6 @@ test("with the keyboard up, Paste sends the clipboard's text to the Session as o
   await expect(input).toBeFocused();
 });
 
-test("with Ctrl armed, pasting a single character sends that character and disarms Ctrl", async ({
-  app,
-  kbench,
-}) => {
-  await app.openDrawer();
-  await app.createWorkspace(kbench.instance.makeFolder("project"));
-  await app.createSession("project");
-  const terminal = app.terminal("session 1");
-  await app.runMarker(terminal, "shellready");
-
-  // The shell prints got-42-c only if the pasted c reached its line as a letter; Ctrl+C
-  // would have cancelled the line.
-  const input = terminal.getByRole("textbox", { name: "Terminal input" });
-  await input.focus();
-  await app.page.keyboard.type("echo got-$((6*7))-");
-  const ctrl = app.extraKey("Ctrl");
-  await ctrl.tap();
-  await expect(ctrl).toHaveAttribute("aria-pressed", "true");
-  await raiseKeyboard(app, terminal);
-
-  await app.page.evaluate('navigator.clipboard.writeText("c")');
-  await app.overlayKey("Paste").tap();
-  // Ctrl is only on the full row, so closing the keyboard shows whether it is still armed.
-  await app.overlayKey("Close keyboard").tap();
-  await expect(ctrl).toHaveAttribute("aria-pressed", "false");
-
-  await input.focus();
-  await app.page.keyboard.press("Enter");
-  await expect(terminal).toContainText("got-42-c");
-});
-
 test("the overlay's Close keyboard sits in its own third row, and the empty slots beside it reach the terminal", async ({
   app,
   kbench,

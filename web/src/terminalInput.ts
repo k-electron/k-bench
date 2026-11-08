@@ -64,17 +64,12 @@ export function canReadClipboard(): boolean {
  * dismissed) does nothing, silently.
  */
 export function pasteFromClipboard(): void {
-  let read: Promise<string>;
-  try {
-    read = navigator.clipboard.readText();
-  } catch {
-    return;
-  }
-  read
+  navigator.clipboard
+    .readText()
     .then((text) => {
       if (!text) return;
-      // The paste passes through the terminal's input like typing does, where an armed Ctrl
-      // would turn a single pasted character into a control character.
+      // Under tmux a paste is normally bracketed, so more than one character. An unbracketed
+      // one-character paste would meet an armed Ctrl and become a control character.
       setCtrl(false);
       registered?.paste(text);
       // The terminal's paste blanked the hidden field; this puts Smart typing's filler back.
