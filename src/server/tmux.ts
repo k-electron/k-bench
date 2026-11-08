@@ -142,8 +142,14 @@ export class TmuxDriver {
   }
 
   private env(): NodeJS.ProcessEnv {
-    // A k-bench server started from inside a tmux pane must not think it is nested.
+    // A k-bench server started from inside a tmux pane must not think it is nested, and
+    // one started by Claude Code (a Dev instance an agent runs) must not hand Claude Code's
+    // own session variables, such as CLAUDE_CODE_DISABLE_ADVISOR_TOOL, to every Session.
+    // The owner's own settings come back from their login shell, which each Session runs.
     const { TMUX: _tmux, TMUX_PANE: _pane, ...env } = process.env;
+    for (const name of Object.keys(env)) {
+      if (name === "CLAUDECODE" || name.startsWith("CLAUDE_")) delete env[name];
+    }
     return env;
   }
 
@@ -401,7 +407,13 @@ function isNoServer(error: unknown): boolean {
 }
 
 function isNoServerMessage(stderr: string): boolean {
-  return stderr.includes("no server running") || stderr.includes("error connecting to");
+  return (
+    stderr.includes("no server running") ||
+    stderr.includes("error connecting to") ||
+    // The server was shutting down as the command reached it: its last Session had just
+    // ended, which is no server at all a moment later.
+    stderr.includes("server exited unexpectedly")
+  );
 }
 
 function isNoSuchSession(error: unknown): boolean {

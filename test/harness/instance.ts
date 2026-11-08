@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -240,6 +240,18 @@ export class TestInstance {
 
   constructor(overrides: Partial<InstanceConfig> = {}) {
     this.root = realpathSync(mkdtempSync(join(tmpdir(), "kb-test-")));
+    // Sessions run the owner's login shell. Left alone, every test shell would share the
+    // owner's ~/.zshrc and ~/.zsh_history: test commands would land in the owner's history,
+    // and zsh waits up to 10 seconds for the history file's lock, which shells starting and
+    // exiting across parallel tests hold for each other. So the instance's shells get a
+    // ZDOTDIR of their own, whose .zshrc keeps no history at all (a history file there
+    // would still be written as the shells die, racing the removal of this folder). It is
+    // hidden, so the folder picker, which lists the instance's root, doesn't show it. The
+    // tmux server takes it from this process's environment when it starts.
+    const zdotdir = join(this.root, ".zdotdir");
+    mkdirSync(zdotdir);
+    writeFileSync(join(zdotdir, ".zshrc"), "unset HISTFILE\n");
+    process.env.ZDOTDIR = zdotdir;
     this.config = {
       dataDir: join(this.root, "data"),
       tmuxSocket: testSocketName(),
@@ -350,7 +362,9 @@ export class TestInstance {
       for (const module of this.toStop) await module.stop();
     } finally {
       this.killTmux();
-      rmSync(this.root, { recursive: true, force: true });
+      // Shells killed with the tmux server die after kill-server returns, so one may still
+      // be touching the folder for a moment.
+      rmSync(this.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     }
   }
 }
