@@ -47,14 +47,14 @@ So `AbandonProcessGroup` is not what protects tmux or a detached child on this m
 
 `kill -9` of the runtime, 8 s later:
 
-| Candidate | `claude` child                                | Liveness after                                                         |
-| --------- | --------------------------------------------- | ---------------------------------------------------------------------- |
-| tmux      | killed with the pane                          | `has-session` fails ("no server running"); the pane is gone            |
-| launchd   | killed with the job                           | `launchctl print` shows `state = not running` and the last exit status |
-| detached  | **orphaned to pid 1, still running its tool** | only a dead pid and a refused socket                                   |
-| plain     | **orphaned to pid 1, still running its tool** | same as detached                                                       |
+| Candidate | `claude` child                               | Liveness after                                                                       |
+| --------- | -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| tmux      | killed with the pane                         | `has-session` fails ("no server running"); the pane is gone                          |
+| launchd   | killed with the job                          | `launchctl print` shows `state = not running` (the exit status line wasn't captured) |
+| detached  | **orphaned to pid 1, still alive 8 s later** | only a dead pid and a refused socket                                                 |
+| plain     | **orphaned to pid 1, still alive 8 s later** | same as detached                                                                     |
 
-A detached runtime that crashes leaves a live `claude` still working on the conversation. Resuming that conversation while the orphan runs would put two processes on one conversation. Detached would need its own reaper, for example recording the `claude` pid and killing it before any resume. tmux and launchd tear the tree down for free.
+A detached runtime that crashes leaves a live `claude` reparented to pid 1 (whether it kept working, finished the turn or wrote to the transcript wasn't checked). If it keeps going, resuming that conversation while the orphan runs would put two processes on one conversation. Detached would need its own reaper, for example recording the `claude` pid and killing it before any resume. tmux and launchd tear the tree down for free.
 
 ## Liveness signals
 
@@ -65,7 +65,7 @@ A detached runtime that crashes leaves a live `claude` still working on the conv
 
 ## Environment
 
-All three candidates, started through the login-shell chain, had identical `PATH` (19 entries including `~/.local/bin`, the Homebrew prefix and the Docker bin), `SHELL`, `LANG`, `HOME` and `SSH_AUTH_SOCK`. The Bash tool inside the conversation saw that same `PATH` and resolved `node`, `pnpm` and `claude`. Only the terminal-ish variables differ: `TERM`/`TERM_PROGRAM`/`TMUX` exist only under tmux, and `XPC_SERVICE_NAME` names the launching job. The runtime process under tmux gets a real tty, which the other two don't, so `claude` ran fine without one.
+All three candidates, started through the login-shell chain, had identical `PATH` (19 entries including `~/.local/bin`, the Homebrew prefix and the Docker bin), `SHELL`, `LANG`, `HOME` and `SSH_AUTH_SOCK`. The Bash tool inside the conversation saw that same `PATH` and resolved `node`, `pnpm` and `claude`. Only the terminal-ish variables differ: `TERM`/`TERM_PROGRAM`/`TMUX` exist only under tmux, and `XPC_SERVICE_NAME` names the launching job. Only the tmux runtime had a tty; `claude` ran fine in the other two without one.
 
 `init` reported `apiKeySource: "none"`, and the turns ran on the Host's existing `claude` login in all three. That is evidence the login reaches a runtime started under launchd, tmux and `setsid`. It says nothing on whether using that login through the SDK is allowed (the separate ticket "Get a clear answer on using a subscription login through the Agent SDK").
 
@@ -77,6 +77,7 @@ Because the runtime sees every message live and writes its own log, a reconnecti
 
 - Reboot or logout. Nothing here survives that, as the lifecycle decision expects; a launchd job bootstrapped from a plist outside `~/Library/LaunchAgents` is not reloaded at login either.
 - Graceful termination (SIGTERM/SIGHUP handling), several runtimes at once, a pending `canUseTool` prompt across restarts.
+- Socket permissions. The runtime's socket was created with the default umask, so any local user could have connected and sent prompts; who may reach an Agent Runtime was not examined.
 - Default settings sources, so no plugins, hooks or MCP servers (their extra child processes) were involved.
 - A launchd job whose command skips the login-shell chain, which would get the bare plist `PATH`.
 
