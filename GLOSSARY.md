@@ -25,8 +25,20 @@ A named, persistent program belonging to one Workspace, started in that Workspac
 _Avoid_: terminal, tab, tmux session
 
 **Claude Session**:
-A Session that runs one Claude conversation, started from the New Claude dialog with the owner's Launch options. Restarting it resumes that same Claude conversation.
-_Avoid_: Claude terminal, agent session
+A Session that runs one Claude conversation, started from the New Claude dialog with the owner's Launch options. Restarting it resumes that same Claude conversation. It is either a Claude TUI or a Claude Agent.
+_Avoid_: Claude terminal
+
+**Claude TUI**:
+A Claude Session the owner operates through Claude Code's own terminal interface.
+_Avoid_: terminal Claude Session
+
+**Claude Agent**:
+A Claude Session the owner operates through k-bench's own web interface instead of a terminal.
+_Avoid_: chat session, SDK session
+
+**Agent Runtime**:
+The long-lived program on the Host that runs one Claude Agent's conversation. It is separate from k-bench itself, so restarting k-bench or closing every browser leaves it running.
+_Avoid_: daemon, worker, backend
 
 **Launch options**:
 The model, effort, advisor and Focus view a Claude Session starts with. They are fixed for the Claude Session's life.
