@@ -18,3 +18,7 @@ This replaces an earlier decision that k-bench knows nothing about Claude Code. 
 - A Claude Session's options are fixed for its life. Restarting passes them again, because Claude Code doesn't restore per-launch settings on resume. Changes mid-conversation go through Claude Code's own commands, such as `/model`.
 - Claude Code saves a conversation only after its first message. A restart tries to resume and, if there's nothing to resume, starts a fresh conversation with the same ID and options.
 - Public docs that describe k-bench as knowing nothing about Claude Code must be rewritten along with the feature.
+
+## Amended
+
+ADR-0007 amends this decision for Claude Agent, which consumes the Agent SDK's published messages. A Claude TUI is unchanged.
