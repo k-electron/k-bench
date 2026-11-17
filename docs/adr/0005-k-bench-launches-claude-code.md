@@ -1,8 +1,8 @@
-# k-bench launches and resumes Claude Code, and never reads it
+# k-bench launches and resumes Claude Code
 
 k-bench exists to manage Claude Code work, so it has a Claude Session: a Session that runs Claude Code itself, launched with options the owner picks in a dialog (model, effort, advisor, Focus view). k-bench gives each Claude Session a conversation ID of its own choosing at launch, so restarting a Stopped Claude Session resumes exactly that Claude conversation with the same options.
 
-The boundary is Claude Code's command-line launch contract. k-bench passes documented flags and resumes by ID. It never detects Claude Code running in an ordinary Session, never parses its output, and never reads its files. Launch flags are documented and stable. Screen and file formats change with every release.
+k-bench passes documented flags and resumes by ID. Claude Code started by hand in an ordinary Session is not a Claude Session.
 
 This replaces an earlier decision that k-bench knows nothing about Claude Code. That decision kept k-bench general, but it left every launch to typing flags by hand and every restart to `/resume`, and that friction was worst on a phone.
 

@@ -2,7 +2,7 @@
 
 A Claude Agent must keep running through a k-bench restart, so its Agent Runtime can't be a child of the server. Each Agent Runtime runs in a tmux session on k-bench's existing socket, named by its Session's ID, and is started through the same login-shell chain as a Claude TUI so it gets the owner's environment. tmux is used only to keep the process alive and to record whether it is running, so ADR-0001 and ADR-0002 hold for Claude Agent too: a tmux session means running, none means Stopped. The owner never sees that tmux session. The conversation reaches the browser as structured messages over the Agent Runtime's own connection, and k-bench refuses to attach a terminal to a Claude Agent.
 
-This amends ADR-0005 for Claude Agent only. k-bench consumes Claude Code's published Agent SDK messages. It still never scrapes a screen or reads Claude Code's private files, and a Claude TUI stays exactly as ADR-0005 describes.
+This amends ADR-0005 for Claude Agent only: k-bench drives it through the Agent SDK. A Claude TUI stays exactly as ADR-0005 describes.
 
 ## Considered Options
 
