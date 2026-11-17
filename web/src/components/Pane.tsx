@@ -1,4 +1,5 @@
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
+import { AgentPrototype, useAgentPrototype } from "../agentPrototype/AgentPrototype";
 import { TerminalView } from "./TerminalView";
 
 interface PaneProps {
@@ -9,6 +10,18 @@ interface PaneProps {
 
 /** A Session's terminal, filling one slot in the main view. */
 export function Pane({ session, focused }: PaneProps) {
+  // PROTOTYPE, throwaway: `?agent=A|B|C` shows a fake Claude Agent conversation instead.
+  const prototype = useAgentPrototype();
+  if (prototype.variant) {
+    return (
+      <section
+        aria-label={`Claude Agent prototype ${session.name}`}
+        className="h-full min-h-0"
+      >
+        <AgentPrototype focused={focused} />
+      </section>
+    );
+  }
   return (
     <section
       aria-label={`Terminal ${session.name}`}

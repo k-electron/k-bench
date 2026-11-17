@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { TypingKeys } from "@/components/TypingKeys";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAgentPrototype } from "./agentPrototype/AgentPrototype";
 import { ActionsProvider, useAppState } from "./useAppState";
 import { useIsPhone } from "./useIsPhone";
 import { useKeyboardUp } from "./useKeyboardUp";
@@ -19,6 +20,7 @@ import { usePaneView } from "./usePaneView";
 export function App() {
   const { state, actions, error } = useAppState();
   const phone = useIsPhone();
+  const agentPrototype = useAgentPrototype(); // PROTOTYPE, throwaway
   // With the on-screen keyboard up the app fits the space above it, minus the header and
   // the Extra keys row, which a compact overlay on the terminal replaces.
   const keyboardUp = useKeyboardUp(phone);
@@ -129,9 +131,11 @@ export function App() {
               onFocus={panes.focusPane}
               onResize={panes.setRatio}
             />
-            {keyboardUp && panes.focusedSessionId && <TypingKeys />}
+            {keyboardUp && panes.focusedSessionId && !agentPrototype.variant && (
+              <TypingKeys />
+            )}
           </div>
-          {phone && !keyboardUp && panes.focusedSessionId && (
+          {phone && !keyboardUp && panes.focusedSessionId && !agentPrototype.variant && (
             <ExtraKeys sessionId={panes.focusedSessionId} />
           )}
         </main>
