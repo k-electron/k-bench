@@ -11,6 +11,7 @@ A Claude Agent is viewed from several devices at once, through browsers that sle
 ## Consequences
 
 - The runtime does the fan-out, so every connected device is an equal participant. The first answer to an Allow/Deny wins. A prompt waits as long as the runtime lives, whoever is connected, and is marked interrupted if the runtime dies.
+- While a Claude Agent is Stopped there is no runtime to relay to, so the server serves that Agent's log read-only, with the same replay code. That way the owner can still read the conversation and see why it stopped.
 - Each Claude Agent's log, socket and later its images live in one folder under the data directory, owner-only (`0700`). Deleting the Session removes the folder, and the reconciler removes any folder with no Session.
 - The wire protocol has a number and only grows by additions. "Update available" means the runtime's own code changed, not just k-bench. A breaking change asks the owner to restart that Agent, which resumes its conversation.
 - Turns taken while the conversation is open in a Claude TUI are not in the log.
