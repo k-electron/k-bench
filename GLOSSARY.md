@@ -52,9 +52,21 @@ _Avoid_: dead, closed, killed
 A Session's earlier output, beyond what fits on screen, that the owner can scroll back through.
 _Avoid_: scrollback, buffer
 
+**Working**:
+The state of a running Claude Agent while Claude is taking a turn.
+_Avoid_: busy, active, thinking
+
+**Idle**:
+The state of a running Claude Agent between turns, with nothing waiting on the owner.
+_Avoid_: ready, done
+
+**Waiting for you**:
+The state of a running Claude Agent that can't go on until the owner answers it: an Allow/Deny, a question, or a plan to approve.
+_Avoid_: blocked, needs input, pending
+
 **Bell**:
-A Session's request for attention, raised when the Session's program rings the terminal bell and cleared once the owner views that Session.
-_Avoid_: notification, alert, activity
+A Session's request for attention, raised while no device is viewing the Session: when its program rings the terminal bell, or, for a Claude Agent, when a turn finishes or it becomes Waiting for you. It is cleared once the owner views that Session on any device.
+_Avoid_: notification, alert, activity, unviewed
 
 **Claude conversation**:
 A Claude Code conversation. A Claude Session runs one at a time and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
