@@ -11,9 +11,13 @@ updates:
       default-days: 3
     groups:
       # Dev dependencies never reach the Host, so they come as one PR. The server's own
-      # dependencies (hono, @hono/node-server, ws, node-pty) each get a PR of their own.
+      # dependencies (hono, @hono/node-server, ws, node-pty) each get a PR of their own, and
+      # so does the Agent SDK: the fake `claude` in the tests speaks its protocol, so an SDK
+      # upgrade that changes the protocol must break the tests in a PR that is only that.
       dev-dependencies:
         dependency-type: development
+        exclude-patterns:
+          - "@anthropic-ai/claude-agent-sdk"
 
   - package-ecosystem: github-actions
     directory: /

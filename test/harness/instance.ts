@@ -17,7 +17,7 @@ import {
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
 import { EventsClient } from "./events.ts";
-import { installFakeClaude } from "./fake-claude.ts";
+import { FakeClaude, installFakeClaude } from "./fake-claude.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
 import { TerminalConnectionProbe } from "./terminal-connection.ts";
@@ -233,6 +233,8 @@ export class TestServer {
 export class TestInstance {
   readonly config: InstanceConfig;
   readonly root: string;
+  /** The fake Claude Code the Agent SDK drives: what it is, what it does, what it received. */
+  readonly fakeClaude: FakeClaude;
   /** The server most recently started. */
   private running: TestServer | undefined;
   /** Servers and modules this instance stops when it is disposed. */
@@ -240,6 +242,7 @@ export class TestInstance {
 
   constructor(overrides: Partial<InstanceConfig> = {}) {
     this.root = realpathSync(mkdtempSync(join(tmpdir(), "kb-test-")));
+    this.fakeClaude = new FakeClaude(this.root);
     // Sessions run the owner's login shell. Left alone, every test shell would share the
     // owner's ~/.zshrc and ~/.zsh_history: test commands would land in the owner's history,
     // and zsh waits up to 10 seconds for the history file's lock, which shells starting and

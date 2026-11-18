@@ -16,6 +16,8 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 - The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
 
+- Internal: the tests' fake `claude` now also speaks the Agent SDK's protocol (messages recorded from a real Claude Code), so a Claude Agent can be tested without a model turn. `@anthropic-ai/claude-agent-sdk` joins as a development dependency only, pinned exactly, with its own Dependabot pull requests; nothing in the published package uses it.
+
 ### Fixed
 
 - The state request no longer fails for a moment when the last running Session ends, which could make a client briefly miss the change.
