@@ -75,7 +75,7 @@ An ordinary Session, from **New shell**, is a shell. If you type `claude` in it,
 
 ## Make Claude Code ring the Bell when it is waiting
 
-k-bench raises a [Bell](using-k-bench.md#bells) when the program in a Session rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and a Bell shows on that Session in the sidebar.
+k-bench raises a [Bell](using-k-bench.md#bells) when the program in a Session rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and that Session's row pulses in the sidebar.
 
 Add this to `~/.claude/settings.json` on the Host (merging it with any settings already in the file):
 
@@ -92,7 +92,7 @@ Sources, from Claude Code's current documentation:
 - [`preferredNotifChannel` in the settings reference](https://code.claude.com/docs/en/settings-reference#preferrednotifchannel), which lists its values and where it applies.
 - [Get a terminal bell or notification](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification), which says when Claude Code sends the notification: when it finishes a task or pauses for a permission prompt, and you appear to be away from the terminal.
 
-To check it, start a short task in a Session, then open a different Session. When Claude Code finishes, the first Session shows a Bell. Remember that a Session only raises a Bell while nothing is viewing it, so a tab left open on that Session elsewhere hides it. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
+To check it, start a short task in a Session, then open a different Session. When Claude Code finishes, the first Session's row pulses. Remember that a Session only raises a Bell while nothing is viewing it, so a tab left open on that Session elsewhere hides it. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 
 ## One Session per Claude conversation
 

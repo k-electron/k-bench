@@ -10,7 +10,6 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
-import { BellBadge } from "./BellBadge";
 import { ClaudeGlyph } from "./ClaudeGlyph";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
@@ -42,9 +41,11 @@ export function SessionRow({
   const actions = useActions();
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Pulsing means only "needs you". A Bell is the one reason today.
+  const pulsing = session.bell;
 
   return (
-    <div className="group flex items-center">
+    <div className={cn("group flex items-center rounded-md", pulsing && "row-pulse")}>
       <span
         role="img"
         aria-label={`${session.name} ${session.status}`}
@@ -74,7 +75,10 @@ export function SessionRow({
       {session.kind === "claude" && (
         <ClaudeGlyph label={`${session.name} is a Claude Session`} />
       )}
-      {session.bell && <BellBadge label={`${session.name} rang the bell`} />}
+      {/* The pulse is visual; this says it to a screen reader and to tests. */}
+      {pulsing && (
+        <span role="status" className="sr-only">{`${session.name} needs you`}</span>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
