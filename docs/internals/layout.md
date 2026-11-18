@@ -17,7 +17,7 @@ The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsco
 
 - `config.ts`: instance config.
 - `access-guard.ts`: the `Tailscale-User-Login` check, ADR-0003 (see [Access](access.md)).
-- `store.ts`: SQLite and migrations, including each Session's kind, a Claude Session's conversation ID and Launch options, and the last-used Launch options.
+- `store.ts`: SQLite and migrations, including each Session's kind, a Claude Session's conversation ID and Launch options, the last-used Launch options and the kind of Session last created.
 - `claude.ts`: everything k-bench knows about launching Claude Code (ADR 0005): the flags the Launch options map to, validating them, and the launcher that starts, resumes and holds an error on screen. It never reads Claude Code's output or files.
 - `tmux.ts`: the tmux driver, an adapter over the tmux CLI that keeps no state about Sessions, and owns the Bell rule (see [The Bell](bell.md)).
 - `reconciler.ts`: kills tmux sessions with no store row, at startup and on every state read.
@@ -34,7 +34,7 @@ The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsco
 ## `src/shared/`
 
 - `terminal-protocol.ts` defines the terminal WebSocket protocol once; the server, the browser and the tests all import it.
-- `launch-options.ts` defines the Launch options, their choices and the all-Default value once, for the server and the New Claude dialog.
+- `launch-options.ts` defines the Launch options, their choices and the all-Default value once, for the server and the New Session dialog.
 - `state-protocol.ts` does the same for state: the snapshot types, the `State-Revision` header, the events path, and decoding a snapshot or a response's revision.
 
 ## `web/`
@@ -44,7 +44,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
 - `src/App.tsx` is the shell.
 - `src/components/` holds:
   - `Sidebar`, `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`;
-  - `NewClaudeDialog`, the New Claude… dialog (it loads the last-used Launch options when it opens);
+  - `NewSessionDialog`, the dialog behind a Workspace's **+** (it loads the last kind and Launch options when it opens; its `KINDS` list is where a new kind of Session is added);
   - `WorkspaceRow`, a sortable Workspace row with its menu;
   - `SessionRow` and `ClaudeGlyph`;
   - `PaneArea`, one or two Panes with a draggable divider;

@@ -20,7 +20,7 @@ import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
 import type { State, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
-import { NewClaudeDialog } from "./NewClaudeDialog";
+import { NewSessionDialog } from "./NewSessionDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { SessionRow } from "./SessionRow";
 import { WorkspaceRow } from "./WorkspaceRow";
@@ -31,14 +31,15 @@ interface SidebarProps {
   openId: string | undefined;
   onOpen: (sessionId: string) => void;
   onOpenInOtherPane: (sessionId: string) => void;
-  /** Creates a Session and opens it. */
-  onCreateSession: (workspaceId: string) => Promise<void>;
-  /** Launches a Claude Session and opens it; rejects with the server's refusal. */
-  onCreateClaudeSession: (
+  /**
+   * Creates a Session (a Claude Session with `claude`) and opens it; rejects with the
+   * server's refusal.
+   */
+  onCreateSession: (
     workspaceId: string,
-    input: { name: string; claude: LaunchOptions },
+    input: { name: string; claude?: LaunchOptions },
   ) => Promise<void>;
-  /** Why the last Session create or restart was refused, if it was. */
+  /** Why the last Session restart was refused, if it was. */
   error?: string;
   /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */
   className?: string;
@@ -54,12 +55,11 @@ export function Sidebar({
   onOpen,
   onOpenInOtherPane,
   onCreateSession,
-  onCreateClaudeSession,
   error,
   className,
 }: SidebarProps) {
   const actions = useActions();
-  const [launching, setLaunching] = useState<WorkspaceState>();
+  const [creating, setCreating] = useState<WorkspaceState>();
   const [dialog, setDialog] = useState<{
     workspace: WorkspaceState;
     action: WorkspaceEdit | "delete";
@@ -101,8 +101,7 @@ export function Sidebar({
               <WorkspaceRow
                 key={workspace.id}
                 workspace={workspace}
-                onCreateSession={() => void onCreateSession(workspace.id)}
-                onCreateClaude={() => setLaunching(workspace)}
+                onCreateSession={() => setCreating(workspace)}
                 onAction={(action) => setDialog({ workspace, action })}
               >
                 <ul>
@@ -122,11 +121,11 @@ export function Sidebar({
           </ul>
         </SortableContext>
       </DndContext>
-      {launching && (
-        <NewClaudeDialog
-          workspace={launching}
-          onLaunch={(input) => onCreateClaudeSession(launching.id, input)}
-          onClose={() => setLaunching(undefined)}
+      {creating && (
+        <NewSessionDialog
+          workspace={creating}
+          onCreate={(input) => onCreateSession(creating.id, input)}
+          onClose={() => setCreating(undefined)}
         />
       )}
       {dialog && dialog.action !== "delete" && (

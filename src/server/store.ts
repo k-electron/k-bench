@@ -43,6 +43,13 @@ const MIGRATIONS: string[] = [
     options TEXT NOT NULL
   );
   `,
+  // The Host's one record of the kind of Session last created, for the New Session dialog.
+  `
+  CREATE TABLE last_session_kind (
+    id   INTEGER PRIMARY KEY CHECK (id = 1),
+    kind TEXT NOT NULL
+  );
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -197,6 +204,23 @@ export class Store {
          ON CONFLICT (id) DO UPDATE SET options = excluded.options`,
       )
       .run(JSON.stringify(options));
+  }
+
+  /** The kind of Session last created, if any has been. */
+  getLastSessionKind(): SessionKind | undefined {
+    const row = this.db
+      .prepare("SELECT kind FROM last_session_kind WHERE id = 1")
+      .get() as { kind: SessionKind } | undefined;
+    return row?.kind;
+  }
+
+  setLastSessionKind(kind: SessionKind): void {
+    this.db
+      .prepare(
+        `INSERT INTO last_session_kind (id, kind) VALUES (1, ?)
+         ON CONFLICT (id) DO UPDATE SET kind = excluded.kind`,
+      )
+      .run(kind);
   }
 
   renameSession(id: string, name: string): void {

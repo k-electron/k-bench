@@ -317,19 +317,22 @@ test("the full extra keys row comes back when the keyboard goes away by itself",
   await expect(app.page.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
 });
 
-test("the phone launches a Claude Session from the + menu and the dialog", async ({
+test("the phone creates a Claude TUI Session from the + button and the New Session dialog", async ({
   app,
   kbench,
 }) => {
   await app.openDrawer();
   await app.createWorkspace(kbench.instance.makeFolder("project"));
 
-  await app.openClaudeDialog("project");
-  // Every option fits the phone's screen, with Launch within reach.
-  await expect(app.claudeDialog.getByRole("button", { name: "Launch" })).toBeInViewport();
-  await app.launchClaude({ model: "Sonnet", focusView: true });
+  await app.openNewSessionDialog("project");
+  await app.newSessionDialog.getByRole("radio", { name: "Claude TUI" }).check();
+  // Every option fits the phone's screen, with Create within reach.
+  await expect(
+    app.newSessionDialog.getByRole("button", { name: "Create" }),
+  ).toBeInViewport();
+  await app.createInDialog({ model: "Sonnet", focusView: true });
 
-  await expect(app.claudeDialog).toBeHidden();
+  await expect(app.newSessionDialog).toBeHidden();
   await expect(app.drawer).toBeHidden();
   await expect(app.terminal("session 1")).toContainText("claude-stub ready");
   await app.openDrawer();
