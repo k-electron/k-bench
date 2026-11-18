@@ -22,6 +22,13 @@ export interface SessionOptions {
   folder: string;
   /** The conversation: named by `--session-id`, or carried on by `--resume`. */
   conversation: { id: string; resume: boolean };
+  /**
+   * What Claude Code asks, through the SDK, wherever the owner's permission rules and mode
+   * say to ask. Setting it at all matters: it is what makes Claude Code ask the SDK instead
+   * of the terminal it does not have. It must wait for as long as the runtime lives (no
+   * `defer`): see `PermissionAsks`.
+   */
+  canUseTool: CanUseTool;
 }
 
 /** The messages for Claude Code, as the SDK's streaming input takes them. */
@@ -52,18 +59,6 @@ class PromptQueue implements AsyncIterable<SDKUserMessage> {
 }
 
 /**
- * A permission ask waits for as long as the runtime lives, whoever is connected (ADR-0008),
- * and is never answered here: answering is ticket #135's. Setting it at all matters, though:
- * it is what makes Claude Code ask the SDK instead of the terminal it does not have.
- */
-const waitForAnswer: CanUseTool = (_tool, _input, { signal }) =>
-  new Promise((_resolve, reject) => {
-    signal.addEventListener("abort", () => reject(new Error("The ask was cancelled")), {
-      once: true,
-    });
-  });
-
-/**
  * The Agent SDK driving the owner's installed `claude`, with everything the spec fixes:
  * the `claude_code` system prompt preset, the default settings sources (so CLAUDE.md,
  * skills, plugins, hooks, MCP servers and permission rules load as in a terminal), partial
@@ -78,7 +73,7 @@ export class ClaudeSession {
   private readonly query: Query;
 
   constructor(options: SessionOptions, handlers: SessionHandlers) {
-    const { claude, folder, conversation } = options;
+    const { claude, folder, conversation, canUseTool } = options;
     const claudeQuery = query({
       prompt: this.prompts,
       options: {
@@ -88,7 +83,7 @@ export class ClaudeSession {
         includePartialMessages: true,
         enableFileCheckpointing: true,
         extraArgs: { "replay-user-messages": null },
-        canUseTool: waitForAnswer,
+        canUseTool,
         ...(conversation.resume
           ? { resume: conversation.id }
           : { sessionId: conversation.id }),

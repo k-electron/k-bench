@@ -5,6 +5,8 @@ import { retryWhenAwake } from "../retryWhenAwake";
 import {
   applyServerMessage,
   emptyTranscript,
+  type PermissionAsk,
+  permissionAsks,
   type TranscriptItem,
   transcriptItems,
 } from "./transcript";
@@ -34,12 +36,25 @@ export interface AgentConversation {
   hello: AgentHello | undefined;
   /** What the Agent is doing, once the runtime has said. */
   state: AgentStatus["state"] | undefined;
+  /**
+   * The Allow/Deny asks open now, oldest first. Empty when the Session is over: nothing can
+   * answer them then.
+   */
+  asks: PermissionAsk[];
   /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
   ended: boolean;
   /** The connection dropped and is retrying: what is shown may be behind, and nothing can be sent. */
   reconnecting: boolean;
   /** Sends a prompt as typed. False when it could not be sent (reconnecting), so the text should stay. */
   send(text: string): boolean;
+  /**
+   * Answers an open ask. False when it could not be sent (reconnecting): it is dropped, never
+   * queued, so an answer cannot reach Claude after the owner has lost the connection and
+   * forgotten the question, and the buttons stay for another try. True means sent, not
+   * applied: the ask ends, here and on every device, when its entry arrives, and an answer
+   * that came second is ignored without a word.
+   */
+  answer(requestId: string, decision: "allow" | "deny"): boolean;
 }
 
 interface Model {
@@ -63,6 +78,8 @@ function reduce(model: Model, event: Event): Model {
   if (message.type === "status") return { ...model, state: message.state };
   return { ...model, transcript: applyServerMessage(model.transcript, message) };
 }
+
+const NO_ASKS: PermissionAsk[] = [];
 
 const initial: Model = {
   transcript: emptyTranscript,
@@ -102,13 +119,22 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     [],
   );
 
+  const answer = useCallback(
+    (requestId: string, decision: "allow" | "deny") =>
+      connection.current?.send({ type: "answer", requestId, decision }) ?? false,
+    [],
+  );
+
   const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
+  const allAsks = useMemo(() => permissionAsks(model.transcript), [model.transcript]);
   return {
     items,
+    asks: model.ended ? NO_ASKS : allAsks,
     hello: model.hello,
     state: model.state,
     ended: model.ended,
     reconnecting: model.reconnecting,
     send,
+    answer,
   };
 }

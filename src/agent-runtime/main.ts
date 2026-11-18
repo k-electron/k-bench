@@ -18,8 +18,10 @@ import {
   AGENT_PROTOCOL_VERSION,
   type AgentClientMessage,
   type AgentHello,
+  openPermissionAsks,
 } from "../shared/agent-protocol.ts";
 import { parseRuntimeArgs } from "./args.ts";
+import { PermissionAsks } from "./asks.ts";
 import { ClientHub } from "./hub.ts";
 import { LiveText } from "./live.ts";
 import { ClaudeSession } from "./session.ts";
@@ -68,6 +70,19 @@ function publishStatus(): void {
 
 record({ kind: "runtime", event: "started" });
 
+// Asks a previous runtime left open (it was killed, or the Host went down) can never be
+// answered: the Claude Code that asked them is gone. Close them, so that no device shows a
+// card nobody can answer.
+for (const ask of openPermissionAsks(log.readAfter(0))) {
+  record({
+    kind: "permission_answered",
+    requestId: ask.requestId,
+    answer: { decision: "interrupted" },
+  });
+}
+
+const asks = new PermissionAsks(record);
+
 // A conversation is saved by Claude Code only after its first message, so a resume of one
 // that never got a prompt starts it again under the same ID instead.
 const claude = new ClaudeSession(
@@ -78,6 +93,7 @@ const claude = new ClaudeSession(
       id: args.conversation,
       resume: args.mode === "resume" && log.hasPrompt(),
     },
+    canUseTool: asks.canUseTool,
   },
   {
     message(message) {
@@ -108,6 +124,8 @@ async function command(message: AgentClientMessage): Promise<void> {
     pendingTurns += 1;
     publishStatus();
     claude.prompt(message.id, message.text);
+  } else if (message.type === "answer") {
+    asks.answer(message.requestId, message.decision);
   } else if (message.type === "shutdown") {
     await finish("Stopped by k-bench", 0);
   }
@@ -118,6 +136,7 @@ async function finish(reason: string, code: number): Promise<void> {
   if (finishing) return;
   finishing = true;
   try {
+    asks.interruptAll();
     record({ kind: "runtime", event: "stopped", reason });
   } catch {
     // The Agent's folder is gone (the Session was deleted): nothing to record into.

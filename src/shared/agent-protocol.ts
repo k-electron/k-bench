@@ -61,19 +61,81 @@ export type LogEntry =
   | (LogEntryBase & { kind: "prompt"; id: string; text: string })
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
-  /** An Allow/Deny that Claude Code is waiting on (written from ticket #135 on). */
+  /**
+   * An Allow/Deny that Claude Code is waiting on: written when it asks, and open until a
+   * `permission_answered` with the same `requestId` follows (see `openPermissionAsks`).
+   * Every field of the SDK's `canUseTool` request that can be serialised is kept, because the
+   * log is permanent and a later ticket (#146, #147) cannot add a field to asks already on
+   * disk. `input` is the tool's input exactly as Claude Code sent it.
+   */
   | (LogEntryBase & {
       kind: "permission_asked";
+      /** Claude Code's ID for the ask: what an `answer` names. Unique per ask. */
       requestId: string;
       toolName: string;
-      input: unknown;
+      input: Record<string, unknown>;
+      /** The tool call the ask is about: the `id` of its `tool_use` block. */
+      toolUseId: string;
+      /** Claude Code's full sentence for the ask ("Claude wants to read foo.txt"). */
+      title?: string;
+      /** A short name for the action ("Read file"). */
+      displayName?: string;
+      /** A subtitle for the ask. */
+      description?: string;
+      /** The path that caused the ask, if one did. */
+      blockedPath?: string;
+      /** Why Claude Code asks. */
+      decisionReason?: string;
+      /**
+       * The rule changes "Yes, don't ask again" would apply: the SDK's `PermissionUpdate`s as
+       * Claude Code sent them, so that an `alwaysAllow` answer (#146) can echo them back.
+       * Never sent by a client.
+       */
+      suggestions?: unknown[];
+      /** Claude Code says the ask must not offer a persistent "don't ask again". */
+      suppressAlwaysAllowRule?: boolean;
+      /** Claude Code says the ask must open on its decline option. */
+      defaultToNo?: boolean;
+      /** The subagent that asks, when one does. */
+      agentId?: string;
     })
-  /** How a `permission_asked` ended (written from ticket #135 on). */
+  /** How an ask ended (see `PermissionAnswer`). Written once per ask, by the runtime only. */
   | (LogEntryBase & {
       kind: "permission_answered";
       requestId: string;
-      answer: unknown;
+      answer: PermissionAnswer;
     });
+
+/**
+ * How an ask ended. `allow` and `deny` are the owner's answer, from whichever device came
+ * first. The others were nobody's answer: `cancelled` is Claude Code withdrawing the ask (the
+ * turn was interrupted, the tool call gone), and `interrupted` is the runtime ending, or
+ * finding at its next start that the previous one ended, while the ask was open: it could
+ * never be answered ("not answered, the Agent stopped"). Later tickets add fields to `allow`
+ * and `deny` (#146, #147), never new meanings to a `decision`.
+ */
+export type PermissionAnswer =
+  | { decision: "allow" }
+  | { decision: "deny" }
+  | { decision: "cancelled" }
+  | { decision: "interrupted" };
+
+/** A `permission_asked` entry. */
+export type PermissionAskEntry = Extract<LogEntry, { kind: "permission_asked" }>;
+
+/**
+ * The asks still open in these entries, oldest first: each `permission_asked` whose
+ * `requestId` has no `permission_answered`. The one definition of "open" that the runtime
+ * (which closes the ones a dead runtime left) and the browser (which shows them) share.
+ */
+export function openPermissionAsks(entries: readonly LogEntry[]): PermissionAskEntry[] {
+  const open = new Map<string, PermissionAskEntry>();
+  for (const entry of entries) {
+    if (entry.kind === "permission_asked") open.set(entry.requestId, entry);
+    else if (entry.kind === "permission_answered") open.delete(entry.requestId);
+  }
+  return [...open.values()];
+}
 
 /** An entry as the runtime appends it: the log numbers and stamps it. */
 export type NewLogEntry = LogEntry extends infer E
@@ -175,6 +237,14 @@ export type AgentClientMessage =
    * message up. Prompts are never marked as composed by the client, so `@path` works.
    */
   | { type: "prompt"; id: string; text: string }
+  /**
+   * The owner's answer to an open ask. The runtime builds what Claude Code is sent from the
+   * ask it holds, so a client says only which: it can never change the tool's input or the
+   * rules to save. The first answer for a `requestId` wins; one for an ask that is no longer
+   * open (answered on another device, withdrawn, never asked) is ignored, with no error.
+   * What came of it arrives as the ask's `permission_answered` entry, to every device.
+   */
+  | { type: "answer"; requestId: string; decision: "allow" | "deny" }
   /** Ends the Agent: the turn is interrupted, the log finished, Claude Code closed. */
   | { type: "shutdown" };
 
@@ -182,6 +252,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Longest `text` a prompt may carry. */
 export const MAX_PROMPT_CHARACTERS = 1_000_000;
+
+/** Longest `requestId` an answer may name. Claude Code's format is not ours to pin down. */
+export const MAX_REQUEST_ID_CHARACTERS = 200;
 
 /**
  * The message a client's text holds, or undefined when it is not a valid one. The runtime
@@ -213,6 +286,13 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         message.text.trim() !== "" &&
         message.text.length <= MAX_PROMPT_CHARACTERS
         ? { type: "prompt", id: message.id, text: message.text }
+        : undefined;
+    case "answer":
+      return typeof message.requestId === "string" &&
+        message.requestId !== "" &&
+        message.requestId.length <= MAX_REQUEST_ID_CHARACTERS &&
+        (message.decision === "allow" || message.decision === "deny")
+        ? { type: "answer", requestId: message.requestId, decision: message.decision }
         : undefined;
     case "shutdown":
       return { type: "shutdown" };
