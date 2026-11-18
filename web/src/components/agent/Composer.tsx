@@ -12,11 +12,15 @@ import { useIsPhone } from "@/useIsPhone";
 export function Composer({
   onSend,
   disabled,
+  offline,
   autoFocus,
 }: {
-  onSend: (text: string) => void;
+  /** Sends the text; false when it could not be sent (reconnecting), and the box keeps it. */
+  onSend: (text: string) => boolean;
   /** The Agent has ended: nothing can be sent. */
   disabled: boolean;
+  /** The connection is down: the box stays editable, but Send waits for it to come back. */
+  offline: boolean;
   autoFocus: boolean;
 }) {
   const phone = useIsPhone();
@@ -30,9 +34,8 @@ export function Composer({
   }, [autoFocus, phone]);
 
   const send = () => {
-    if (disabled || text.trim() === "") return;
-    onSend(text);
-    setText("");
+    if (disabled || offline || text.trim() === "") return;
+    if (onSend(text)) setText("");
   };
 
   return (
@@ -70,7 +73,7 @@ export function Composer({
         type="submit"
         size="icon"
         aria-label="Send"
-        disabled={disabled || text.trim() === ""}
+        disabled={disabled || offline || text.trim() === ""}
         // Keeps the keyboard up on a phone: pressing Send must not take the focus from the box.
         onMouseDown={(event) => event.preventDefault()}
       >

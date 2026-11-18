@@ -71,3 +71,55 @@ test("deleting a Claude Agent's Session removes it", async ({ app, kbench }) => 
   await expect(app.session("session 1")).toHaveCount(0);
   await expect(app.agentRegion("session 1")).toHaveCount(0);
 });
+
+test("reloading the page mid-turn shows the whole conversation so far and the rest of the reply", async ({
+  app,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const { fakeClaude } = kbench.instance;
+  fakeClaude.script([{ text: ["one ", "two ", { hold: "gate" }, "three"] }]);
+  const conversation = app.agentRegion("session 1").getByRole("log");
+  await app.agentInput("session 1").fill("tell me a story");
+  await app.agentInput("session 1").press("Enter");
+  await expect(conversation).toContainText("one two");
+
+  await app.page.reload();
+
+  // The prompt, and the reply so far, from the page's first moment.
+  await expect(conversation).toContainText("tell me a story");
+  await expect(conversation).toContainText("one two");
+  fakeClaude.release("gate");
+  await expect(conversation).toContainText("one two three");
+  // Once, not once from the snapshot and again from the finished message.
+  await expect(conversation.getByText("one two three")).toHaveCount(1);
+});
+
+test("restarting k-bench mid-turn leaves the Claude Agent working, and the page carries on without a reload", async ({
+  app,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const { fakeClaude } = kbench.instance;
+  fakeClaude.script([{ text: ["one ", "two ", { hold: "gate" }, "three"] }]);
+  const conversation = app.agentRegion("session 1").getByRole("log");
+  await app.agentInput("session 1").fill("tell me a story");
+  await app.agentInput("session 1").press("Enter");
+  await expect(conversation).toContainText("one two");
+
+  await kbench.stopServer();
+  await expect(app.agentRegion("session 1").getByText("Reconnecting…")).toBeVisible();
+  // Claude carries on with no k-bench running.
+  fakeClaude.release("gate");
+  await kbench.startServer();
+
+  await expect(conversation).toContainText("one two three");
+  await expect(conversation.getByText("one two three")).toHaveCount(1);
+  await expect(app.agentRegion("session 1").getByText("Reconnecting…")).toHaveCount(0);
+  // And it can be talked to again.
+  await app.agentInput("session 1").fill("thanks");
+  await app.agentInput("session 1").press("Enter");
+  await expect(conversation).toContainText("fake claude heard: thanks");
+});

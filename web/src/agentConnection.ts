@@ -27,73 +27,149 @@ export interface AgentSocket {
 const CONNECTING = 0;
 const OPEN = 1;
 
+const DEFAULT_RETRY_FIRST_MS = 500;
+const DEFAULT_RETRY_MAX_MS = 5000;
+
 export interface AgentConnectionOptions {
   sessionId: string;
-  /** Opens the agent WebSocket at `path` (from `agentPath`). */
+  /** Opens the agent WebSocket at `path` (from `agentPath`). Called again for every retry. */
   openSocket: (path: string) => AgentSocket;
+  /**
+   * Subscribes `retry` to whatever says the network may be back (the page became visible,
+   * the browser went online) and returns how to unsubscribe. Optional.
+   */
+  wake?: (retry: () => void) => () => void;
+  /** The first retry's delay; each further one doubles it up to `retryMaxMs`. Defaults to 500. */
+  retryFirstMs?: number;
+  /** The longest retry delay. Defaults to 5000. */
+  retryMaxMs?: number;
 }
 
 /** What a connection reports. */
 export interface AgentListener {
-  /** A message from the Agent Runtime, in the order it was sent. */
+  /**
+   * A message from the Agent Runtime, in the order it was sent. After every reconnect the
+   * first messages are a hello, a status and the replay of what was missed.
+   */
   message(message: AgentServerMessage): void;
   /**
-   * The socket closed. `ended` is true when the Session is over (deleted or Stopped): there
-   * is nothing to reconnect to. The connection does not reconnect by itself yet (ticket #134).
+   * True when the connection dropped and is retrying; false once it is back. Nothing sent
+   * while it is true reaches the Agent.
    */
-  closed(ended: boolean): void;
+  reconnecting(on: boolean): void;
+  /** The Session is over (deleted or Stopped): the connection will not retry. */
+  ended(): void;
 }
 
 /**
  * The browser's connection to one Claude Agent, speaking `src/shared/agent-protocol.ts`:
  * the counterpart of the server's relay and of the runtime behind it, with no React.
- * It asks for the log as soon as the socket opens (`sync` from the newest entry it has had),
- * so every message that reaches a listener after that is part of the conversation.
+ * Every socket it opens starts by asking for the log after the newest entry it has had
+ * (`sync`), so across any number of drops a listener gets every entry exactly once, then
+ * what is live.
  */
 export interface AgentConnection {
-  /** Sends a command to the runtime. Kept until the socket opens if it is still opening. */
-  send(message: AgentClientMessage): void;
+  /**
+   * Sends a command to the runtime. Kept until the socket opens if it is still opening for
+   * the first time; dropped while reconnecting, so a prompt is never sent late, after the
+   * owner has stopped expecting it. Returns whether it was sent or kept.
+   */
+  send(message: AgentClientMessage): boolean;
   /** Calls the listener's handlers for what happens from now on. Returns how to stop. */
   subscribe(listener: Partial<AgentListener>): () => void;
-  /** Disconnects for good. */
+  /** Disconnects for good and stops reconnecting. */
   close(): void;
 }
 
+/**
+ * Opens the Agent's socket and keeps it connected. When the socket drops it reconnects by
+ * itself with backoff, reporting `reconnecting` meanwhile, and retries at once when `wake`
+ * fires unless a socket is already opening. A close with `CLOSE_AGENT_SESSION_ENDED`
+ * reports `ended` and is never retried. The Agent itself never notices: closing a tab, a
+ * device sleeping and the server restarting only end this connection.
+ */
 export function createAgentConnection(options: AgentConnectionOptions): AgentConnection {
+  const {
+    sessionId,
+    openSocket,
+    wake,
+    retryFirstMs = DEFAULT_RETRY_FIRST_MS,
+    retryMaxMs = DEFAULT_RETRY_MAX_MS,
+  } = options;
   const listeners = new Set<Partial<AgentListener>>();
-  /** The newest log entry this connection has had. */
+  /** The newest log entry this connection has had: every socket syncs from it. */
   let lastSeq = 0;
+  let socket: AgentSocket | undefined;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let attempts = 0;
+  let reconnecting = false;
   let closed = false;
-  // Frames sent while the socket is still opening are kept, not dropped, and sent after the sync.
+  let ended = false;
+  // Frames sent while the first socket is still opening are kept, not dropped, and sent after
+  // the sync.
   const queued: string[] = [];
-  const socket = options.openSocket(agentPath(options.sessionId));
 
-  socket.onopen = () => {
-    socket.send(encodeAgentClientMessage({ type: "sync", afterSeq: lastSeq }));
-    for (const text of queued.splice(0)) socket.send(text);
+  const setReconnecting = (on: boolean) => {
+    if (reconnecting === on) return;
+    reconnecting = on;
+    for (const listener of [...listeners]) listener.reconnecting?.(on);
   };
-  socket.onmessage = (event) => {
-    if (typeof event.data !== "string") return;
-    const message = decodeAgentServerMessage(event.data);
-    if (!message) return;
-    if (message.type === "replay") {
-      lastSeq = message.entries.at(-1)?.seq ?? lastSeq;
-    } else if (message.type === "entry") {
-      lastSeq = message.entry.seq;
-    }
-    for (const listener of [...listeners]) listener.message?.(message);
+
+  const connect = () => {
+    clearTimeout(retry);
+    const ws = openSocket(agentPath(sessionId));
+    socket = ws;
+    ws.onopen = () => {
+      attempts = 0;
+      // The sync goes first: whatever is sent after it is in order after the replay.
+      ws.send(encodeAgentClientMessage({ type: "sync", afterSeq: lastSeq }));
+      for (const text of queued.splice(0)) ws.send(text);
+      setReconnecting(false);
+    };
+    ws.onmessage = (event) => {
+      if (typeof event.data !== "string" || socket !== ws) return;
+      const message = decodeAgentServerMessage(event.data);
+      if (!message) return;
+      if (message.type === "replay") {
+        lastSeq = message.entries.at(-1)?.seq ?? lastSeq;
+      } else if (message.type === "entry") {
+        lastSeq = message.entry.seq;
+      }
+      for (const listener of [...listeners]) listener.message?.(message);
+    };
+    ws.onclose = (event) => {
+      if (closed || socket !== ws) return;
+      // The Session was deleted or Stopped: the state feed shows which.
+      if (event.code === CLOSE_AGENT_SESSION_ENDED) {
+        ended = true;
+        for (const listener of [...listeners]) listener.ended?.();
+        return;
+      }
+      queued.length = 0;
+      setReconnecting(true);
+      const delay = Math.min(retryFirstMs * 2 ** attempts, retryMaxMs);
+      attempts += 1;
+      retry = setTimeout(connect, delay);
+    };
   };
-  socket.onclose = (event) => {
-    if (closed) return;
-    const ended = event.code === CLOSE_AGENT_SESSION_ENDED;
-    for (const listener of [...listeners]) listener.closed?.(ended);
-  };
+
+  // A phone that slept or regained its network should not wait out the backoff.
+  const stopWaking = wake?.(() => {
+    const waiting =
+      socket && socket.readyState !== OPEN && socket.readyState !== CONNECTING;
+    if (waiting && !closed && !ended && attempts > 0) connect();
+  });
+
+  connect();
 
   return {
     send(message) {
+      if (reconnecting || ended) return false;
       const text = encodeAgentClientMessage(message);
-      if (socket.readyState === OPEN) socket.send(text);
-      else if (socket.readyState === CONNECTING) queued.push(text);
+      if (socket?.readyState === OPEN) socket.send(text);
+      else if (socket?.readyState === CONNECTING) queued.push(text);
+      else return false;
+      return true;
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -103,8 +179,10 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
     },
     close() {
       closed = true;
+      clearTimeout(retry);
+      stopWaking?.();
       listeners.clear();
-      socket.close();
+      socket?.close();
     },
   };
 }

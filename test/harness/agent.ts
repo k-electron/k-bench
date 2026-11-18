@@ -4,6 +4,7 @@ import {
   type AgentClientMessage,
   type AgentHello,
   type AgentServerMessage,
+  type AgentSnapshot,
   agentPath,
   decodeAgentServerMessage,
   encodeAgentClientMessage,
@@ -76,6 +77,16 @@ export class AgentClient {
     });
   }
 
+  /** Every snapshot of the text streaming at the moment of a `sync`, in order. */
+  get snapshots(): AgentSnapshot[] {
+    return this.messages.filter((m): m is AgentSnapshot => m.type === "snapshot");
+  }
+
+  /** The `seq` of the newest entry received: what a reconnecting client syncs from. */
+  get lastSeq(): number {
+    return this.entries.at(-1)?.seq ?? 0;
+  }
+
   /** The text of every complete assistant message among the entries, in order. */
   get assistantTexts(): string[] {
     return this.entries.flatMap((entry) => {
@@ -98,8 +109,8 @@ export class AgentClient {
   /**
    * Asks for the entries after `afterSeq`, and every entry and fragment from now on, and
    * resolves once the replay has come: from then on this connection is in the live set.
-   * (Send a prompt from another connection before that and its fragments are missed, as
-   * they are never replayed.)
+   * (Fragments are never replayed: send a prompt from another connection before that and
+   * this one gets the text so far as a snapshot, not the fragments one by one.)
    */
   async sync(afterSeq = 0): Promise<void> {
     const before = this.messages.filter((m) => m.type === "replay").length;

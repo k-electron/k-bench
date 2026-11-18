@@ -103,6 +103,116 @@ describe("a Claude Agent", () => {
     );
   });
 
+  it("gives a connection that joins mid-reply the text so far as one snapshot, then only the fragments that follow", async () => {
+    const { instance, server, workspace } = await boot();
+    const { fakeClaude } = instance;
+    const session = await server.createClaudeAgent(workspace.id);
+    const first = await server.openAgent(session.id);
+    await first.sync();
+    fakeClaude.script([{ text: ["one ", "two ", { hold: "gate" }, "three"] }]);
+    first.prompt("go");
+    await pollUntil(() => first.fragments.includes("two "), {
+      description: "the second fragment",
+    });
+
+    const late = await server.openAgent(session.id);
+    await late.sync();
+    fakeClaude.release("gate");
+    await late.waitForEntry(isResult, "the turn's result");
+
+    // "one " and "two " arrive as one piece of text, not as the fragments they were.
+    expect(late.snapshots.map((s) => s.blocks)).toEqual([
+      [{ index: 0, type: "text", text: "one two " }],
+    ]);
+    expect(late.fragments).toEqual(["three"]);
+    expect(late.assistantTexts).toEqual(["one two three"]);
+    expect(first.fragments).toEqual(["one ", "two ", "three"]);
+    // Nothing is streaming once the turn is over: a later join gets no snapshot.
+    const after = await server.openAgent(session.id);
+    await after.sync();
+    expect(after.snapshots).toEqual([]);
+  });
+
+  it("gives a connection that comes back mid-turn, from its last sequence number, every later entry once, then what is live", async () => {
+    const { instance, server, workspace } = await boot();
+    const { fakeClaude } = instance;
+    const session = await server.createClaudeAgent(workspace.id);
+    const away = await server.openAgent(session.id);
+    await away.sync();
+    fakeClaude.script([{ text: ["a ", { hold: "gate" }, "b"] }]);
+    fakeClaude.script([{ text: "second" }]);
+    away.prompt("first");
+    await pollUntil(() => away.fragments.includes("a "), {
+      description: "the first fragment",
+    });
+    const had = away.lastSeq;
+    away.close();
+
+    const back = await server.openAgent(session.id);
+    await back.sync(had);
+    fakeClaude.release("gate");
+    await back.waitForEntry(isResult, "the first turn's result");
+    back.prompt("second");
+    await pollUntil(() => back.entries.filter(isResult).length === 2, {
+      description: "the second turn's result",
+    });
+
+    const whole = await server.openAgent(session.id);
+    await whole.sync();
+    // Exactly the entries it missed: none skipped, none repeated, live ones included.
+    expect(back.entries).toEqual(whole.entries.filter((entry) => entry.seq > had));
+    expect(back.entries.map((entry) => entry.seq)).toEqual(
+      back.entries.map((_, i) => had + 1 + i),
+    );
+    expect(back.snapshots.map((s) => s.blocks[0]?.text)).toEqual(["a "]);
+    expect(back.fragments).toEqual(["b", "second"]);
+  });
+
+  it("keeps running when the server restarts mid-turn, finishes the turn, and a reconnected client has it whole with no gap or repeat", async () => {
+    const { instance, server, workspace } = await boot();
+    const { fakeClaude } = instance;
+    const session = await server.createClaudeAgent(workspace.id);
+    const before = await server.openAgent(session.id);
+    const { runtimeBuildId } = await pollUntil(() => before.hello, {
+      description: "the hello",
+    });
+    await before.sync();
+    fakeClaude.script([{ text: ["a ", { hold: "gate" }, "b"] }]);
+    before.prompt("go");
+    await pollUntil(() => before.fragments.includes("a "), {
+      description: "the first fragment",
+    });
+    const had = before.lastSeq;
+
+    await server.stop();
+    // The browser's socket is dropped, not told the Session ended: it may come back.
+    expect(await before.waitForClose()).not.toBe(4410);
+    fakeClaude.release("gate");
+    const restarted = await instance.start();
+
+    const after = await restarted.openAgent(session.id);
+    await after.sync(had);
+    await after.waitForEntry(isResult, "the turn's result");
+    after.prompt("again");
+    await pollUntil(() => after.entries.filter(isResult).length === 2, {
+      description: "the second turn's result",
+    });
+
+    const whole = await restarted.openAgent(session.id);
+    await whole.sync();
+    expect(after.entries).toEqual(whole.entries.filter((entry) => entry.seq > had));
+    expect(after.entries.map((entry) => entry.seq)).toEqual(
+      after.entries.map((_, i) => had + 1 + i),
+    );
+    expect(after.assistantTexts).toEqual(["a b", "fake claude heard: again"]);
+    // The very same runtime and Claude Code carried on: neither was started a second time.
+    expect(whole.hello?.runtimeBuildId).toBe(runtimeBuildId);
+    expect(whole.entries.filter((e) => e.kind === "runtime")).toMatchObject([
+      { event: "started" },
+    ]);
+    expect(starts(fakeClaude.received())).toHaveLength(1);
+  });
+
   it("refuses what it does not understand, and sends none of it to claude", async () => {
     const { instance, server, workspace } = await boot();
     const session = await server.createClaudeAgent(workspace.id);

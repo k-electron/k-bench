@@ -62,6 +62,11 @@ export function AgentPane({
           Claude is working…
         </p>
       )}
+      {conversation.reconnecting && !conversation.ended && (
+        <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
+          Reconnecting…
+        </p>
+      )}
       {conversation.ended && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
           This Session has ended.
@@ -70,6 +75,7 @@ export function AgentPane({
       <Composer
         onSend={conversation.send}
         disabled={conversation.ended}
+        offline={conversation.reconnecting}
         autoFocus={focused}
       />
     </div>

@@ -21,6 +21,7 @@ import {
 } from "../shared/agent-protocol.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { ClientHub } from "./hub.ts";
+import { LiveText } from "./live.ts";
 import { ClaudeSession } from "./session.ts";
 
 /** Put in at build time from the SDK's package.json (`vite.runtime.config.ts`). */
@@ -46,10 +47,13 @@ const hello = (): AgentHello => ({
   sdkClaudeCodeVersion: __SDK_CLAUDE_CODE_VERSION__,
 });
 
+const live = new LiveText();
+
 const hub = new ClientHub({
   socketFile: agentSocketFile(args.agentDir),
   log,
   hello,
+  snapshot: () => live.snapshot(),
   onCommand: (message) => void command(message),
 });
 
@@ -78,12 +82,15 @@ const claude = new ClaudeSession(
   {
     message(message) {
       if (message.type === "stream_event") {
-        // Fragments go live and are never logged.
-        hub.partial(message as unknown as Record<string, unknown>);
+        // Fragments go live and are never logged; the text so far is kept for late joiners.
+        const fragment = message as unknown as Record<string, unknown>;
+        live.fragment(fragment);
+        hub.partial(fragment);
         return;
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
       if (message.type === "result") {
+        live.turnEnded();
         pendingTurns = Math.max(0, pendingTurns - 1);
         publishStatus();
       }

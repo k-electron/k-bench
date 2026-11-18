@@ -6,6 +6,7 @@ import {
   type AgentClientMessage,
   type AgentHello,
   type AgentServerMessage,
+  type AgentSnapshot,
   type AgentStatus,
   decodeAgentClientMessage,
   encodeAgentServerMessage,
@@ -31,6 +32,7 @@ export class ClientHub {
   private readonly socketFile: string;
   private readonly log: AgentLog;
   private readonly hello: () => AgentHello;
+  private readonly snapshot: () => AgentSnapshot | undefined;
   private status: AgentStatus = { type: "status", state: "idle" };
   private readonly onCommand: (message: AgentClientMessage) => void;
 
@@ -38,12 +40,15 @@ export class ClientHub {
     socketFile: string;
     log: AgentLog;
     hello: () => AgentHello;
+    /** The text so far of the message streaming now, for a connection that joins mid-message. */
+    snapshot: () => AgentSnapshot | undefined;
     /** Called with every valid message except `sync`, which the hub answers itself. */
     onCommand: (message: AgentClientMessage) => void;
   }) {
     this.socketFile = options.socketFile;
     this.log = options.log;
     this.hello = options.hello;
+    this.snapshot = options.snapshot;
     this.onCommand = options.onCommand;
     this.server = createServer((socket) => this.accept(socket));
   }
@@ -114,12 +119,14 @@ export class ClientHub {
         });
         return;
       }
-      // The replay and the join happen in one turn of the event loop, so no entry falls
-      // between them and none is sent twice.
+      // The replay, the snapshot of the text streaming now and the join happen in one turn
+      // of the event loop, so no entry or fragment falls between them and none is sent twice.
       this.send(client, {
         type: "replay",
         entries: this.log.readAfter(message.afterSeq),
       });
+      const live = this.snapshot();
+      if (live) this.send(client, live);
       client.synced = true;
     } else {
       this.onCommand(message);

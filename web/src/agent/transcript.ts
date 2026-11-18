@@ -1,4 +1,8 @@
-import type { AgentServerMessage, LogEntry } from "../../../src/shared/agent-protocol.ts";
+import type {
+  AgentServerMessage,
+  AgentSnapshot,
+  LogEntry,
+} from "../../../src/shared/agent-protocol.ts";
 
 /**
  * What the conversation shows, built from the Agent's log entries and live fragments. This
@@ -126,6 +130,32 @@ function addFragment(
   }
 }
 
+/**
+ * Takes in the snapshot of the text streaming now, which comes right after a replay. A client
+ * that joined mid-message already holds some of that message's blocks complete (in the
+ * replay), and those are not shown from the snapshot.
+ */
+function addSnapshot(state: TranscriptState, snapshot: AgentSnapshot): TranscriptState {
+  const completeBlocks = state.entries.filter(
+    (entry) =>
+      entry.kind === "sdk" &&
+      entry.message.type === "assistant" &&
+      entry.message.parent_tool_use_id == null &&
+      isObject(entry.message.message) &&
+      entry.message.message.id === snapshot.messageId,
+  ).length;
+  return {
+    ...state,
+    live: {
+      id: snapshot.messageId,
+      blocks: new Map(
+        snapshot.blocks.map(({ index, type, text }) => [index, { type, text }]),
+      ),
+      completeBlocks,
+    },
+  };
+}
+
 /** The state after a message from the runtime. Messages that are not the conversation change nothing. */
 export function applyServerMessage(
   state: TranscriptState,
@@ -133,7 +163,11 @@ export function applyServerMessage(
 ): TranscriptState {
   switch (message.type) {
     case "replay":
-      return addEntries(state, message.entries);
+      // Text streamed before a drop is stale: if a message is still streaming, a snapshot
+      // follows this replay, and if not, the entries replayed hold what it became.
+      return addEntries({ ...state, live: undefined }, message.entries);
+    case "snapshot":
+      return addSnapshot(state, message);
     case "entry":
       return addEntries(state, [message.entry]);
     case "partial":
