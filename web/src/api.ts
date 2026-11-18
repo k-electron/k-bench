@@ -1,7 +1,11 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { revisionOf, type SessionKind } from "../../src/shared/state-protocol.ts";
+import {
+  type ClaudeInterface,
+  type NewSessionKind,
+  revisionOf,
+} from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
   path: string;
@@ -17,6 +21,15 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/** What creating a Session takes: a shell, or with `claude` a Claude Session. */
+export interface CreateSessionInput {
+  name?: string;
+  /** Makes it a Claude Session, with these Launch options. */
+  claude?: LaunchOptions;
+  /** A Claude Session's interface: a Claude TUI unless this says `agent`, which needs no `claude`. */
+  interface?: ClaudeInterface;
 }
 
 /**
@@ -82,12 +95,9 @@ export const api = {
    * used for a Claude Session. A shell with every option Default if none has been created.
    */
   lastNewSession: () =>
-    get<{ kind: SessionKind; claude: LaunchOptions }>("/api/new-session/last"),
-  /** An ordinary shell Session, or with `claude` a Claude Session. */
-  createSession: (
-    workspaceId: string,
-    input: { name?: string; claude?: LaunchOptions } = {},
-  ) =>
+    get<{ kind: NewSessionKind; claude: LaunchOptions }>("/api/new-session/last"),
+  /** An ordinary shell Session, or with `claude` or `interface` a Claude Session. */
+  createSession: (workspaceId: string, input: CreateSessionInput = {}) =>
     send<{ id: string; name: string }>(
       "POST",
       `/api/workspaces/${workspaceId}/sessions`,

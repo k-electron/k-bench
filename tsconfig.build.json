@@ -6,6 +6,7 @@
     "outDir": "dist/js"
   },
   "include": [
+    "src/agent",
     "src/server",
     "src/shared",
     "scripts/k-bench.ts",

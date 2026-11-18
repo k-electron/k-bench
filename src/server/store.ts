@@ -3,7 +3,11 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { LaunchOptions } from "../shared/launch-options.ts";
-import type { SessionKind } from "../shared/state-protocol.ts";
+import type {
+  ClaudeInterface,
+  NewSessionKind,
+  SessionKind,
+} from "../shared/state-protocol.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
@@ -50,6 +54,12 @@ const MIGRATIONS: string[] = [
     kind TEXT NOT NULL
   );
   `,
+  // Which interface a Claude Session is in, Claude TUI ('tui') or Claude Agent ('agent'); null
+  // for a shell. Every Claude Session so far is a Claude TUI.
+  `
+  ALTER TABLE sessions ADD COLUMN interface TEXT;
+  UPDATE sessions SET interface = 'tui' WHERE kind = 'claude';
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -65,6 +75,8 @@ export interface SessionRow {
   kind: SessionKind;
   /** The Claude conversation a Claude Session runs; null for a shell Session. */
   conversationId: string | null;
+  /** The interface a Claude Session is in; null for a shell Session. */
+  interface: ClaudeInterface | null;
   /** The Launch options a Claude Session was created with; null for a shell Session. */
   launchOptions: LaunchOptions | null;
 }
@@ -170,7 +182,8 @@ export class Store {
     const rows = this.db
       .prepare(
         `SELECT id, workspace_id AS workspaceId, name, kind,
-                conversation_id AS conversationId, launch_options AS launchOptions
+                conversation_id AS conversationId, interface,
+                launch_options AS launchOptions
          FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid`,
       )
       .all(workspaceId) as unknown as RawSessionRow[];
@@ -181,7 +194,7 @@ export class Store {
     const row = this.db
       .prepare(
         `SELECT s.id, s.workspace_id AS workspaceId, s.name, s.kind,
-                s.conversation_id AS conversationId,
+                s.conversation_id AS conversationId, s.interface,
                 s.launch_options AS launchOptions, w.folder
          FROM sessions s JOIN workspaces w ON w.id = s.workspace_id WHERE s.id = ?`,
       )
@@ -207,14 +220,14 @@ export class Store {
   }
 
   /** The kind of Session last created, if any has been. */
-  getLastSessionKind(): SessionKind | undefined {
+  getLastSessionKind(): NewSessionKind | undefined {
     const row = this.db
       .prepare("SELECT kind FROM last_session_kind WHERE id = 1")
-      .get() as { kind: SessionKind } | undefined;
+      .get() as { kind: NewSessionKind } | undefined;
     return row?.kind;
   }
 
-  setLastSessionKind(kind: SessionKind): void {
+  setLastSessionKind(kind: NewSessionKind): void {
     this.db
       .prepare(
         `INSERT INTO last_session_kind (id, kind) VALUES (1, ?)
@@ -239,15 +252,19 @@ export class Store {
     conversationId?: string;
     /** The Launch options of a Claude Session. */
     launchOptions?: LaunchOptions;
+    /** The interface of a Claude Session; a Claude TUI when left out. */
+    interface?: ClaudeInterface;
   }): SessionRow {
     const conversationId = input.conversationId ?? null;
     const launchOptions = conversationId === null ? null : (input.launchOptions ?? null);
     const kind = conversationId === null ? "shell" : "claude";
+    const claudeInterface = conversationId === null ? null : (input.interface ?? "tui");
     this.db
       .prepare(
         `INSERT INTO sessions
-           (id, workspace_id, name, created_at, kind, conversation_id, launch_options)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, workspace_id, name, created_at, kind, conversation_id, launch_options,
+            interface)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -257,6 +274,7 @@ export class Store {
         kind,
         conversationId,
         launchOptions && JSON.stringify(launchOptions),
+        claudeInterface,
       );
     return {
       id: input.id,
@@ -264,6 +282,7 @@ export class Store {
       name: input.name,
       kind,
       conversationId,
+      interface: claudeInterface,
       launchOptions,
     };
   }

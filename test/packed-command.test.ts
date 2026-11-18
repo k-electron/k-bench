@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { AgentClient, isResult } from "./harness/agent.ts";
+import { installFakeClaude } from "./harness/fake-claude.ts";
 import { LOGIN_HEADER } from "./harness/instance.ts";
 import {
   cleanUpPacked,
@@ -72,6 +74,60 @@ describe("the packed k-bench command", () => {
       expect(await page.text()).toContain('<div id="root">');
     } finally {
       server.kill("SIGTERM");
+    }
+  });
+
+  it("runs a Claude Agent from its bundled runtime, and the package depends on no Agent SDK", async () => {
+    // Nothing to fetch: the SDK, with the platform package that carries a whole Claude Code
+    // (about 338 MB), is not a dependency, optional or otherwise, and was not installed.
+    const manifest = JSON.parse(
+      readFileSync(join(pkg.packageDir, "package.json"), "utf8"),
+    ) as Record<string, Record<string, string> | undefined>;
+    const shipped = Object.keys({
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+    });
+    expect(shipped.filter((name) => name.includes("claude-agent-sdk"))).toEqual([]);
+    expect(existsSync(join(pkg.packageDir, "node_modules/@anthropic-ai"))).toBe(false);
+
+    // And an Agent runs from what is in the package: the fake stands in for `claude`, named by
+    // path because a login shell's PATH can find the owner's real one first.
+    const home = packedTempDir();
+    mkdirSync(join(home, "zdotdir"));
+    writeFileSync(join(home, "zdotdir/.zshrc"), "unset HISTFILE\n");
+    const login = "owner@example.com";
+    const server = await startPackedServer(pkg, login, {
+      K_BENCH_CLAUDE_PROGRAM: installFakeClaude(packedTempDir()),
+      HOME: home,
+      ZDOTDIR: join(home, "zdotdir"),
+    });
+    try {
+      const base = `http://127.0.0.1:${server.port}`;
+      const headers = { [LOGIN_HEADER]: login, "content-type": "application/json" };
+      const post = async (path: string, body: unknown) => {
+        const response = await fetch(`${base}${path}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+        expect(response.status, await response.clone().text()).toBe(201);
+        return (await response.json()) as { id: string };
+      };
+      const workspace = await post("/api/workspaces", { folder: packedTempDir() });
+      const agent = await post(`/api/workspaces/${workspace.id}/sessions`, {
+        interface: "agent",
+      });
+
+      const client = await AgentClient.open(base, agent.id, headers);
+      await client.sync();
+      client.prompt("hello from the package");
+      await client.waitForEntry(isResult, "the reply");
+      expect(client.assistantTexts).toEqual([
+        "fake claude heard: hello from the package",
+      ]);
+    } finally {
+      server.stop();
     }
   });
 

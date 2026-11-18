@@ -27,6 +27,7 @@
   },
   "files": [
     "dist/js",
+    "dist/runtime",
     "dist/web",
     "scripts/fix-node-pty.mjs"
   ],
@@ -38,8 +39,9 @@
     "postinstall": "node scripts/fix-node-pty.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:serve": "node scripts/dev-serve.ts",
-    "build": "pnpm build:web && pnpm build:server",
+    "build": "pnpm build:web && pnpm build:runtime && pnpm build:server",
     "build:web": "vite build",
+    "build:runtime": "vite build --config vite.runtime.config.ts",
     "build:server": "rm -rf dist/js && tsc -p tsconfig.build.json",
     "prepack": "pnpm build",
     "start": "node src/server/main.ts",

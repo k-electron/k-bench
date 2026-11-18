@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { LaunchOptions } from "../../src/shared/launch-options.ts";
 import { EVENTS_PATH, type State } from "../../src/shared/state-protocol.ts";
-import { ApiError, api, type Change } from "./api";
+import { ApiError, api, type Change, type CreateSessionInput } from "./api";
 import { createStateClient, type StateClient } from "./stateClient";
 
 /** The events WebSocket URL: the server pushes a full state snapshot on every change. */
@@ -31,7 +30,7 @@ export interface Actions {
    */
   createSession(
     workspaceId: string,
-    input: { name?: string; claude?: LaunchOptions },
+    input: CreateSessionInput,
   ): Promise<string | undefined>;
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;

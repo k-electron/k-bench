@@ -1,4 +1,5 @@
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
+import { AgentPane } from "./agent/AgentPane";
 import { TerminalView } from "./TerminalView";
 
 interface PaneProps {
@@ -7,8 +8,21 @@ interface PaneProps {
   focused: boolean;
 }
 
-/** A Session's terminal, filling one slot in the main view. */
+/** A Session in one slot of the main view: a Claude Agent's conversation, or a terminal. */
 export function Pane({ session, focused }: PaneProps) {
+  if (session.kind === "claude" && session.interface === "agent") {
+    return (
+      <section aria-label={`Claude Agent ${session.name}`} className="h-full min-h-0">
+        {session.status === "running" ? (
+          <AgentPane session={session} focused={focused} />
+        ) : (
+          <p className="p-4 text-sm text-muted-foreground">
+            This Session is Stopped. Restart it from the sidebar.
+          </p>
+        )}
+      </section>
+    );
+  }
   return (
     <section
       aria-label={`Terminal ${session.name}`}

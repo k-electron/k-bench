@@ -16,8 +16,8 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
-import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
 import type { State, WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import type { CreateSessionInput } from "../api";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
 import { NewSessionDialog } from "./NewSessionDialog";
@@ -35,10 +35,7 @@ interface SidebarProps {
    * Creates a Session (a Claude Session with `claude`) and opens it; rejects with the
    * server's refusal.
    */
-  onCreateSession: (
-    workspaceId: string,
-    input: { name: string; claude?: LaunchOptions },
-  ) => Promise<void>;
+  onCreateSession: (workspaceId: string, input: CreateSessionInput) => Promise<void>;
   /** Why the last Session restart was refused, if it was. */
   error?: string;
   /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */

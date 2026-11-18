@@ -13,12 +13,17 @@
 
 The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsconfig.build.json`) for the npm package: see [Packaging](packaging.md).
 
+## `src/agent/` and `src/agent-runtime/`
+
+Claude Agents ([Claude Agent internals](agent.md)). `src/agent/` is Node code the server and the runtime share (paths, the log, the exit record, line framing); the server compiles it. `src/agent-runtime/` is the Agent Runtime, bundled with the Agent SDK into one file by `vite.runtime.config.ts` (`pnpm build:runtime`) and never imported by the server.
+
 ## `src/server/`
 
 - `config.ts`: instance config.
 - `access-guard.ts`: the `Tailscale-User-Login` check, ADR-0003 (see [Access](access.md)).
 - `store.ts`: SQLite and migrations, including each Session's kind, a Claude Session's conversation ID and Launch options, the last-used Launch options and the kind of Session last created.
 - `claude.ts`: everything k-bench knows about launching Claude Code (ADR 0005): the flags the Launch options map to, validating them, and the launcher that starts, resumes and holds an error on screen. It never reads Claude Code's output or files.
+- `agents.ts` and `agent-sockets.ts`: Claude Agents on the server: installing and starting the Agent Runtime, reaching its socket, ending it; and the agent WebSocket that relays to it.
 - `tmux.ts`: the tmux driver, an adapter over the tmux CLI that keeps no state about Sessions, and owns the Bell rule (see [The Bell](bell.md)).
 - `reconciler.ts`: kills tmux sessions with no store row, at startup and on every state read.
 - `service.ts`: domain operations.
@@ -35,6 +40,7 @@ The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsco
 
 - `terminal-protocol.ts` defines the terminal WebSocket protocol once; the server, the browser and the tests all import it.
 - `launch-options.ts` defines the Launch options, their choices and the all-Default value once, for the server and the New Session dialog.
+- `agent-protocol.ts` defines the Claude Agent wire protocol once (messages, log entries, validation), for the runtime, the server, the browser and the tests.
 - `state-protocol.ts` does the same for state: the snapshot types, the `State-Revision` header, the events path, and decoding a snapshot or a response's revision.
 
 ## `web/`
@@ -48,13 +54,15 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
   - `WorkspaceRow`, a sortable Workspace row with its menu;
   - `SessionRow` and `ClaudeGlyph`;
   - `PaneArea`, one or two Panes with a draggable divider;
-  - `Pane`, a Session's terminal in one slot;
+  - `Pane`, a Session's terminal, or a Claude Agent's conversation, in one slot;
+  - `agent/`, a Claude Agent's Pane: `AgentPane` and its `Composer`;
   - `PaneLabels`, the top bar's `Workspace › Session` label over each Pane, laid out on the same grid columns as `PaneArea` (`paneColumns` in `src/layout.ts`), so each label follows its Pane and the divider by construction;
   - `TerminalView`, xterm.js on the terminal WebSocket: wheel and touch scroll tmux history (below), OSC 52 copies to the clipboard, shift-drag selects in the browser, and a "reconnecting…" badge shows while the connection retries;
   - `ExtraKeys`, for the phone layout (below).
 - `src/components/ui/` holds the shadcn/ui components.
 - `src/api.ts` is the API client.
 - `src/stateClient.ts` is the state client, with no React: it keeps the events WebSocket connected (backoff, resync), hands each snapshot to subscribers and answers `whenShown(change)`. `src/useAppState.ts` is a thin wrapper that mirrors it into React state and builds the owner's actions.
+- `src/agentConnection.ts` is a Claude Agent's connection (no React), and `src/agent/` its conversation: `transcript.ts`, the pure reducer from log entries and live fragments to what is shown, and `useAgentConversation.ts`. See [Claude Agent internals](agent.md).
 - `src/terminalConnection.ts` is the terminal's connection, with no React and no xterm.js, the browser's counterpart of the server's `Attachments`: it opens the terminal WebSocket at the terminal's size, keeps input and resizes sent while it is opening until it opens, drops them while a retry waits, reconnects with backoff (and at once when the page is visible or online again), and stops for good when the Session ended. `TerminalView` plugs xterm.js into it.
 - `src/layout.ts` is the per-device Pane layout: a `Layout` value plus pure functions such as `openInFocusedPane`, `openInOtherPane`, `stashInOtherPane`, `togglePaneCount`, `moveFocus` and `setRatio`, and `useLayout()`, which keeps it in browser storage. It is the internals of `usePaneView`.
 - `src/usePaneView.ts` owns the Panes: it holds the saved layout, forgets deleted Sessions (keeping a notice with the saved Pane they were in), titles the tab, and returns what each visible Pane shows (a Session with its Workspace name, a deleted notice, or empty) along with the intents that change the layout. The components render that and look nothing up. The phone's one-Pane view is applied when reading only and never saved, so on a phone an intent acts on the saved layout's Focused Pane.

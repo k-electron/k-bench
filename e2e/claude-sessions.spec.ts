@@ -3,14 +3,17 @@ import { expect, test } from "./harness.ts";
 // Claude Code is the stub from test/harness/fake-claude.sh: the harness points the instance
 // at it, so nothing here runs the real `claude`.
 
-test("the + button opens one dialog offering Shell and Claude TUI, which opens on Shell the first time", async ({
+test("the + button opens one dialog offering Shell, Claude TUI and Claude Agent, which opens on Shell the first time", async ({
   app,
   kbench,
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
 
   await app.openNewSessionDialog("project");
-  await expect(app.newSessionKinds).toHaveCount(2);
+  await expect(app.newSessionKinds).toHaveCount(3);
+  await expect(
+    app.newSessionDialog.getByRole("radio", { name: "Claude Agent (WIP)" }),
+  ).toBeVisible();
   await expect(app.newSessionDialog.getByRole("radio", { name: "Shell" })).toBeChecked();
   // Launch options belong to Claude TUI only.
   await expect(app.newSessionDialog.getByLabel("Model", { exact: true })).toBeHidden();

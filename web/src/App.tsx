@@ -123,9 +123,9 @@ export function App() {
               onFocus={panes.focusPane}
               onResize={panes.setRatio}
             />
-            {keyboardUp && panes.focusedSessionId && <TypingKeys />}
+            {keyboardUp && panes.focusedHasTerminal && <TypingKeys />}
           </div>
-          {phone && !keyboardUp && panes.focusedSessionId && (
+          {phone && !keyboardUp && panes.focusedSessionId && panes.focusedHasTerminal && (
             <ExtraKeys sessionId={panes.focusedSessionId} />
           )}
         </main>

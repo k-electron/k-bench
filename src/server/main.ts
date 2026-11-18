@@ -12,8 +12,11 @@ if (!config.allowedLogin) {
 // A production build (`pnpm build`) is served by this server alone. In `pnpm dev` there is
 // usually none, and Vite serves the front end instead.
 const webDir = resolve("dist/web");
+// Likewise the Agent Runtime, built into one file by `pnpm build`.
+const agentRuntimeFile = resolve("dist/runtime/agent-runtime.mjs");
 const server = await startServer(config, {
   webDir: existsSync(webDir) ? webDir : undefined,
+  agentRuntimeFile,
 });
 console.log(
   `k-bench ${describeBuild()} listening on http://127.0.0.1:${server.port} (tmux socket "${config.tmuxSocket}", data ${config.dataDir})`,

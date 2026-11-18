@@ -174,6 +174,7 @@ describe("installing the app files", () => {
       "// the command is not part of the app",
     );
     write(join(pkg, "dist/web/index.html"), `<html>${version}</html>`);
+    write(join(pkg, "dist/runtime/agent-runtime.mjs"), `runtime ${version}`);
     write(join(pkg, "package.json"), "{}");
     write(join(pkg, "scripts/fix-node-pty.mjs"), "// fix");
     write(join(pkg, "scripts/install.ts"), "// not part of the app");
@@ -196,6 +197,10 @@ describe("installing the app files", () => {
     expect(readFileSync(join(staged, "dist/web/index.html"), "utf8")).toBe(
       "<html>1</html>",
     );
+    // The Agent Runtime, which the server installs into the data folder at startup.
+    expect(readFileSync(join(staged, "dist/runtime/agent-runtime.mjs"), "utf8")).toBe(
+      "runtime 1",
+    );
     expect(JSON.parse(readFileSync(join(staged, "package.json"), "utf8"))).toEqual(
       manifest,
     );
@@ -213,8 +218,8 @@ describe("installing the app files", () => {
     expect(existsSync(join(staged, "leftover-from-a-failed-run"))).toBe(false);
   });
 
-  it("fails clearly when the front end or the server has not been built", () => {
-    for (const missing of ["dist/web", "dist/js"]) {
+  it("fails clearly when the front end, the Agent Runtime or the server has not been built", () => {
+    for (const missing of ["dist/web", "dist/runtime", "dist/js"]) {
       const pkg = fakePackage("1");
       rmSync(join(pkg, missing), { recursive: true });
       expect(() =>

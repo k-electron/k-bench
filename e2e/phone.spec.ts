@@ -436,3 +436,34 @@ test.describe("Paste in the keyboard-up overlay", () => {
     await expect(app.overlayKey("Paste")).toBeHidden();
   });
 });
+
+test("a Claude Agent on the phone has no Extra keys, Return starts a new line and Send sends", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  await expect(app.agentRegion("session 1")).toBeVisible();
+  // Nothing of the terminal's keys: this is an ordinary input box.
+  await expect(
+    app.page.getByRole("group", { name: "Extra keys", exact: true }),
+  ).toHaveCount(0);
+
+  const input = app.agentInput("session 1");
+  await input.tap();
+  await app.page.keyboard.type("one");
+  await app.page.keyboard.press("Enter");
+  await app.page.keyboard.type("two");
+  // Return wrote a new line and sent nothing.
+  await expect(input).toHaveValue("one\ntwo");
+  const conversation = app.agentRegion("session 1").getByRole("log");
+  await expect(conversation).not.toContainText("fake claude heard");
+
+  await app
+    .agentRegion("session 1")
+    .getByRole("button", { name: "Send", exact: true })
+    .tap();
+  await expect(conversation).toContainText("fake claude heard: one two");
+  await expect(input).toHaveValue("");
+});

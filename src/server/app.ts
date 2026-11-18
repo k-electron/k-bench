@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { LaunchOptions } from "../shared/launch-options.ts";
+import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import { REVISION_HEADER } from "../shared/state-protocol.ts";
 import { parseLaunchOptions } from "./claude.ts";
 import { DirectoryError, listDirectories } from "./directories.ts";
@@ -126,16 +126,26 @@ export function createApp(
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
     // `claude` makes it a Claude Session; its Launch options are checked before anything starts.
+    // `interface: "agent"` makes it a Claude Agent (a Claude Session too: `claude` may then be
+    // left out, which is all Default). Without it, a Claude Session is a Claude TUI.
     let launchOptions: LaunchOptions | undefined;
     if (body.claude !== undefined) {
       const parsed = parseLaunchOptions(body.claude);
       if ("error" in parsed) throw new ServiceError("invalid", parsed.error);
       launchOptions = parsed.options;
     }
+    const requested = body.interface;
+    if (requested !== undefined && requested !== "tui" && requested !== "agent") {
+      throw new ServiceError("invalid", 'interface must be "tui" or "agent"');
+    }
+    if (requested === "agent") launchOptions ??= DEFAULT_LAUNCH_OPTIONS;
+    if (requested === "tui" && !launchOptions) {
+      throw new ServiceError("invalid", "interface needs claude (a Claude Session)");
+    }
     const session = await service.createSession(
       c.req.param("id"),
       optionalString(body.name),
-      launchOptions,
+      launchOptions && { options: launchOptions, interface: requested ?? "tui" },
     );
     return c.json(session, 201);
   });

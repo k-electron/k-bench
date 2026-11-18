@@ -11,10 +11,21 @@
 /** What a Session runs: the owner's shell, or Claude Code (a Claude Session). */
 export type SessionKind = "shell" | "claude";
 
+/** How a Claude Session is operated: in a terminal (Claude TUI) or in a conversation (Claude Agent). */
+export type ClaudeInterface = "tui" | "agent";
+
+/**
+ * What the New Session dialog offers, and what the Host remembers as the kind created last.
+ * "claude" is Claude TUI. Not what a Session is: that is `SessionKind` and `ClaudeInterface`.
+ */
+export type NewSessionKind = SessionKind | "claude-agent";
+
 export interface SessionState {
   id: string;
   name: string;
   kind: SessionKind;
+  /** For a Claude Session, the interface it is in now; absent for a shell. */
+  interface?: ClaudeInterface;
   status: "running" | "stopped";
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
