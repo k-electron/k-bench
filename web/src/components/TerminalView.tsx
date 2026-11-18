@@ -3,6 +3,7 @@ import { type IDisposable, type IEvent, Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import type { SessionKind } from "../../../src/shared/state-protocol.ts";
 import { type MirroredField, mirrorTypedLine } from "../mirroredField";
+import { retryWhenAwake } from "../retryWhenAwake";
 import { useSmartTypingChoice, useSmartTypingOffered } from "../smartTyping";
 import { createTerminalConnection } from "../terminalConnection";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
@@ -14,22 +15,6 @@ function terminalUrl(path: string): string {
   const url = new URL(path, window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
-}
-
-/**
- * Calls `retry` when a phone that slept or regained its network should not wait out the
- * backoff: the page became visible, or the browser went online.
- */
-function retryWhenAwake(retry: () => void): () => void {
-  const retryIfVisible = () => {
-    if (document.visibilityState !== "hidden") retry();
-  };
-  document.addEventListener("visibilitychange", retryIfVisible);
-  window.addEventListener("online", retryIfVisible);
-  return () => {
-    document.removeEventListener("visibilitychange", retryIfVisible);
-    window.removeEventListener("online", retryIfVisible);
-  };
 }
 
 /**

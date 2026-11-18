@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { AgentHello, AgentStatus } from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
+import { retryWhenAwake } from "../retryWhenAwake";
 import {
   applyServerMessage,
   emptyTranscript,
@@ -35,8 +36,10 @@ export interface AgentConversation {
   state: AgentStatus["state"] | undefined;
   /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
   ended: boolean;
-  /** Sends a prompt as typed. */
-  send(text: string): void;
+  /** The connection dropped and is retrying: what is shown may be behind, and nothing can be sent. */
+  reconnecting: boolean;
+  /** Sends a prompt as typed. False when it could not be sent (reconnecting), so the text should stay. */
+  send(text: string): boolean;
 }
 
 interface Model {
@@ -44,16 +47,17 @@ interface Model {
   hello: AgentHello | undefined;
   state: AgentStatus["state"] | undefined;
   ended: boolean;
+  reconnecting: boolean;
 }
 
 type Event =
   | { type: "message"; message: Parameters<typeof applyServerMessage>[1] }
-  | { type: "closed"; ended: boolean };
+  | { type: "reconnecting"; on: boolean }
+  | { type: "ended" };
 
 function reduce(model: Model, event: Event): Model {
-  if (event.type === "closed") {
-    return event.ended ? { ...model, ended: true } : model;
-  }
+  if (event.type === "ended") return { ...model, ended: true, reconnecting: false };
+  if (event.type === "reconnecting") return { ...model, reconnecting: event.on };
   const { message } = event;
   if (message.type === "hello") return { ...model, hello: message };
   if (message.type === "status") return { ...model, state: message.state };
@@ -65,6 +69,7 @@ const initial: Model = {
   hello: undefined,
   state: undefined,
   ended: false,
+  reconnecting: false,
 };
 
 /** Connects to a Claude Agent for as long as the component is mounted. */
@@ -76,11 +81,13 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     const opened = createAgentConnection({
       sessionId,
       openSocket: (path) => new WebSocket(agentUrl(path)),
+      wake: retryWhenAwake,
     });
     connection.current = opened;
     const stop = opened.subscribe({
       message: (message) => dispatch({ type: "message", message }),
-      closed: (ended) => dispatch({ type: "closed", ended }),
+      reconnecting: (on) => dispatch({ type: "reconnecting", on }),
+      ended: () => dispatch({ type: "ended" }),
     });
     return () => {
       stop();
@@ -89,10 +96,19 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     };
   }, [sessionId]);
 
-  const send = useCallback((text: string) => {
-    connection.current?.send({ type: "prompt", id: newPromptId(), text });
-  }, []);
+  const send = useCallback(
+    (text: string) =>
+      connection.current?.send({ type: "prompt", id: newPromptId(), text }) ?? false,
+    [],
+  );
 
   const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
-  return { items, hello: model.hello, state: model.state, ended: model.ended, send };
+  return {
+    items,
+    hello: model.hello,
+    state: model.state,
+    ended: model.ended,
+    reconnecting: model.reconnecting,
+    send,
+  };
 }

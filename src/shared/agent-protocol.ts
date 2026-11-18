@@ -127,6 +127,21 @@ export interface AgentPartial {
   message: Record<string, unknown>;
 }
 
+/**
+ * The text so far of the message being streamed, sent once to a client that joins in the
+ * middle of it (right after its `replay`), so it does not wait for the next fragment to see
+ * what came before. The `partial`s that follow carry on from exactly here. Sent only while
+ * a top-level message is streaming; a client holding stale streamed text drops it at every
+ * `replay`, so no snapshot means nothing is streaming.
+ */
+export interface AgentSnapshot {
+  type: "snapshot";
+  /** The Messages API message ID the blocks belong to (its `message_start`). */
+  messageId: string;
+  /** Every content block started so far, in index order; `text` is what streamed into it. */
+  blocks: Array<{ index: number; type: string; text: string }>;
+}
+
 /** A message the runtime refused, or a request it could not carry out. */
 export interface AgentError {
   type: "error";
@@ -140,6 +155,7 @@ export type AgentServerMessage =
   | AgentReplay
   | AgentEntry
   | AgentPartial
+  | AgentSnapshot
   | AgentError;
 
 // ---- Client to runtime -------------------------------------------------------------------
@@ -147,8 +163,9 @@ export type AgentServerMessage =
 export type AgentClientMessage =
   /**
    * Asks for every entry after `afterSeq` (0 for all of them), answered with one `replay`,
-   * then sends this connection every `entry` and `partial` from the same moment on, with no
-   * gap and no repeat. A connection that never syncs receives `hello` and `status` only.
+   * then, if a message is mid-stream, one `snapshot` of its text so far, then sends this
+   * connection every `entry` and `partial` from the same moment on, with no gap and no
+   * repeat. A connection that never syncs receives `hello` and `status` only.
    * Once per connection.
    */
   | { type: "sync"; afterSeq: number }
@@ -218,6 +235,7 @@ const SERVER_TYPES: readonly string[] = [
   "replay",
   "entry",
   "partial",
+  "snapshot",
   "error",
 ] satisfies AgentServerMessage["type"][];
 
