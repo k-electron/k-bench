@@ -186,20 +186,23 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
-  /** The Bell badge on a Session's row; present only while its Bell is raised. */
-  bellBadge(sessionName: string): Locator {
-    return this.sidebar.getByRole("img", {
-      name: `${sessionName} rang the bell`,
-      exact: true,
-    });
+  /**
+   * A Session's row is pulsing: it needs the owner (its Bell is raised). The pulse is
+   * animation, so this finds the status text the row carries for it, present only while it pulses.
+   */
+  rowPulse(sessionName: string): Locator {
+    return this.sidebar
+      .getByRole("status")
+      .and(this.page.getByText(`${sessionName} needs you`, { exact: true }));
   }
 
-  /** The hint on a Workspace row saying some Session in it rang the bell. */
-  workspaceBellHint(workspaceName: string): Locator {
-    return this.sidebar.getByRole("img", {
-      name: `${workspaceName} has a session that rang the bell`,
-      exact: true,
-    });
+  /** A collapsed Workspace's row is pulsing: some Session in it needs the owner. */
+  workspacePulse(workspaceName: string): Locator {
+    return this.sidebar.getByRole("status").and(
+      this.page.getByText(`${workspaceName} has a session that needs you`, {
+        exact: true,
+      }),
+    );
   }
 
   /** Collapses a Workspace's Sessions out of view. */

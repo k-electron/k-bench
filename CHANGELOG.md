@@ -15,6 +15,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Changed
 
+- A Bell now shows as a pulsing Session row instead of a small bell badge, and a collapsed Workspace pulses while any Session in it has a Bell. The pulse is a steady tint under reduced motion. Bells are raised and cleared as before.
 - The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
 
 ### Fixed

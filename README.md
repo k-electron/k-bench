@@ -23,7 +23,7 @@ It is not only for Claude Code. **New shell** gives you a plain shell Session, s
 - **Claude Sessions.** Pick **New Claude…** from a Workspace's **+**, choose the model, effort, advisor and Focus view (a condensed view that suits a phone), and k-bench launches Claude Code for you. Restart a Stopped Claude Session, even after a reboot, and the same conversation resumes.
 - **Workspaces per project.** A Workspace points at a project folder on your Mac, and its Sessions start there.
 - **Two Panes** side by side, for example Claude Code next to a dev server.
-- **Bells.** When a Session rings the terminal bell, its row in the sidebar shows a Bell until you look at it.
+- **Bells.** When a Session rings the terminal bell, its row in the sidebar pulses until you look at it.
 - **A phone layout** with a drawer for your Workspaces and a row of extra keys (Esc, Tab, Shift-Tab, Ctrl, the arrows and Enter) for the keys a phone keyboard lacks.
 - **Access only for your tailnet login.** k-bench listens on localhost only and is published with `tailscale serve`. It admits only requests that carry your own tailnet login.
 
