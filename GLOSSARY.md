@@ -25,7 +25,7 @@ A named, persistent program belonging to one Workspace, started in that Workspac
 _Avoid_: terminal, tab, tmux session
 
 **Claude Session**:
-A Session that runs one Claude conversation at a time, started from the New Session dialog with the owner's Launch options. Restarting it resumes that same Claude conversation. It is either a Claude TUI or a Claude Agent.
+A Session that runs one Claude conversation at a time, started from the New Session dialog with the owner's Launch options. Restarting it resumes that same Claude conversation. It is operated as a Claude TUI or a Claude Agent, and can switch between the two while keeping its Claude conversation.
 _Avoid_: Claude terminal
 
 **Claude TUI**:
