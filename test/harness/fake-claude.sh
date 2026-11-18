@@ -11,8 +11,15 @@
 #            message is sent, and the stub answers "claude-stub heard: <message>"
 # It fails as Claude Code does: --resume of a conversation it never saved, and --session-id
 # of one it did save, each exit 1.
+#
+# Run with `--input-format stream-json`, as the Agent SDK runs Claude Code, it is not a
+# terminal program at all: it hands over to fake-claude-sdk.mjs, under the `node` linked
+# beside it (the harness puts both there).
 
 here=$(dirname "$0")
+case " $* " in
+  *" --input-format stream-json "*) exec "$here/node" "$here/fake-claude-sdk.mjs" "$@" ;;
+esac
 saved="$here/conversations"
 mkdir -p "$saved"
 

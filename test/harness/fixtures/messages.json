@@ -1,0 +1,1696 @@
+{
+  "recorded": {
+    "claudeCodeVersion": "2.1.327",
+    "argv": [
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--input-format",
+      "stream-json",
+      "--model=haiku",
+      "--include-partial-messages",
+      "--replay-user-messages"
+    ]
+  },
+  "initializeReply": {
+    "type": "control_response",
+    "response": {
+      "subtype": "success",
+      "request_id": "2qwf01wtd96",
+      "response": {
+        "commands": [
+          {
+            "name": "deep-research",
+            "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "design",
+            "description": "Grant or revoke Claude agent access to your Design projects",
+            "argumentHint": "consent | revoke",
+            "builtin": true
+          },
+          {
+            "name": "design-sync",
+            "description": "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+            "argumentHint": "[<project hint, e.g. \"Acme DS\">]",
+            "builtin": true
+          },
+          {
+            "name": "dataviz",
+            "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. When the destination is a first-party document connector (host-designated, never self-described) that renders live charts, hand it the rows (inline, or as an uploaded data file the chart cites) rather than a rendered PNG/SVG — a picture of a chart loses hover, data inspection and per-value comments. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "update-config",
+            "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "verify",
+            "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "debug",
+            "description": "Enable debug logging for this session and help diagnose issues",
+            "argumentHint": "[issue description]",
+            "builtin": true
+          },
+          {
+            "name": "simplify",
+            "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+            "argumentHint": "[<target>]",
+            "builtin": true
+          },
+          {
+            "name": "batch",
+            "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+            "argumentHint": "<instruction>",
+            "builtin": true
+          },
+          {
+            "name": "fewer-permission-prompts",
+            "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "doctor",
+            "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+            "argumentHint": "[prompt-audit [<path>]]",
+            "aliases": ["checkup"],
+            "builtin": true
+          },
+          {
+            "name": "loop",
+            "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+            "argumentHint": "[interval] [prompt]",
+            "aliases": ["proactive"],
+            "builtin": true
+          },
+          {
+            "name": "schedule",
+            "description": "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
+            "argumentHint": "",
+            "aliases": ["routines"],
+            "builtin": true
+          },
+          {
+            "name": "claude-api",
+            "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read FIRST, before you answer, run a command or open a file (already started? read it now); don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file; if nothing hits, load this skill).",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "workflow-authoring",
+            "description": "Reference for writing a Workflow tool script (script API and gotchas, resume, quality patterns, worked examples). Load before authoring a script for a workflow the user already opted into; it does not itself authorize running one.",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "run",
+            "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "run-skill-generator",
+            "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "plugin-authoring",
+            "description": "Make a mod: a change to Claude's own interface or behaviour, such as a theme, a panel or pane that stays beside the chat and updates, a band, status line, toast, slash command, or hook on tool calls. Use to make, change or debug a mod or its hooks module.",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "advisor",
+            "description": "Let Claude consult a stronger model at key moments",
+            "argumentHint": "[fable|opus|sonnet|off]",
+            "builtin": true
+          },
+          {
+            "name": "agents",
+            "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "auto-mode-setup",
+            "description": "Teach auto mode about your environment, plus optional rule tweaks",
+            "argumentHint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)",
+            "builtin": true
+          },
+          {
+            "name": "autocompact",
+            "description": "Set how full the context gets before auto-summarizing",
+            "argumentHint": "[auto|<tokens>]",
+            "builtin": true
+          },
+          {
+            "name": "clear",
+            "description": "Start a new session with empty context; previous session stays on disk (resumable with /resume)",
+            "argumentHint": "[name]",
+            "aliases": ["reset", "new"],
+            "builtin": true
+          },
+          {
+            "name": "color",
+            "description": "Set the prompt bar color for this session",
+            "argumentHint": "[red|blue|green|yellow|purple|orange|pink|cyan|default]",
+            "builtin": true
+          },
+          {
+            "name": "compact",
+            "description": "Free up context by summarizing the conversation so far",
+            "argumentHint": "<optional custom summarization instructions>",
+            "builtin": true
+          },
+          {
+            "name": "config",
+            "description": "Set a setting by key",
+            "argumentHint": "key=value",
+            "aliases": ["settings"],
+            "builtin": true
+          },
+          {
+            "name": "output-style",
+            "description": "List output styles or switch to one",
+            "argumentHint": "[style]",
+            "builtin": true
+          },
+          {
+            "name": "context",
+            "description": "Show current context usage",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "effort",
+            "description": "Set the model's effort level",
+            "argumentHint": "<low|medium|high|xhigh|max|auto|ultracode [on|off]>",
+            "builtin": true
+          },
+          {
+            "name": "fast",
+            "description": "Toggle fast mode (Opus 5.5)",
+            "argumentHint": "[on|off]",
+            "builtin": true
+          },
+          {
+            "name": "focus",
+            "description": "Toggle focus view: just your prompt, summary, and response",
+            "argumentHint": "[on|off]",
+            "builtin": true
+          },
+          {
+            "name": "heapdump",
+            "description": "Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "init",
+            "description": "Initialize a new CLAUDE.md file with codebase documentation",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "mcp",
+            "description": "Manage MCP servers",
+            "argumentHint": "[reconnect|enable|disable [<server>|all]]",
+            "builtin": true
+          },
+          {
+            "name": "import",
+            "description": "Import config from another AI coding agent",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "model",
+            "description": "Set the AI model for Claude Code",
+            "argumentHint": "<model>",
+            "builtin": true
+          },
+          {
+            "name": "__remote-workflow",
+            "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "workflow-launch-exec",
+            "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "reload-plugins",
+            "description": "Activate pending plugin changes in the current session",
+            "argumentHint": "[--force]",
+            "builtin": true
+          },
+          {
+            "name": "reload-skills",
+            "description": "Pick up skills added or changed on disk during this session",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "rename",
+            "description": "Rename the current conversation",
+            "argumentHint": "[name]",
+            "aliases": ["name"],
+            "builtin": true
+          },
+          {
+            "name": "ultrareview",
+            "description": "Start a cloud agent that finds and verifies bugs in your branch (~5-15 min, $5-$25 USD) · Runs in a cloud session. See https://code.claude.com/docs/en/claude-code-on-the-web",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "security-review",
+            "description": "Complete a security review of the pending changes on the current branch",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "usage-credits",
+            "description": "Configure usage credits or request them from your admin when you hit a limit",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "extra-usage",
+            "description": "Renamed to /usage-credits",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "usage",
+            "description": "Show session cost, plan usage, and what's contributing to your limits",
+            "argumentHint": "",
+            "aliases": ["cost", "stats"],
+            "builtin": true
+          },
+          {
+            "name": "insights",
+            "description": "Generate a report analyzing your Claude Code sessions",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "recap",
+            "description": "Generate a one-line session recap now",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "skill-doctor",
+            "description": "Show which loaded skills are unused and costing context",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "goal",
+            "description": "Set a goal — keep working until the condition is met",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "design-consent",
+            "description": "Grant Claude agent access to your Design projects",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "design-revoke",
+            "description": "Revoke Claude agent access to your Design projects",
+            "argumentHint": "",
+            "builtin": true
+          },
+          {
+            "name": "list-agents",
+            "description": "List subagents, teammates, and other Claude sessions you can message",
+            "argumentHint": "",
+            "aliases": ["peers"],
+            "builtin": true
+          },
+          {
+            "name": "team-onboarding",
+            "description": "Help teammates ramp on Claude Code with a guide from your usage",
+            "argumentHint": "",
+            "builtin": true
+          }
+        ],
+        "agents": [],
+        "output_style": "default",
+        "available_output_styles": [
+          "default",
+          "Proactive",
+          "Concise",
+          "Explanatory",
+          "Learning"
+        ],
+        "user_output_styles_dir": "/home/you/.claude/output-styles",
+        "models": [
+          {
+            "value": "default",
+            "resolvedModel": "claude-opus-5-5",
+            "displayName": "Default (recommended)",
+            "description": "Opus 5.5 · Best for everyday, complex tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsFastMode": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "opus",
+            "resolvedModel": "claude-opus-5-5",
+            "displayName": "Opus 5.5",
+            "description": "For complex work and everyday tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsFastMode": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "fable",
+            "resolvedModel": "claude-fable-5-2",
+            "displayName": "Fable 5.2",
+            "description": "For your toughest challenges",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsFastMode": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "sonnet",
+            "resolvedModel": "claude-sonnet-5-5",
+            "displayName": "Sonnet 5.5",
+            "description": "Most efficient for simpler tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "haiku",
+            "resolvedModel": "claude-haiku-5-5",
+            "displayName": "Haiku 5.5",
+            "description": "Fastest for quick answers",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "claude-fable-5-1",
+            "resolvedModel": "claude-fable-5-1",
+            "displayName": "Fable 5.1",
+            "description": "Most capable for your hardest and longest-running tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "claude-haiku-4-5-20251001",
+            "resolvedModel": "claude-haiku-4-5-20251001",
+            "displayName": "Haiku 4.5",
+            "description": "Fastest for quick answers",
+            "supportsThinkingOff": true
+          },
+          {
+            "value": "claude-sonnet-5",
+            "resolvedModel": "claude-sonnet-5",
+            "displayName": "Sonnet 5",
+            "description": "Efficient for routine tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": true
+          },
+          {
+            "value": "claude-opus-5",
+            "resolvedModel": "claude-opus-5",
+            "displayName": "Opus 5",
+            "description": "Best for everyday, complex tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsFastMode": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": true
+          },
+          {
+            "value": "claude-fable-5",
+            "resolvedModel": "claude-fable-5",
+            "displayName": "Fable 5",
+            "description": "Most capable for your hardest and longest-running tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": false
+          },
+          {
+            "value": "claude-opus-4-8",
+            "resolvedModel": "claude-opus-4-8",
+            "displayName": "Opus 4.8",
+            "description": "Best for everyday, complex tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsFastMode": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": true
+          },
+          {
+            "value": "claude-opus-4-7",
+            "resolvedModel": "claude-opus-4-7",
+            "displayName": "Opus 4.7",
+            "description": "Best for everyday, complex tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": true
+          },
+          {
+            "value": "claude-opus-4-6",
+            "resolvedModel": "claude-opus-4-6",
+            "displayName": "Opus 4.6",
+            "description": "Best for everyday, complex tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": true
+          },
+          {
+            "value": "claude-sonnet-4-6",
+            "resolvedModel": "claude-sonnet-4-6",
+            "displayName": "Sonnet 4.6",
+            "description": "Efficient for routine tasks",
+            "supportsEffort": true,
+            "supportedEffortLevels": ["low", "medium", "high", "max"],
+            "supportsAdaptiveThinking": true,
+            "supportsAutoMode": true,
+            "supportsThinkingOff": true
+          }
+        ],
+        "account": {
+          "email": "you@example.com",
+          "organization": "Example Org",
+          "subscriptionType": "Claude Max",
+          "apiProvider": "firstParty"
+        },
+        "pid": 4242,
+        "claude_code_version": "2.1.327",
+        "current_permission_mode": "default",
+        "hook_on_failure_supported": true,
+        "hooks_when_unanswered_kept": 0,
+        "other_hook_ask_outranks_host": true,
+        "feedback_mode": {
+          "kind": "post"
+        },
+        "analytics_disabled": false,
+        "remote_control_auto_enable": false,
+        "remote_control_auto_connect_default": false,
+        "remote_control_available": true,
+        "remote_control_auto_on_by_default": false,
+        "ide_rc_auto_enable_gate": true,
+        "fast_mode_state": "off",
+        "fast_mode_disabled_reason": "sdk_opt_in_required",
+        "session_state": "idle",
+        "capabilities": [
+          "ui_surface_v1",
+          "mcp_call_result_not_for_model_v1",
+          "mcp_call_check_permissions_v1",
+          "voice_call_talk_line_v1",
+          "ui_pane_widget_v1",
+          "reload_plugins_refuse_if_busy_v1"
+        ]
+      },
+      "pending_permission_requests": [],
+      "pending_user_dialog_requests": []
+    }
+  },
+  "init": {
+    "type": "system",
+    "subtype": "init",
+    "cwd": "/home/you/project",
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "tools": [
+      "Task",
+      "Bash",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "DesignSync",
+      "Edit",
+      "EnterWorktree",
+      "ExitWorktree",
+      "ListAgents",
+      "LSP",
+      "Monitor",
+      "NotebookEdit",
+      "PushNotification",
+      "Read",
+      "RemoteTrigger",
+      "ReportFindings",
+      "ScheduleWakeup",
+      "SendMessage",
+      "Skill",
+      "TaskStop",
+      "ToolSearch",
+      "WebSearch",
+      "Workflow",
+      "Write"
+    ],
+    "mcp_servers": [],
+    "model": "claude-haiku-5-5",
+    "permissionMode": "default",
+    "slash_commands": [],
+    "terminal_slash_commands": [],
+    "apiKeySource": "none",
+    "claude_code_version": "2.1.327",
+    "output_style": "default",
+    "agents": [],
+    "skills": [],
+    "plugins": [],
+    "capabilities": [
+      "interrupt_receipt_v1",
+      "interrupt_cancel_queued_v1",
+      "interrupt_send_now_v1",
+      "interrupt_requeue_taken_v1",
+      "msg_lifecycle_v1",
+      "request_marker_lists_v1",
+      "ask_user_question_unanswered_v1",
+      "lifecycle_wakeup_source_v1",
+      "sdk_mcp_tools_list_changed",
+      "sdk_mcp_manifests",
+      "mcp_read_resource_v1",
+      "mcp_tool_ui_meta_v1",
+      "ui_surface_v1",
+      "mcp_call_result_not_for_model_v1",
+      "mcp_call_check_permissions_v1",
+      "voice_call_talk_line_v1",
+      "withdrawn_files_note_v2",
+      "ui_pane_widget_v1",
+      "reload_plugins_refuse_if_busy_v1",
+      "silent_resend_files_v1"
+    ],
+    "analytics_disabled": false,
+    "product_feedback_disabled": false,
+    "uuid": "cecf7be1-e8b8-4c7d-8fdc-a2a0978e0240",
+    "original_cwd": "/home/you/project",
+    "additional_directories": [],
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "per_turn_effort_active": true,
+    "ultrathink_available": false,
+    "ultrathink_typed_raises": false,
+    "view_mode": "default",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000001"]
+  },
+  "status": {
+    "type": "system",
+    "subtype": "status",
+    "status": "requesting",
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "uuid": "4105f313-3d60-4195-ae0e-9a7e8144b34d",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000001"]
+  },
+  "rateLimit": {
+    "type": "rate_limit_event",
+    "rate_limit_info": {
+      "status": "allowed",
+      "resetsAt": 1795048200,
+      "rateLimitType": "five_hour",
+      "isUsingOverage": false
+    },
+    "uuid": "21786633-18f1-489a-9214-fa10a239e7e5",
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068"
+  },
+  "commandLifecycle": {
+    "type": "command_lifecycle",
+    "command_uuid": "00000000-0000-4000-8000-000000000001",
+    "state": "queued",
+    "uuid": "8b8c6b4a-1576-486f-8edb-ba66672f6c78",
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068"
+  },
+  "sessionState": {
+    "type": "system",
+    "subtype": "session_state_changed",
+    "state": "running",
+    "uuid": "d57927f0-b52f-4a40-b4bd-1dc221a97440",
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32"
+  },
+  "userEcho": {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": "Reply with the single word: pong"
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "timestamp": "2026-11-18T23:02:27.139Z",
+    "isReplay": true
+  },
+  "messageStart": {
+    "type": "stream_event",
+    "event": {
+      "type": "message_start",
+      "message": {
+        "model": "claude-haiku-5-5",
+        "id": "msg_011ChBE8VVZpd63eDNcNziU8",
+        "type": "message",
+        "role": "assistant",
+        "content": [],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 23336,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 23336
+          },
+          "output_tokens": 4,
+          "service_tier": "standard",
+          "inference_geo": "global",
+          "speed": "standard"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      }
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "f67d415b-3049-4864-bf6a-0ccc5c09672d",
+    "ttft_ms": 749,
+    "thinking_display": "updates",
+    "api_message_id": "msg_011ChBE8VVZpd63eDNcNziU8",
+    "user_message_uuid": "00000000-0000-4000-8000-000000000001",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000001"],
+    "owed_rows": []
+  },
+  "textStart": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_start",
+      "index": 0,
+      "content_block": {
+        "type": "text",
+        "text": ""
+      }
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "43376176-7458-4ff0-95ab-3259ad12197f",
+    "api_message_id": "msg_011ChBE8VVZpd63eDNcNziU8"
+  },
+  "textDelta": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_delta",
+      "index": 0,
+      "delta": {
+        "type": "text_delta",
+        "text": "pong"
+      }
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "aa717a01-e0a3-421f-a15d-5e338c32ff1d",
+    "api_message_id": "msg_011ChBE8VVZpd63eDNcNziU8"
+  },
+  "blockStop": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_stop",
+      "index": 0
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "816e9905-83d8-426e-95b8-8a06766a999b",
+    "api_message_id": "msg_011ChBE8VVZpd63eDNcNziU8"
+  },
+  "messageDelta": {
+    "type": "stream_event",
+    "event": {
+      "type": "message_delta",
+      "delta": {
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "container": null
+      },
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 23336,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 4,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 23336,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 23336
+            },
+            "type": "message"
+          }
+        ]
+      },
+      "context_management": {
+        "applied_edits": []
+      }
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "76f33c65-5de3-49f5-a43a-fe63a4f64cd7",
+    "api_message_id": "msg_011ChBE8VVZpd63eDNcNziU8"
+  },
+  "messageStop": {
+    "type": "stream_event",
+    "event": {
+      "type": "message_stop"
+    },
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "parent_tool_use_id": null,
+    "uuid": "32eaca94-ca3c-47be-8656-adbbb38e9e52",
+    "api_message_id": "msg_011ChBE8VVZpd63eDNcNziU8"
+  },
+  "thinkingStart": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_start",
+      "index": 0,
+      "content_block": {
+        "type": "thinking",
+        "thinking": "",
+        "signature": ""
+      }
+    },
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "parent_tool_use_id": null,
+    "uuid": "172cf5cc-562e-4db1-b6f0-74090a5eb533",
+    "thinking_display": "updates",
+    "api_message_id": "msg_011ChBE8eBCRh9o7DzVuW6gg"
+  },
+  "thinkingDelta": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_delta",
+      "index": 0,
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "",
+        "estimated_tokens": 50
+      }
+    },
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "parent_tool_use_id": null,
+    "uuid": "2219dc93-654c-46aa-b12b-b3767978a35e",
+    "thinking_display": "updates",
+    "api_message_id": "msg_011ChBE8eBCRh9o7DzVuW6gg"
+  },
+  "toolStart": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_start",
+      "index": 1,
+      "content_block": {
+        "type": "tool_use",
+        "id": "toolu_013jEhSQPiT5LarKjVFZ1F7G",
+        "name": "Write",
+        "input": {},
+        "caller": {
+          "type": "direct"
+        }
+      }
+    },
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "parent_tool_use_id": null,
+    "uuid": "492616ad-dd30-4841-a5e6-90513ec25948",
+    "api_message_id": "msg_011ChBE8eBCRh9o7DzVuW6gg"
+  },
+  "toolDelta": {
+    "type": "stream_event",
+    "event": {
+      "type": "content_block_delta",
+      "index": 1,
+      "delta": {
+        "type": "input_json_delta",
+        "partial_json": ""
+      }
+    },
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "parent_tool_use_id": null,
+    "uuid": "3f7f7169-c3f8-46f1-9a68-7477960d34ab",
+    "api_message_id": "msg_011ChBE8eBCRh9o7DzVuW6gg"
+  },
+  "assistantText": {
+    "type": "assistant",
+    "message": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011ChBE8VVZpd63eDNcNziU8",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "pong"
+        }
+      ],
+      "container": null,
+      "stop_reason": null,
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 23336,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 23336
+        },
+        "output_tokens": 4,
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "input_transformations": [],
+      "diagnostics": null,
+      "context_management": null
+    },
+    "parent_tool_use_id": null,
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "uuid": "821b08c2-fcb9-4e2e-9925-6b09ef8f8d55",
+    "timestamp": "2026-11-18T23:02:27.945Z",
+    "request_id": "req_011ChBE8VLtodbcunfT9rgLA",
+    "user_message_uuid": "00000000-0000-4000-8000-000000000001",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000001"]
+  },
+  "assistantThinking": {
+    "type": "assistant",
+    "message": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011ChBE8eBCRh9o7DzVuW6gg",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "",
+          "signature": "ZmFrZS1zaWduYXR1cmU="
+        }
+      ],
+      "container": null,
+      "stop_reason": null,
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 24984,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 24984
+        },
+        "output_tokens": 10,
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "input_transformations": [],
+      "diagnostics": null,
+      "context_management": null
+    },
+    "parent_tool_use_id": null,
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "uuid": "77d41425-18d3-4a06-a41c-8b44e7a4d83e",
+    "timestamp": "2026-11-18T23:02:30.478Z",
+    "request_id": "req_011ChBE8e2n8Eg4TFhPZ9v3D",
+    "thinking_duration_ms": 694,
+    "thinking_display": "updates",
+    "user_message_uuid": "00000000-0000-4000-8000-000000000002",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000002"]
+  },
+  "assistantToolUse": {
+    "type": "assistant",
+    "message": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011ChBE8eBCRh9o7DzVuW6gg",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_013jEhSQPiT5LarKjVFZ1F7G",
+          "name": "Write",
+          "input": {
+            "file_path": "/home/you/project/hello.txt",
+            "content": "hi"
+          },
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "container": null,
+      "stop_reason": null,
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 24984,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 24984
+        },
+        "output_tokens": 10,
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "input_transformations": [],
+      "diagnostics": null,
+      "context_management": null
+    },
+    "parent_tool_use_id": null,
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "uuid": "10b5183b-11fb-4c3d-a03f-b3da3556ed51",
+    "timestamp": "2026-11-18T23:02:30.853Z",
+    "request_id": "req_011ChBE8e2n8Eg4TFhPZ9v3D",
+    "wire_tool_inputs": {
+      "toolu_013jEhSQPiT5LarKjVFZ1F7G": {
+        "file_path": "/home/you/project/hello.txt",
+        "content": "hi"
+      }
+    }
+  },
+  "assistantAskUserQuestion": {
+    "type": "assistant",
+    "message": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011ChBE97YFBQsUNdL7FqqNN",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_012xom5ALN8rcVKNgQviyw7r",
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "Do you prefer tea or coffee?",
+                "header": "Drink",
+                "multiSelect": false,
+                "options": [
+                  {
+                    "label": "Tea",
+                    "description": "You prefer tea."
+                  },
+                  {
+                    "label": "Coffee",
+                    "description": "You prefer coffee."
+                  }
+                ]
+              }
+            ]
+          },
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "container": null,
+      "stop_reason": null,
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 12326,
+        "cache_read_input_tokens": 12680,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 12326
+        },
+        "output_tokens": 4,
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "input_transformations": [],
+      "diagnostics": null,
+      "context_management": null
+    },
+    "parent_tool_use_id": null,
+    "session_id": "b297730d-e49b-4088-8816-ec0ddab483f6",
+    "uuid": "742c2a14-ef2d-4ea6-ad67-f9024b572e2b",
+    "timestamp": "2026-11-18T23:02:36.714Z",
+    "request_id": "req_011ChBE97EdTuJFMYnTum354",
+    "wire_tool_inputs": {
+      "toolu_012xom5ALN8rcVKNgQviyw7r": {
+        "questions": [
+          {
+            "question": "Do you prefer tea or coffee?",
+            "header": "Drink",
+            "multiSelect": false,
+            "options": [
+              {
+                "label": "Tea",
+                "description": "You prefer tea."
+              },
+              {
+                "label": "Coffee",
+                "description": "You prefer coffee."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "assistantExitPlanMode": {
+    "type": "assistant",
+    "message": {
+      "model": "claude-sonnet-5-5",
+      "id": "msg_011ChBEEkKxMEFpc9YL91A5M",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01Vg4ZEGCA89kcGzZh34RWHo",
+          "name": "ExitPlanMode",
+          "input": {
+            "plan": "# Plan: Create hello.txt\n\n## Context\nThe user wants a file named `hello.txt` containing the text `hi`. The task is trivial, so no exploration or design agents are needed.\n\n## Steps\n1. Create `/home/you/project/hello.txt` (the working directory) using the Write tool, with the content `hi`.\n\n## Verification\n- Read `hello.txt` and confirm it contains exactly `hi`.\n",
+            "planFilePath": "/home/you/.claude/plans/plan-how-to-create-luminous-salamander.md"
+          },
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "container": null,
+      "stop_reason": null,
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 5690,
+        "cache_read_input_tokens": 26525,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 5690
+        },
+        "output_tokens": 24,
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "input_transformations": [],
+      "diagnostics": null,
+      "context_management": null
+    },
+    "parent_tool_use_id": null,
+    "session_id": "54cce8bd-f32a-4d0a-a340-ce12cfa5df48",
+    "uuid": "6b9d2fbc-967f-4551-9ec4-0b7caee55edc",
+    "timestamp": "2026-11-18T23:03:52.783Z",
+    "request_id": "req_011ChBEEkA2uxbnvMP7ouJhd",
+    "wire_tool_inputs": {
+      "toolu_01Vg4ZEGCA89kcGzZh34RWHo": {}
+    }
+  },
+  "toolResultDenied": {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "content": "Not now.",
+          "is_error": true,
+          "tool_use_id": "toolu_013jEhSQPiT5LarKjVFZ1F7G"
+        }
+      ]
+    },
+    "parent_tool_use_id": null,
+    "session_id": "b2cd2763-2dc1-49b3-b498-93f324de2d32",
+    "uuid": "6fd45141-9013-44f3-aff6-c6ef2ec5bae5",
+    "timestamp": "2026-11-18T23:02:30.886Z",
+    "tool_use_result": "Error: Not now.",
+    "tool_result_meta": [
+      {
+        "id": "toolu_013jEhSQPiT5LarKjVFZ1F7G",
+        "non_execution_kind": "permission-rule",
+        "permission_decision": {
+          "decision": "reject",
+          "source": "user_reject"
+        }
+      }
+    ]
+  },
+  "toolResultAnswered": {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "content": "Your questions have been answered: \"Do you prefer tea or coffee?\"=\"Tea\". You can now continue with these answers in mind.",
+          "tool_use_id": "toolu_012xom5ALN8rcVKNgQviyw7r"
+        }
+      ]
+    },
+    "parent_tool_use_id": null,
+    "session_id": "b297730d-e49b-4088-8816-ec0ddab483f6",
+    "uuid": "b1289fb7-dbe7-491c-8713-bc2d6a1cf486",
+    "timestamp": "2026-11-18T23:02:36.781Z",
+    "tool_use_result": {
+      "questions": [
+        {
+          "question": "Do you prefer tea or coffee?",
+          "header": "Drink",
+          "options": [
+            {
+              "label": "Tea",
+              "description": "You prefer tea."
+            },
+            {
+              "label": "Coffee",
+              "description": "You prefer coffee."
+            }
+          ],
+          "multiSelect": false
+        }
+      ],
+      "answers": {
+        "Do you prefer tea or coffee?": "Tea"
+      }
+    },
+    "tool_result_meta": [
+      {
+        "id": "toolu_012xom5ALN8rcVKNgQviyw7r",
+        "permission_decision": {
+          "decision": "accept",
+          "source": "user_temporary"
+        }
+      }
+    ]
+  },
+  "canUseTool": {
+    "type": "control_request",
+    "request_id": "b1818ec6-281c-45fb-b7c7-4faf56d286ed",
+    "request": {
+      "subtype": "can_use_tool",
+      "tool_name": "Write",
+      "display_name": "Write",
+      "input": {
+        "file_path": "/home/you/project/hello.txt",
+        "content": "hi"
+      },
+      "description": "hello.txt",
+      "permission_suggestions": [
+        {
+          "type": "setMode",
+          "mode": "acceptEdits",
+          "destination": "session"
+        }
+      ],
+      "server_policy_ask_only": false,
+      "tool_use_id": "toolu_013jEhSQPiT5LarKjVFZ1F7G"
+    }
+  },
+  "canUseToolAskUserQuestion": {
+    "type": "control_request",
+    "request_id": "bcefdeee-95d4-49e8-ab0f-11b47790ac50",
+    "request": {
+      "subtype": "can_use_tool",
+      "tool_name": "AskUserQuestion",
+      "display_name": "AskUserQuestion",
+      "input": {
+        "questions": [
+          {
+            "question": "Do you prefer tea or coffee?",
+            "header": "Drink",
+            "options": [
+              {
+                "label": "Tea",
+                "description": "You prefer tea."
+              },
+              {
+                "label": "Coffee",
+                "description": "You prefer coffee."
+              }
+            ],
+            "multiSelect": false
+          }
+        ]
+      },
+      "tool_use_id": "toolu_012xom5ALN8rcVKNgQviyw7r",
+      "requires_user_interaction": true
+    }
+  },
+  "canUseToolExitPlanMode": {
+    "type": "control_request",
+    "request_id": "77cb3748-3b63-4f52-a0d9-2b5d855f5e6d",
+    "request": {
+      "subtype": "can_use_tool",
+      "tool_name": "ExitPlanMode",
+      "display_name": "ExitPlanMode",
+      "input": {
+        "plan": "# Plan: Create hello.txt\n\n## Context\nThe user wants a file named `hello.txt` containing the text `hi`. The task is trivial, so no exploration or design agents are needed.\n\n## Steps\n1. Create `/home/you/project/hello.txt` (the working directory) using the Write tool, with the content `hi`.\n\n## Verification\n- Read `hello.txt` and confirm it contains exactly `hi`.\n",
+        "planFilePath": "/home/you/.claude/plans/plan-how-to-create-luminous-salamander.md"
+      },
+      "tool_use_id": "toolu_01Vg4ZEGCA89kcGzZh34RWHo",
+      "requires_user_interaction": true
+    }
+  },
+  "resultSuccess": {
+    "duration_api_ms": 1441,
+    "stop_reason": "end_turn",
+    "session_id": "ebc0567e-5b69-40d8-a4ae-03488c4af068",
+    "total_cost_usd": 0.0047938,
+    "usage": {
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 23336,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 4,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 23336,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "global",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 4,
+          "cache_read_input_tokens": 0,
+          "cache_creation_input_tokens": 23336,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 23336
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard",
+      "fallback_credit": null
+    },
+    "modelUsage": {
+      "claude-haiku-5-5": {
+        "inputTokens": 1176,
+        "outputTokens": 18,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 23336,
+        "webSearchRequests": 0,
+        "costUSD": 0.0047938,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 0,
+        "cacheCreationEphemeral5mInputTokens": 0,
+        "cacheCreationEphemeral1hInputTokens": 23336,
+        "canonicalModel": "claude-haiku-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "safety_stops": 0,
+    "is_error": false,
+    "num_turns": 1,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "pong",
+    "ttft_ms": 926,
+    "type": "result",
+    "duration_ms": 1310,
+    "uuid": "58b0c677-d23a-4e59-b8cb-67eedac45e23",
+    "ttft_stream_ms": 925,
+    "time_to_request_ms": 176,
+    "first_content_frame_ms": 926,
+    "user_message_uuid": "00000000-0000-4000-8000-000000000001",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000001"],
+    "request_sent_wall_ms": 1795042947195,
+    "first_request_input_tokens": 23338,
+    "first_request_cache_read_input_tokens": 0,
+    "queued_turn_count": 0,
+    "result_index": 0,
+    "model_usage_since_last_result": {
+      "claude-haiku-5-5": {
+        "inputTokens": 1176,
+        "outputTokens": 18,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 23336,
+        "webSearchRequests": 0,
+        "costUSD": 0.0047938,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 0,
+        "cacheCreationEphemeral5mInputTokens": 0,
+        "cacheCreationEphemeral1hInputTokens": 23336,
+        "canonicalModel": "claude-haiku-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "credential_expires_at": "2026-11-22T14:16:23.568Z"
+  },
+  "resultInterrupted": {
+    "duration_api_ms": 3760,
+    "stop_reason": null,
+    "session_id": "e66edf0c-4b41-4cc3-adb9-0265480e1f57",
+    "total_cost_usd": 0.004355019999999999,
+    "usage": {
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 0,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard",
+      "fallback_credit": null
+    },
+    "modelUsage": {
+      "claude-haiku-5-5": {
+        "inputTokens": 1188,
+        "outputTokens": 426,
+        "cacheReadInputTokens": 62522,
+        "cacheCreationInputTokens": 16990,
+        "webSearchRequests": 0,
+        "costUSD": 0.004355019999999999,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 148,
+        "cacheCreationEphemeral5mInputTokens": 0,
+        "cacheCreationEphemeral1hInputTokens": 16990,
+        "canonicalModel": "claude-haiku-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [],
+    "terminal_reason": "aborted_streaming",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "safety_stops": 0,
+    "is_error": true,
+    "num_turns": 2,
+    "subtype": "error_during_execution",
+    "errors": [
+      "[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=null"
+    ],
+    "user_message_uuid": "00000000-0000-4000-8000-000000000006",
+    "type": "result",
+    "duration_ms": 581,
+    "uuid": "d8bcfafe-4253-4aa0-8897-c31c70aecb66",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000006"],
+    "queued_turn_count": 0,
+    "result_index": 2,
+    "model_usage_since_last_result": {
+      "claude-haiku-5-5": {
+        "inputTokens": 2,
+        "outputTokens": 2,
+        "cacheReadInputTokens": 27991,
+        "cacheCreationInputTokens": 131,
+        "webSearchRequests": 0,
+        "costUSD": 0.00030730999999999993,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 0,
+        "cacheCreationEphemeral5mInputTokens": 0,
+        "cacheCreationEphemeral1hInputTokens": 131,
+        "canonicalModel": "claude-haiku-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "credential_expires_at": "2026-11-22T14:16:23.568Z"
+  },
+  "assistantAborted": {
+    "type": "assistant",
+    "message": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011ChBE9cqcaDy8H5fqSXkDQ",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "1"
+        }
+      ],
+      "container": null,
+      "stop_reason": null,
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 131,
+        "cache_read_input_tokens": 27991,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 131
+        },
+        "output_tokens": 2,
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "input_transformations": [],
+      "diagnostics": null,
+      "context_management": null
+    },
+    "parent_tool_use_id": null,
+    "session_id": "e66edf0c-4b41-4cc3-adb9-0265480e1f57",
+    "uuid": "0d3de75d-17bf-4be3-bd18-1a0edd1eee09",
+    "timestamp": "2026-11-18T23:02:43.186Z",
+    "request_id": "req_011ChBE9cewnDygTJdRLqobU",
+    "aborted": true,
+    "user_message_uuid": "00000000-0000-4000-8000-000000000006",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000006"]
+  },
+  "userInterrupted": {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "[Request interrupted by user]"
+        }
+      ]
+    },
+    "parent_tool_use_id": null,
+    "session_id": "e66edf0c-4b41-4cc3-adb9-0265480e1f57",
+    "uuid": "a8863bce-81b0-41de-bdf2-bb0e14ecfd72",
+    "timestamp": "2026-11-18T23:02:43.189Z"
+  },
+  "conversationReset": {
+    "type": "conversation_reset",
+    "new_conversation_id": "9ae1a673-5fe1-4c42-a801-11d451adc899",
+    "uuid": "9ae1a673-5fe1-4c42-a801-11d451adc899",
+    "trigger": "clear",
+    "user_message_uuid": "00000000-0000-4000-8000-000000000008",
+    "timestamp": "2026-11-18T23:02:45.307Z",
+    "session_id": "14a4db2d-e7a1-4a3e-ae13-9a7446f38582"
+  },
+  "backgroundTasksChanged": {
+    "type": "system",
+    "subtype": "background_tasks_changed",
+    "tasks": [],
+    "uuid": "95f12c82-3933-44db-9ce3-a88b60f7c875",
+    "session_id": "14a4db2d-e7a1-4a3e-ae13-9a7446f38582"
+  },
+  "clearEcho": {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": "<command-name>/clear</command-name>\n            <command-message>clear</command-message>\n            <command-args></command-args>"
+    },
+    "session_id": "3ac1190d-8704-4482-8ddf-8e0ec9e3cd21",
+    "parent_tool_use_id": null,
+    "uuid": "00000000-0000-4000-8000-000000000008",
+    "timestamp": "2026-11-18T23:02:45.241Z",
+    "isReplay": true
+  },
+  "resultClear": {
+    "is_error": false,
+    "duration_api_ms": 0,
+    "num_turns": 0,
+    "stop_reason": null,
+    "session_id": "3ac1190d-8704-4482-8ddf-8e0ec9e3cd21",
+    "total_cost_usd": 0,
+    "usage": {
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "input_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 0,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard",
+      "fallback_credit": null
+    },
+    "modelUsage": {},
+    "permission_denials": [],
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "safety_stops": 0,
+    "subtype": "success",
+    "result": "",
+    "user_message_uuid": "00000000-0000-4000-8000-000000000008",
+    "user_message_uuids": ["00000000-0000-4000-8000-000000000008"],
+    "local_command": "clear",
+    "type": "result",
+    "duration_ms": 82,
+    "uuid": "e24eb5fb-4deb-4dee-9e85-a647af4680a5",
+    "queued_turn_count": 0,
+    "result_index": 1,
+    "model_usage_since_last_result": {},
+    "credential_expires_at": "2026-11-22T14:16:23.568Z"
+  }
+}
