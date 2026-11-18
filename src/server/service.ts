@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
-import type { SessionKind, State } from "../shared/state-protocol.ts";
+import type { ClaudeInterface, NewSessionKind, State } from "../shared/state-protocol.ts";
+import { type AgentRuntimes, AgentStartError } from "./agents.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
@@ -27,17 +28,25 @@ function isDirectory(path: string): boolean {
   }
 }
 
+/** What makes a new Session a Claude Session: its Launch options and its interface. */
+export interface ClaudeSessionRequest {
+  options: LaunchOptions;
+  interface: ClaudeInterface;
+}
+
 /** The domain operations. The store holds what the owner chose; tmux says what is alive. */
 export class Service {
   private readonly store: Store;
   private readonly tmux: TmuxDriver;
+  private readonly agents: AgentRuntimes;
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
 
-  constructor(store: Store, tmux: TmuxDriver) {
+  constructor(store: Store, tmux: TmuxDriver, agents: AgentRuntimes) {
     this.store = store;
     this.tmux = tmux;
+    this.agents = agents;
     this.reconciler = new Reconciler(store, tmux);
   }
 
@@ -93,15 +102,30 @@ export class Service {
   async deleteWorkspace(id: string): Promise<void> {
     if (!this.store.getWorkspace(id))
       throw new ServiceError("not_found", "Unknown Workspace");
-    const ids = this.store.listSessions(id).map((session) => session.id);
-    // Every shell gets its kill, even if one fails; a failure keeps the Workspace so the
-    // owner can retry (killing is idempotent), instead of leaving a half-killed one.
-    const kills = await Promise.allSettled(
-      ids.map((sessionId) => this.tmux.killSession(sessionId)),
+    const sessions = this.store.listSessions(id);
+    // Every Session gets its end, even if one fails; a failure keeps the Workspace so the
+    // owner can retry (ending is idempotent), instead of leaving a half-ended one.
+    const ends = await Promise.allSettled(
+      sessions.map((session) => this.endSession(session)),
     );
-    const failed = kills.find((kill) => kill.status === "rejected");
+    const failed = ends.find((end) => end.status === "rejected");
     if (failed) throw failed.reason;
     this.store.deleteWorkspace(id);
+    for (const session of sessions) {
+      if (session.interface === "agent") this.agents.removeFolder(session.id);
+    }
+  }
+
+  /**
+   * Ends a Session's program and everything in it. A Claude Agent's runtime is asked to shut
+   * down first, so its log is finished and its Claude Code closed before its tmux session goes.
+   */
+  private async endSession(session: {
+    id: string;
+    interface: ClaudeInterface | null;
+  }): Promise<void> {
+    if (session.interface === "agent") await this.agents.shutdown(session.id);
+    else await this.tmux.killSession(session.id);
   }
 
   private workspaceNames(exceptId?: string): Set<string> {
@@ -127,11 +151,11 @@ export class Service {
   createSession(
     workspaceId: string,
     requestedName?: string,
-    /** Makes it a Claude Session started with these Launch options. */
-    launchOptions?: LaunchOptions,
+    /** Makes it a Claude Session, started with these Launch options in this interface. */
+    claude?: ClaudeSessionRequest,
   ) {
     const result = this.sessionCreations.then(() =>
-      this.createSessionNow(workspaceId, requestedName, launchOptions),
+      this.createSessionNow(workspaceId, requestedName, claude),
     );
     this.sessionCreations = result.catch(() => undefined);
     return result;
@@ -140,7 +164,7 @@ export class Service {
   private async createSessionNow(
     workspaceId: string,
     requestedName: string | undefined,
-    launchOptions: LaunchOptions | undefined,
+    request: ClaudeSessionRequest | undefined,
   ) {
     const workspace = this.store.getWorkspace(workspaceId);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
@@ -158,13 +182,30 @@ export class Service {
     }
     const id = randomUUID();
     // k-bench chooses the Claude conversation's ID, so a restart can name it (ADR-0005).
-    const claude: ClaudeLaunch | undefined = launchOptions && {
+    const claude: ClaudeLaunch | undefined = request && {
       conversationId: randomUUID(),
-      options: launchOptions,
+      options: request.options,
       mode: "start",
     };
+    const agent = request?.interface === "agent";
     await this.reconciler.whileStarting(id, async () => {
-      await this.tmux.createSession(id, workspace.folder, claude);
+      try {
+        if (claude && agent) {
+          await this.agents.launch({
+            sessionId: id,
+            workspaceFolder: workspace.folder,
+            conversationId: claude.conversationId,
+            mode: "start",
+          });
+        } else {
+          await this.tmux.createSession(id, workspace.folder, claude);
+        }
+      } catch (error) {
+        if (agent) this.agents.removeFolder(id);
+        throw error instanceof AgentStartError
+          ? new ServiceError("invalid", `Claude Agent could not start: ${error.message}`)
+          : error;
+      }
       try {
         this.store.addSession({
           id,
@@ -172,17 +213,42 @@ export class Service {
           name,
           conversationId: claude?.conversationId,
           launchOptions: claude?.options,
+          interface: request?.interface,
         });
       } catch (error) {
-        await this.tmux.killSession(id);
+        await this.endSession({ id, interface: request?.interface ?? null });
+        if (agent) this.agents.removeFolder(id);
         throw error;
       }
     });
+    if (agent) await this.finishStartingAgent(id, "create");
     // Remembered for the next New Session dialog, on any device. A shell leaves the Launch
-    // options as they were, so switching the dialog back to Claude finds them.
-    this.store.setLastSessionKind(launchOptions ? "claude" : "shell");
-    if (launchOptions) this.store.setLastLaunchOptions(launchOptions);
+    // options as they were, so switching the dialog back to Claude finds them; so does a
+    // Claude Agent, which takes none yet.
+    this.store.setLastSessionKind(
+      !request ? "shell" : request.interface === "agent" ? "claude-agent" : "claude",
+    );
+    if (request && !agent) this.store.setLastLaunchOptions(request.options);
     return { id, name };
+  }
+
+  /**
+   * Waits for a Claude Agent's runtime to come up. If it does not, the Agent is undone as
+   * far as `step` got (a new Session is deleted; a restarted one stays Stopped) and the
+   * reason the runtime recorded is the refusal.
+   */
+  private async finishStartingAgent(id: string, step: "create" | "restart") {
+    try {
+      await this.agents.waitUntilReady(id);
+    } catch (error) {
+      await this.agents.shutdown(id);
+      if (step === "create") {
+        this.store.deleteSession(id);
+        this.agents.removeFolder(id);
+      }
+      const why = error instanceof Error ? error.message : String(error);
+      throw new ServiceError("invalid", `Claude Agent could not start: ${why}`);
+    }
   }
 
   /**
@@ -190,7 +256,7 @@ export class Service {
    * options last used for a Claude Session. A shell, and all Default with Focus view off, if
    * none has been created.
    */
-  lastNewSession(): { kind: SessionKind; claude: LaunchOptions } {
+  lastNewSession(): { kind: NewSessionKind; claude: LaunchOptions } {
     return {
       kind: this.store.getLastSessionKind() ?? "shell",
       claude: this.store.getLastLaunchOptions() ?? DEFAULT_LAUNCH_OPTIONS,
@@ -214,11 +280,12 @@ export class Service {
 
   /** Ends the Session's shell and everything in it, then forgets the Session. */
   async deleteSession(sessionId: string): Promise<void> {
-    if (!this.store.getSession(sessionId)) {
-      throw new ServiceError("not_found", "Unknown Session");
-    }
-    await this.tmux.killSession(sessionId);
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    await this.endSession(session);
     this.store.deleteSession(sessionId);
+    // Last: the runtime has gone and the row with it, so nothing can write here again.
+    if (session.interface === "agent") this.agents.removeFolder(sessionId);
   }
 
   async getState(): Promise<State> {
@@ -231,6 +298,7 @@ export class Service {
           id: session.id,
           name: session.name,
           kind: session.kind,
+          ...(session.interface ? { interface: session.interface } : {}),
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
         })),
@@ -261,10 +329,33 @@ export class Service {
     folder: string;
     conversationId: string | null;
     launchOptions: LaunchOptions | null;
+    interface: ClaudeInterface | null;
   }): Promise<void> {
     if ((await this.tmux.listSessions()).some((live) => live.id === session.id)) return;
     if (!isDirectory(session.folder)) {
       throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
+    }
+    if (session.interface === "agent" && session.conversationId !== null) {
+      const { id, folder, conversationId } = session;
+      await this.reconciler.whileStarting(id, async () => {
+        try {
+          await this.agents.launch({
+            sessionId: id,
+            workspaceFolder: folder,
+            conversationId,
+            mode: "resume",
+          });
+        } catch (error) {
+          throw error instanceof AgentStartError
+            ? new ServiceError(
+                "invalid",
+                `Claude Agent could not start: ${error.message}`,
+              )
+            : error;
+        }
+      });
+      await this.finishStartingAgent(id, "restart");
+      return;
     }
     await this.reconciler.whileStarting(session.id, () =>
       this.tmux.createSession(
@@ -282,10 +373,20 @@ export class Service {
     );
   }
 
-  /** Whether the terminal WebSocket has a shell to attach to: a known Session that is running. */
+  /**
+   * Whether the terminal WebSocket has a shell to attach to: a known Session that is running.
+   * Never a Claude Agent, whose tmux session is hidden: no terminal attaches to it (ADR-0007).
+   */
   async hasRunningShell(sessionId: string): Promise<boolean> {
-    if (!this.store.getSession(sessionId)) return false;
+    const session = this.store.getSession(sessionId);
+    if (!session || session.interface === "agent") return false;
     const live = await this.tmux.listSessions();
     return live.some((s) => s.id === sessionId);
+  }
+
+  /** Whether the agent WebSocket has a runtime to relay to: a known Claude Agent that is running. */
+  async hasRunningAgent(sessionId: string): Promise<boolean> {
+    if (this.store.getSession(sessionId)?.interface !== "agent") return false;
+    return this.agents.isRunning(sessionId);
   }
 }

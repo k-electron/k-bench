@@ -16,6 +16,8 @@ import {
 } from "../../src/shared/state-protocol.ts";
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
+import { AgentClient } from "./agent.ts";
+import { HARNESS_RUNTIME_FILE } from "./agent-runtime.ts";
 import { EventsClient } from "./events.ts";
 import { FakeClaude, installFakeClaude } from "./fake-claude.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
@@ -161,6 +163,37 @@ export class TestServer {
     return (await response.json()) as SessionInfo;
   }
 
+  /**
+   * Creates a Claude Agent (a Claude Session in the Claude Agent interface) and waits, as the
+   * server does, until its runtime is up; fails unless it is created. Launch options are all
+   * Default: a Claude Agent takes none yet.
+   */
+  async createClaudeAgent(
+    workspaceId: string,
+    input: { name?: string } = {},
+  ): Promise<SessionInfo> {
+    const response = await this.post(`/api/workspaces/${workspaceId}/sessions`, {
+      ...input,
+      interface: "agent",
+    });
+    if (response.status !== 201) {
+      throw new Error(
+        `create Claude Agent failed: ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as SessionInfo;
+  }
+
+  /**
+   * Opens a Claude Agent's WebSocket like a browser's Pane does, carrying the login header,
+   * and returns once it is open. The client has the runtime's hello after a moment (wait for
+   * `client.hello`), and nothing else until it syncs. A Session that is not a running Claude
+   * Agent has its socket closed with 4410 (`client.closeCode`).
+   */
+  openAgent(sessionId: string): Promise<AgentClient> {
+    return AgentClient.open(this.baseUrl, sessionId, this.loginHeaders);
+  }
+
   /** Renames a Session. Returns the raw response so tests can check the status. */
   renameSession(sessionId: string, name: string): Promise<Response> {
     return this.request(`/api/sessions/${sessionId}`, {
@@ -267,9 +300,17 @@ export class TestInstance {
     };
   }
 
+  /**
+   * Boots the server. It installs the harness's build of the Agent Runtime
+   * (`HARNESS_RUNTIME_FILE`) unless `options.agentRuntimeFile` names another, as a test of
+   * an update under a running Agent does.
+   */
   async start(options?: ServerOptions): Promise<TestServer> {
     const server = new TestServer(
-      await startServer(this.config, options),
+      await startServer(this.config, {
+        agentRuntimeFile: HARNESS_RUNTIME_FILE,
+        ...options,
+      }),
       this.config.allowedLogin,
     );
     this.toStop.push(server);

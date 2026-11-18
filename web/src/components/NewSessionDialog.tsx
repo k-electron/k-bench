@@ -4,8 +4,12 @@ import {
   LAUNCH_CHOICES,
   type LaunchOptions,
 } from "../../../src/shared/launch-options.ts";
-import type { SessionKind, WorkspaceState } from "../../../src/shared/state-protocol.ts";
-import { ApiError, api } from "../api";
+import type {
+  ClaudeInterface,
+  NewSessionKind,
+  WorkspaceState,
+} from "../../../src/shared/state-protocol.ts";
+import { ApiError, api, type CreateSessionInput } from "../api";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -20,11 +24,24 @@ import { Select } from "./ui/select";
 
 /**
  * The kinds of Session the dialog offers, in the order shown. Adding a kind is one entry
- * here (and its handling on the server): `launchOptions` says whether it takes Launch options.
+ * here (and its handling on the server): `launchOptions` says whether it takes Launch options,
+ * and `interface` is sent for a Claude Session that is not a Claude TUI. Claude Agent takes no
+ * Launch options until ticket #143.
  */
-const KINDS: { kind: SessionKind; label: string; launchOptions: boolean }[] = [
+const KINDS: {
+  kind: NewSessionKind;
+  label: string;
+  launchOptions: boolean;
+  interface?: ClaudeInterface;
+}[] = [
   { kind: "shell", label: "Shell", launchOptions: false },
   { kind: "claude", label: "Claude TUI", launchOptions: true },
+  {
+    kind: "claude-agent",
+    label: "Claude Agent (WIP)",
+    launchOptions: false,
+    interface: "agent",
+  },
 ];
 
 const FIELDS = [
@@ -41,7 +58,7 @@ function choiceLabel(choice: string): string {
 
 /** What the dialog opens on, which the Host keeps. */
 interface Start {
-  kind: SessionKind;
+  kind: NewSessionKind;
   claude: LaunchOptions;
 }
 
@@ -60,11 +77,7 @@ export function NewSessionDialog({
   onClose,
 }: {
   workspace: WorkspaceState;
-  onCreate: (input: {
-    name: string;
-    /** Present for the kinds that take Launch options. */
-    claude?: LaunchOptions;
-  }) => Promise<void>;
+  onCreate: (input: CreateSessionInput & { name: string }) => Promise<void>;
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
@@ -98,6 +111,7 @@ export function NewSessionDialog({
       await onCreate({
         name: name.trim(),
         claude: kind?.launchOptions ? options : undefined,
+        interface: kind?.interface,
       });
       onClose();
     } catch (e) {
@@ -125,7 +139,9 @@ export function NewSessionDialog({
             <DialogDescription>
               {kind?.launchOptions
                 ? `Runs Claude Code in the folder of ${workspace.name}. Default leaves a setting to your own Claude Code configuration.`
-                : `Starts your shell in the folder of ${workspace.name}.`}
+                : kind?.interface === "agent"
+                  ? `Runs Claude Code in the folder of ${workspace.name} as a conversation you can follow from any device, not a terminal. Work in progress.`
+                  : `Starts your shell in the folder of ${workspace.name}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">
@@ -152,11 +168,11 @@ export function NewSessionDialog({
             aria-busy={!start}
             className={`grid min-w-0 gap-4 ${start ? "" : "invisible"}`}
           >
-            <div role="radiogroup" aria-label="Kind" className="flex gap-2">
+            <div role="radiogroup" aria-label="Kind" className="flex flex-wrap gap-2">
               {KINDS.map((k) => (
                 <label
                   key={k.kind}
-                  className="flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-sm font-medium has-checked:border-primary has-checked:bg-accent has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50"
+                  className="flex h-9 flex-1 cursor-pointer whitespace-nowrap items-center gap-2 rounded-md border border-input px-3 text-sm font-medium has-checked:border-primary has-checked:bg-accent has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50"
                 >
                   <input
                     type="radio"

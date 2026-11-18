@@ -1,5 +1,6 @@
 import {
   Columns2Icon as ColumnsIcon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
   PencilIcon,
   RotateCcwIcon,
@@ -68,7 +69,8 @@ export function SessionRow({
         // ⌘-click opens it in the other Pane.
         onClick={(event) => (event.metaKey ? onOpenInOtherPane() : onOpen())}
       >
-        <TerminalIcon />
+        {/* A speech bubble for a conversation, a terminal for a terminal. */}
+        {session.interface === "agent" ? <MessageSquareIcon /> : <TerminalIcon />}
         <span className="truncate">{session.name}</span>
       </Button>
       {/* Beside the row's button, not inside it, so it stays out of the button's name. */}

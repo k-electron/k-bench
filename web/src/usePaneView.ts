@@ -36,6 +36,8 @@ export interface PaneViewModel {
   ratio: number;
   /** The Session in the Focused Pane, if it has one. */
   focusedSessionId: string | undefined;
+  /** Whether the Focused Pane shows a terminal, which a Claude Agent's conversation is not. */
+  focusedHasTerminal: boolean;
   /** Plain click on a Session: opens it in the Focused Pane. */
   openInFocusedPane(sessionId: string): void;
   /** Opens a Session in the other Pane. On a phone this is not visible. */
@@ -127,6 +129,8 @@ export function usePaneView(state: State | undefined, phone: boolean): PaneViewM
     paneCount: shown.length === 2 ? 2 : 1,
     ratio: saved.ratio,
     focusedSessionId: focusedSession?.session.id,
+    focusedHasTerminal:
+      focusedSession !== undefined && focusedSession.session.interface !== "agent",
     openInFocusedPane: (id) => update((l) => openInFocusedPane(l, id)),
     openInOtherPane: (id) =>
       update((l) => (phone ? stashInOtherPane(l, id) : openInOtherPane(l, id))),

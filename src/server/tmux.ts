@@ -2,7 +2,12 @@ import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
-import { type ClaudeLaunch, claudeCommand } from "./claude.ts";
+import {
+  type AgentLaunch,
+  agentCommand,
+  type ClaudeLaunch,
+  claudeCommand,
+} from "./claude.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -180,6 +185,35 @@ export class TmuxDriver {
           launch: claude,
         })
       : sessionCommand(folder);
+    await this.startSession(id, folder, command);
+  }
+
+  /**
+   * Starts a Claude Agent's Agent Runtime as the Session's only program, hidden: nothing ever
+   * attaches a terminal to it (ADR-0007). `launch.claudeProgram` is filled in here, from the
+   * instance's configuration.
+   */
+  async createAgentSession(
+    id: string,
+    folder: string,
+    launch: Omit<AgentLaunch, "claudeProgram">,
+  ): Promise<void> {
+    await this.startSession(
+      id,
+      folder,
+      agentCommand({
+        folder,
+        shell: ownerShell(),
+        launch: { ...launch, claudeProgram: this.claudeProgram },
+      }),
+    );
+  }
+
+  private async startSession(
+    id: string,
+    folder: string,
+    command: string[],
+  ): Promise<void> {
     await this.run(...serverConfiguration(), [
       "new-session",
       "-d",

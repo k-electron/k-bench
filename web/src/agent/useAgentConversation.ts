@@ -1,0 +1,98 @@
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import type { AgentHello, AgentStatus } from "../../../src/shared/agent-protocol.ts";
+import { type AgentConnection, createAgentConnection } from "../agentConnection";
+import {
+  applyServerMessage,
+  emptyTranscript,
+  type TranscriptItem,
+  transcriptItems,
+} from "./transcript";
+
+/** The agent WebSocket URL for a path from `agentPath`. */
+function agentUrl(path: string): string {
+  const url = new URL(path, window.location.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
+
+/** A UUID for a prompt. `crypto.randomUUID` needs a secure context, which plain http on a LAN is not. */
+function newPromptId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** What a Claude Agent's Pane shows and does. */
+export interface AgentConversation {
+  /** The conversation so far, in order. */
+  items: TranscriptItem[];
+  /** The runtime's hello, once it has come: its versions. */
+  hello: AgentHello | undefined;
+  /** What the Agent is doing, once the runtime has said. */
+  state: AgentStatus["state"] | undefined;
+  /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
+  ended: boolean;
+  /** Sends a prompt as typed. */
+  send(text: string): void;
+}
+
+interface Model {
+  transcript: typeof emptyTranscript;
+  hello: AgentHello | undefined;
+  state: AgentStatus["state"] | undefined;
+  ended: boolean;
+}
+
+type Event =
+  | { type: "message"; message: Parameters<typeof applyServerMessage>[1] }
+  | { type: "closed"; ended: boolean };
+
+function reduce(model: Model, event: Event): Model {
+  if (event.type === "closed") {
+    return event.ended ? { ...model, ended: true } : model;
+  }
+  const { message } = event;
+  if (message.type === "hello") return { ...model, hello: message };
+  if (message.type === "status") return { ...model, state: message.state };
+  return { ...model, transcript: applyServerMessage(model.transcript, message) };
+}
+
+const initial: Model = {
+  transcript: emptyTranscript,
+  hello: undefined,
+  state: undefined,
+  ended: false,
+};
+
+/** Connects to a Claude Agent for as long as the component is mounted. */
+export function useAgentConversation(sessionId: string): AgentConversation {
+  const [model, dispatch] = useReducer(reduce, initial);
+  const connection = useRef<AgentConnection>(undefined);
+
+  useEffect(() => {
+    const opened = createAgentConnection({
+      sessionId,
+      openSocket: (path) => new WebSocket(agentUrl(path)),
+    });
+    connection.current = opened;
+    const stop = opened.subscribe({
+      message: (message) => dispatch({ type: "message", message }),
+      closed: (ended) => dispatch({ type: "closed", ended }),
+    });
+    return () => {
+      stop();
+      opened.close();
+      connection.current = undefined;
+    };
+  }, [sessionId]);
+
+  const send = useCallback((text: string) => {
+    connection.current?.send({ type: "prompt", id: newPromptId(), text });
+  }, []);
+
+  const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
+  return { items, hello: model.hello, state: model.state, ended: model.ended, send };
+}

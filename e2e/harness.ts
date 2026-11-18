@@ -282,14 +282,14 @@ export class AppPage {
 
   /**
    * Fills in the open New Session dialog and presses Create. Everything is optional: the
-   * name, the kind by its label ("Shell", "Claude TUI"; left alone it is whatever the dialog
-   * opened on), and for Claude TUI each Launch option by the label of the choice ("XHigh",
+   * name, the kind by its label ("Shell", "Claude TUI", "Claude Agent (WIP)"; left alone it is
+   * whatever the dialog opened on), and for Claude TUI each Launch option by the label of the choice ("XHigh",
    * "Off") or, for Focus view, on/off.
    */
   async createInDialog(
     options: {
       name?: string;
-      kind?: "Shell" | "Claude TUI";
+      kind?: "Shell" | "Claude TUI" | "Claude Agent (WIP)";
       model?: string;
       effort?: string;
       advisor?: string;
@@ -332,6 +332,26 @@ export class AppPage {
     await this.openNewSessionDialog(workspaceName);
     await this.createInDialog({ ...options, kind: "Claude TUI" });
     await expect(this.newSessionDialog).toBeHidden();
+  }
+
+  /** Creates a Claude Agent Session through the New Session dialog. */
+  async createClaudeAgent(workspaceName: string, options: { name?: string } = {}) {
+    await this.openNewSessionDialog(workspaceName);
+    await this.createInDialog({ ...options, kind: "Claude Agent (WIP)" });
+    await expect(this.newSessionDialog).toBeHidden();
+  }
+
+  /** The conversation of the named Claude Agent: a region, where a terminal is `terminal(name)`. */
+  agentRegion(sessionName: string): Locator {
+    return this.page.getByRole("region", {
+      name: `Claude Agent ${sessionName}`,
+      exact: true,
+    });
+  }
+
+  /** The input box of the named Claude Agent. */
+  agentInput(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("textbox", { name: "Message Claude" });
   }
 
   /** The Claude glyph on a Session's row; present on Claude Sessions only. */

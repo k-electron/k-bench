@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { buildAgentRuntime } from "../test/harness/agent-runtime.ts";
 import { LOGIN_HEADER, TestInstance } from "../test/harness/instance.ts";
 import { tmuxSocketDir } from "../test/harness/socket-leaks.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
@@ -54,6 +55,7 @@ if (!flags["no-build"]) {
   execFileSync("pnpm", ["exec", "vite", "build", "--logLevel", "warn"], {
     stdio: "inherit",
   });
+  buildAgentRuntime();
 }
 const webDir = resolve("dist/web");
 if (!existsSync(resolve(webDir, "index.html"))) {

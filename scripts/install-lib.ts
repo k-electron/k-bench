@@ -150,10 +150,10 @@ ${env}
 
 /**
  * What the installed app copies from the package: the compiled server (with the modules it
- * shares with the browser), the built front end, and the script that restores node-pty's
- * spawn-helper execute bit. Its package.json is generated: see `appManifest`.
+ * shares with the browser and the Agent Runtime), the built Agent Runtime, the built front
+ * end, and the script that restores node-pty's spawn-helper execute bit. Its package.json is generated: see `appManifest`.
  */
-const APP_FILES = ["dist/js/src", "dist/web", "scripts/fix-node-pty.mjs"];
+const APP_FILES = ["dist/js/src", "dist/runtime", "dist/web", "scripts/fix-node-pty.mjs"];
 
 /** The nearest folder at or above `start` that holds a package.json. */
 export function findPackageRoot(start: string): string {
@@ -191,7 +191,11 @@ export function stageApp(options: {
   stagingDir: string;
   manifest: Record<string, unknown>;
 }): void {
-  for (const built of ["dist/web/index.html", SERVER_ENTRY]) {
+  for (const built of [
+    "dist/web/index.html",
+    "dist/runtime/agent-runtime.mjs",
+    SERVER_ENTRY,
+  ]) {
     if (!existsSync(join(options.packageDir, built))) {
       throw new Error(`${built} has not been built: run \`pnpm build\` first.`);
     }

@@ -148,6 +148,24 @@ export function claudeCommand(input: {
   launch: ClaudeLaunch;
 }): string[] {
   const { folder, shell, program, launch } = input;
+  return loginChain(folder, shell, [
+    LAUNCHER,
+    "kb-launcher",
+    folder,
+    program,
+    launch.options.advisor === "off" ? "1" : "0",
+    launch.mode,
+    launch.conversationId,
+    ...launchOptionArguments(launch.options),
+  ]);
+}
+
+/**
+ * The first two programs of every Claude launch: zsh with no startup files changes into
+ * `folder`, then the owner's login shell runs `exec "$@"` on the third, `/bin/sh -c` with
+ * `sh` (the script, then its name and arguments). See `claudeCommand` for why each is there.
+ */
+function loginChain(folder: string, shell: string, sh: string[]): string[] {
   return [
     "/bin/zsh",
     "-f",
@@ -163,13 +181,86 @@ export function claudeCommand(input: {
     "kb-login",
     "/bin/sh",
     "-c",
-    LAUNCHER,
-    "kb-launcher",
+    ...sh,
+  ];
+}
+
+/** What a Claude Agent's Agent Runtime is started with. */
+export interface AgentLaunch {
+  /** The Node that runs the runtime: the server's own, as an absolute path. */
+  node: string;
+  /** The installed runtime file (`<dataDir>/runtimes/<build id>/agent-runtime.mjs`). */
+  runtimeFile: string;
+  /** The Agent's folder. The server has made it; nothing launched here may. */
+  agentFolder: string;
+  /** The program `claude` is found as: a name the login shell resolves, or a path. */
+  claudeProgram: string;
+  conversationId: string;
+  mode: "start" | "resume";
+}
+
+/**
+ * Starts the Agent Runtime and, when it ends, notes it if the runtime did not. Arguments,
+ * never script text, in this order: the Workspace folder, Node, the runtime file, the
+ * Agent's folder, the `claude` program, the mode, the conversation ID. It is POSIX `sh` too.
+ *
+ * It resolves `claude` with `command -v` inside the login shell, so the Agent gets the same
+ * `claude` a terminal on the Host would (the SDK needs an absolute path), and without one it
+ * ends with a reason, as the runtime would have. It runs Node as a child and waits for it,
+ * never `exec`: the runtime writes `exit.json` for every exit it controls, and this wrapper,
+ * which outlives it, writes the gap's record (exit status, no reason) when the runtime was
+ * killed or crashed. tmux ends the Session as soon as this script ends, so nothing could be
+ * written after that. The record is deleted first, so one from an earlier run never
+ * outlives a restart. Nothing here creates a folder.
+ */
+const AGENT_LAUNCHER = `
+folder=$1
+node=$2
+runtime=$3
+dir=$4
+program=$5
+mode=$6
+conversation=$7
+cd -- "$folder"
+rm -f "$dir/exit.json"
+case $program in
+  */*) claude=$program ;;
+  *) claude=$(command -v "$program") ;;
+esac
+if [ -z "$claude" ]; then
+  printf '{"reason":"Claude Code was not found. Is it installed for your login shell?","at":"%s"}\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/exit.json"
+  exit 127
+fi
+"$node" "$runtime" --agent-dir "$dir" --folder "$folder" --claude "$claude" --conversation "$conversation" --mode "$mode"
+status=$?
+if [ ! -e "$dir/exit.json" ]; then
+  signal=null
+  [ "$status" -gt 128 ] && signal=$((status - 128))
+  printf '{"code":%s,"signal":%s,"at":"%s"}\\n' "$status" "$signal" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/exit.json"
+fi
+exit "$status"
+`;
+
+/**
+ * What a Claude Agent's pane runs, as an argument list for `tmux new-session`: the same
+ * login-shell chain as `claudeCommand`, so the runtime gets the owner's environment, ending
+ * in `AGENT_LAUNCHER` instead of the Claude Code launcher.
+ */
+export function agentCommand(input: {
+  folder: string;
+  shell: string;
+  launch: AgentLaunch;
+}): string[] {
+  const { folder, shell, launch } = input;
+  return loginChain(folder, shell, [
+    AGENT_LAUNCHER,
+    "kb-agent-launcher",
     folder,
-    program,
-    launch.options.advisor === "off" ? "1" : "0",
+    launch.node,
+    launch.runtimeFile,
+    launch.agentFolder,
+    launch.claudeProgram,
     launch.mode,
     launch.conversationId,
-    ...launchOptionArguments(launch.options),
-  ];
+  ]);
 }
