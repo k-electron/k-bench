@@ -55,6 +55,7 @@ Something not working? Run `k-bench status`: it checks each part and says how to
   - [Setup](docs/guide/setup.md): Tailscale, installing, updating, uninstalling.
   - [Using k-bench](docs/guide/using-k-bench.md): Workspaces, Sessions, Claude Sessions, Panes, Bells, scrolling and copying, the phone layout.
   - [Using k-bench with Claude Code](docs/guide/claude-code.md): Claude Sessions and the New Claude dialog, Focus view, resuming on restart, making Claude Code ring the Bell, and working with several conversations.
+  - [Claude Agent (WIP)](docs/guide/claude-agent.md): operating a Claude Session from the web interface, Open in terminal, subscription only, folder trust.
   - [Troubleshooting](docs/guide/troubleshooting.md): start from `k-bench status`.
 - [CHANGELOG](CHANGELOG.md): what changed in each version.
 
