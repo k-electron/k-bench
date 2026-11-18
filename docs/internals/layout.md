@@ -46,7 +46,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
   - `Sidebar`, `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`;
   - `NewClaudeDialog`, the New Claude… dialog (it loads the last-used Launch options when it opens);
   - `WorkspaceRow`, a sortable Workspace row with its menu;
-  - `SessionRow`, `BellBadge` and `ClaudeGlyph`;
+  - `SessionRow` and `ClaudeGlyph`;
   - `PaneArea`, one or two Panes with a draggable divider;
   - `Pane`, a Session's terminal in one slot;
   - `PaneLabels`, the top bar's `Workspace › Session` label over each Pane, laid out on the same grid columns as `PaneArea` (`paneColumns` in `src/layout.ts`), so each label follows its Pane and the divider by construction;
