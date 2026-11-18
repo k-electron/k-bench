@@ -15,7 +15,6 @@ import {
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
-import { BellBadge } from "./BellBadge";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -52,6 +51,8 @@ export function WorkspaceRow({
     isDragging,
   } = useSortable({ id: workspace.id });
   const [collapsed, setCollapsed] = useState(false);
+  // Collapsed, the Sessions' own pulses are out of sight: roll them up into this row.
+  const pulsing = collapsed && workspace.sessions.some((session) => session.bell);
 
   return (
     <li
@@ -59,7 +60,12 @@ export function WorkspaceRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn("rounded-md bg-card", isDragging && "relative z-10 shadow-lg")}
     >
-      <div className="flex items-center gap-1 py-1 pr-1 text-sm font-medium">
+      <div
+        className={cn(
+          "flex items-center gap-1 rounded-md py-1 pr-1 text-sm font-medium",
+          pulsing && "row-pulse",
+        )}
+      >
         <button
           type="button"
           ref={setActivatorNodeRef}
@@ -87,9 +93,11 @@ export function WorkspaceRow({
         <h2 className="min-w-0 flex-1 truncate" title={workspace.folder}>
           {workspace.name}
         </h2>
-        {/* Collapsed, the Sessions' own badges are out of sight: roll them up here. */}
-        {collapsed && workspace.sessions.some((session) => session.bell) && (
-          <BellBadge label={`${workspace.name} has a session that rang the bell`} />
+        {/* The pulse is visual; this says it to a screen reader and to tests. */}
+        {pulsing && (
+          <span role="status" className="sr-only">
+            {`${workspace.name} has a session that needs you`}
+          </span>
         )}
         <Button
           variant="ghost"

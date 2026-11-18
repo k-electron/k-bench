@@ -71,15 +71,15 @@ Your layout is remembered per browser, so your phone and your laptop can differ.
 
 ## Bells
 
-![A Bell on the "tests" Session in the sidebar](../images/bell.png)
+![The "tests" Session pulsing in the sidebar after a Bell](../images/bell.png)
 
-A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
+A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then **pulses**, and a collapsed Workspace pulses too while any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
 
-To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first shows a Bell.
+To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first pulses.
 
 Things to know:
 
-- A Bell is a mark in the sidebar. It makes no sound and sends no push notification, so it is for the moments you look at k-bench.
+- A Bell is a pulsing row in the sidebar. It makes no sound and sends no push notification, so it is for the moments you look at k-bench.
 - A Session raises a Bell only while nothing is viewing it. A browser tab, on any device, that still has the Session open counts as viewing it. If Bells don't appear when you expect them, close the stale tab. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 - A Bell survives a k-bench restart. It is lost only if your Sessions are, which means after a logout or a Mac restart.
 

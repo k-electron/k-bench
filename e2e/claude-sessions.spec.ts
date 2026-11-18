@@ -91,6 +91,10 @@ test("the dialog takes an optional name, launches on Enter, and refuses a taken 
   await expect(app.session("refactor")).toHaveAttribute("aria-current", "true");
 
   await app.openNewSessionDialog("project");
+  // Enter does nothing until the Host's last kind has arrived; it opens on Claude TUI.
+  await expect(
+    app.newSessionDialog.getByRole("radio", { name: "Claude TUI" }),
+  ).toBeChecked();
   const nameField = app.newSessionDialog.getByRole("textbox", { name: "Session name" });
   await nameField.fill("refactor");
   await nameField.press("Enter");
