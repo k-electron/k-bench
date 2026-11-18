@@ -1,7 +1,7 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { revisionOf } from "../../src/shared/state-protocol.ts";
+import { revisionOf, type SessionKind } from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
   path: string;
@@ -77,8 +77,12 @@ export const api = {
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
-  /** The Launch options last used for a Claude Session; all Default if none has been. */
-  lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),
+  /**
+   * What the New Session dialog opens on: the kind last created and the Launch options last
+   * used for a Claude Session. A shell with every option Default if none has been created.
+   */
+  lastNewSession: () =>
+    get<{ kind: SessionKind; claude: LaunchOptions }>("/api/new-session/last"),
   /** An ordinary shell Session, or with `claude` a Claude Session. */
   createSession: (
     workspaceId: string,

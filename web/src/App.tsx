@@ -64,16 +64,10 @@ export function App() {
             setDrawerOpen(false);
           }}
           onOpenInOtherPane={panes.openInOtherPane}
-          onCreateSession={async (workspaceId) => {
-            // Resolves once the new Session is in state, so the Pane knows it.
-            const id = await actions.createSession(workspaceId);
-            if (id === undefined) return;
-            panes.openInFocusedPane(id);
-            setDrawerOpen(false);
-          }}
-          onCreateClaudeSession={async (workspaceId, input) => {
-            // A refusal rejects, so the dialog can show it; it stays open.
-            const id = await actions.createClaudeSession(workspaceId, input);
+          onCreateSession={async (workspaceId, input) => {
+            // Resolves once the new Session is in state, so the Pane knows it. A refusal
+            // rejects, so the dialog can show it; it stays open.
+            const id = await actions.createSession(workspaceId, input);
             if (id === undefined) return;
             panes.openInFocusedPane(id);
             setDrawerOpen(false);

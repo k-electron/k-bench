@@ -15,8 +15,8 @@ function eventsUrl(): string {
  * The owner's actions. Each one finishes once its change is in `state`, so whatever runs
  * after it (closing a dialog, opening a new Session in a Pane) sees the result.
  *
- * An action whose form can show why it was refused rejects with an `ApiError`. Creating and
- * restarting a Session have no form: their refusal goes in `error` instead.
+ * An action whose form can show why it was refused rejects with an `ApiError`. Restarting a
+ * Session has no form: its refusal goes in `error` instead.
  */
 export interface Actions {
   createWorkspace(input: { folder: string; name?: string }): Promise<void>;
@@ -25,18 +25,13 @@ export interface Actions {
   reorderWorkspaces(ids: string[]): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;
   /**
-   * The new Session's id, once it is in state. Undefined if it was refused (see `error`) or
-   * did not show in time.
+   * Creates a shell Session, or with `claude` a Claude Session, and resolves with its id once
+   * it is in state (undefined if it did not show in time). The New Session dialog shows why it
+   * was refused, so a refusal rejects with an `ApiError`.
    */
-  createSession(workspaceId: string): Promise<string | undefined>;
-  /**
-   * Launches a Claude Session and resolves with its id once it is in state (undefined if it
-   * did not show in time). Its dialog shows why it was refused, so a refusal rejects with an
-   * `ApiError` instead of going in `error`.
-   */
-  createClaudeSession(
+  createSession(
     workspaceId: string,
-    input: { name?: string; claude: LaunchOptions },
+    input: { name?: string; claude?: LaunchOptions },
   ): Promise<string | undefined>;
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
@@ -110,12 +105,7 @@ export function useAppState(): {
         return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
       },
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
-      createSession: (workspaceId) =>
-        reporting(async () => {
-          const change = await api.createSession(workspaceId);
-          return (await whenShown(change)) ? change.value.id : undefined;
-        }),
-      createClaudeSession: async (workspaceId, input) => {
+      createSession: async (workspaceId, input) => {
         const change = await api.createSession(workspaceId, input);
         return (await whenShown(change)) ? change.value.id : undefined;
       },

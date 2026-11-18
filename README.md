@@ -15,12 +15,12 @@ You can reach Claude Code on your Mac from another device in a few ways, and eac
 
 k-bench takes a third route. It gives you real Claude Code in a real terminal: persistent, and reachable from any browser on your tailnet. A Session runs your own login shell, or Claude Code itself, with your own PATH and config, so Claude Code, its slash commands, its hooks and everything you have set up behave as they do in your local terminal.
 
-It is not only for Claude Code. **New shell** gives you a plain shell Session, so it works for any terminal workload: a dev server, a test watcher, a deploy, an editor.
+It is not only for Claude Code. The **Shell** kind gives you a plain shell Session, so it works for any terminal workload: a dev server, a test watcher, a deploy, an editor.
 
 ## What you get
 
 - **Sessions that keep running** when you close the tab, lock your phone or lose your connection. Come back from any device and pick up where you left off.
-- **Claude Sessions.** Pick **New Claude…** from a Workspace's **+**, choose the model, effort, advisor and Focus view (a condensed view that suits a phone), and k-bench launches Claude Code for you. Restart a Stopped Claude Session, even after a reboot, and the same conversation resumes.
+- **Claude Sessions.** Choose **Claude TUI** in the New Session dialog from a Workspace's **+**, choose the model, effort, advisor and Focus view (a condensed view that suits a phone), and k-bench launches Claude Code for you. Restart a Stopped Claude Session, even after a reboot, and the same conversation resumes.
 - **Workspaces per project.** A Workspace points at a project folder on your Mac, and its Sessions start there.
 - **Two Panes** side by side, for example Claude Code next to a dev server.
 - **Bells.** When a Session rings the terminal bell, its row in the sidebar shows a Bell until you look at it.
@@ -54,7 +54,7 @@ Something not working? Run `k-bench status`: it checks each part and says how to
 - [The guide](docs/guide/README.md), with
   - [Setup](docs/guide/setup.md): Tailscale, installing, updating, uninstalling.
   - [Using k-bench](docs/guide/using-k-bench.md): Workspaces, Sessions, Claude Sessions, Panes, Bells, scrolling and copying, the phone layout.
-  - [Using k-bench with Claude Code](docs/guide/claude-code.md): Claude Sessions and the New Claude dialog, Focus view, resuming on restart, making Claude Code ring the Bell, and working with several conversations.
+  - [Using k-bench with Claude Code](docs/guide/claude-code.md): Claude Sessions and the New Session dialog, Focus view, resuming on restart, making Claude Code ring the Bell, and working with several conversations.
   - [Troubleshooting](docs/guide/troubleshooting.md): start from `k-bench status`.
 - [CHANGELOG](CHANGELOG.md): what changed in each version.
 

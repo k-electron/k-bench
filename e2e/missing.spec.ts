@@ -24,8 +24,12 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
   await app.session("session 1").click();
   await app.runMarker(app.terminal("session 1"), "kb-after-vanish-5252");
   // Starting a new one says why it can't.
-  await app.createSession("project");
-  await expect(app.sidebar.getByRole("alert")).toContainText("Folder does not exist");
+  await app.openNewSessionDialog("project");
+  await app.createInDialog({ kind: "Shell" });
+  await expect(app.newSessionDialog.getByRole("alert")).toContainText(
+    "Folder does not exist",
+  );
+  await app.page.keyboard.press("Escape");
   // Other Workspaces keep working.
   await app.createSession("other");
   // Both Workspaces now have a "session 1": wait until the new one is the open Session.

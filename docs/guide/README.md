@@ -16,7 +16,7 @@ New here? Follow the [quick start in the README](../../README.md#quick-start), t
 - **Host**: your Mac, which runs k-bench and every Session.
 - **Workspace**: a named entry that points at a project folder on the Host.
 - **Session**: a named, persistent program inside a Workspace, started in its folder: your shell, or Claude Code for a Claude Session. It keeps running whether or not a browser is showing it.
-- **Claude Session**: a Session that runs Claude Code itself, started from **New Claude…** with the Launch options you choose. Restarting it resumes the same Claude conversation.
+- **Claude Session**: a Session that runs Claude Code itself, started from the New Session dialog as a **Claude TUI**, with the Launch options you choose. Restarting it resumes the same Claude conversation.
 - **Launch options**: the model, effort, advisor and Focus view a Claude Session starts with. They are fixed for its life.
 - **Stopped**: a Session whose program is gone, because it exited or because you logged out of the Host or restarted it. You can restart it in the same folder: a shell starts fresh, and a Claude Session resumes its conversation.
 - **Missing**: a Workspace whose folder no longer exists on the Host.

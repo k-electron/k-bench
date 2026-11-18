@@ -14,6 +14,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Changed
 
+- One **New Session** dialog, opened from a Workspace's **+**, replaces **New shell** and **New Claude…**. It offers Shell and Claude TUI, shows the Launch options for Claude TUI only, and opens on the kind and options you used last, on any device (Shell the first time). Enter creates, and a blank name gives "session N".
 - The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
 
 ### Fixed

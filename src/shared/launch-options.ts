@@ -1,4 +1,4 @@
-/** The Launch options of a Claude Session, shared by the server and the New Claude dialog. */
+/** The Launch options of a Claude Session, shared by the server and the New Session dialog. */
 
 /**
  * The Launch options: fixed for a Claude Session's life, and stored with it. "default" means

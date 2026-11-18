@@ -9,8 +9,6 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
-  SparklesIcon,
-  TerminalIcon,
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -35,15 +33,12 @@ export type WorkspaceAction = "rename" | "folder" | "delete";
 export function WorkspaceRow({
   workspace,
   onCreateSession,
-  onCreateClaude,
   onAction,
   children,
 }: {
   workspace: WorkspaceState;
-  /** New shell. */
+  /** Opens the New Session dialog for this Workspace. */
   onCreateSession: () => void;
-  /** New Claude…, which asks for its details first. */
-  onCreateClaude: () => void;
   onAction: (action: WorkspaceAction) => void;
   children: ReactNode;
 }) {
@@ -96,27 +91,14 @@ export function WorkspaceRow({
         {collapsed && workspace.sessions.some((session) => session.bell) && (
           <BellBadge label={`${workspace.name} has a session that rang the bell`} />
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`New session in ${workspace.name}`}
-            >
-              <PlusIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onCreateSession}>
-              <TerminalIcon />
-              New shell
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onCreateClaude}>
-              <SparklesIcon />
-              New Claude…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`New session in ${workspace.name}`}
+          onClick={onCreateSession}
+        >
+          <PlusIcon />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
