@@ -136,7 +136,11 @@ export class FakeClaude {
     this.write(file, { ...current, ...changes });
   }
 
-  /** Scripts a turn: each prompt takes the oldest scripted turn not yet taken. */
+  /**
+   * Scripts a turn: each prompt takes the oldest scripted turn not yet taken. A `/clear`
+   * takes none (Claude Code handles it itself, with no turn) and resets the conversation.
+   * Script before sending the prompt.
+   */
   script(steps: FakeStep[]): void {
     this.writeTurn({ steps });
   }

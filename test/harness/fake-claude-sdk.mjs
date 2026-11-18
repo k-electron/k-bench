@@ -458,7 +458,7 @@ async function runTurn(prompt, scripted) {
     });
   }
   const text = promptText(prompt);
-  const clearing = prompt && /^\/clear\b/.test(text) && !scripted;
+  const clearing = isClear(prompt);
   if (!clearing) {
     sendInit(config);
     startOfTurn();
@@ -509,6 +509,8 @@ async function runTurn(prompt, scripted) {
   }
 }
 
+const isClear = (prompt) => Boolean(prompt) && /^\/clear\b/.test(promptText(prompt));
+
 function promptText(prompt) {
   const content = prompt?.message?.content;
   if (typeof content === "string") return content;
@@ -526,7 +528,8 @@ async function pump() {
       const prompt = prompts.shift();
       if (prompt) {
         interrupted = false;
-        await runTurn(prompt, takeScript(false));
+        // Claude Code handles /clear itself, with no turn: it takes no script.
+        await runTurn(prompt, isClear(prompt) ? undefined : takeScript(false));
       } else {
         const auto = takeScript(true);
         if (!auto) break;
