@@ -8,10 +8,12 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Create a Workspace.** Choose **New Workspace**, then paste the path of a project folder on your Mac or choose **Browse folders** to pick it. The name defaults to the folder's name; give it another one if you like. Several Workspaces may point at the same folder.
 
-**Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the Focused Pane and starts in the Workspace's folder.
+**Create a Session.** Choose the **+** next to a Workspace's name. The **New Session** dialog opens, with a name (optional) and a choice of kind. Press Enter or choose **Create**, and the new Session opens in the Focused Pane and starts in the Workspace's folder. A blank name gives "session 1", "session 2" and so on.
 
-- **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
-- **New Claude…** opens a dialog where you choose a name (optional), the model, the effort, the advisor and Focus view, then launches a Claude Session. It runs Claude Code itself, and the sidebar marks it with a small orange glyph. A blank name gives "session N" too. [Using k-bench with Claude Code](claude-code.md) explains the dialog.
+- **Shell** starts your login shell. It is what the dialog offers the first time.
+- **Claude TUI** runs Claude Code itself, and the sidebar marks the Session with a small orange glyph. It also shows the model, effort, advisor and Focus view. [Using k-bench with Claude Code](claude-code.md) explains them.
+
+The dialog opens on the kind you created last, with the Launch options you last used, on whichever device.
 
 ![The sidebar: shell Sessions, and Claude Sessions marked with a glyph](../images/claude-sidebar.png)
 
@@ -69,15 +71,15 @@ Your layout is remembered per browser, so your phone and your laptop can differ.
 
 ## Bells
 
-![A Bell on the "tests" Session in the sidebar](../images/bell.png)
+![The "tests" Session pulsing in the sidebar after a Bell](../images/bell.png)
 
-A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
+A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then **pulses**, and a collapsed Workspace pulses too while any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
 
-To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first shows a Bell.
+To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first pulses.
 
 Things to know:
 
-- A Bell is a mark in the sidebar. It makes no sound and sends no push notification, so it is for the moments you look at k-bench.
+- A Bell is a pulsing row in the sidebar. It makes no sound and sends no push notification, so it is for the moments you look at k-bench.
 - A Session raises a Bell only while nothing is viewing it. A browser tab, on any device, that still has the Session open counts as viewing it. If Bells don't appear when you expect them, close the stale tab. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 - A Bell survives a k-bench restart. It is lost only if your Sessions are, which means after a logout or a Mac restart.
 

@@ -7,10 +7,10 @@ k-bench only starts and resumes Claude Code, using its documented command-line f
 ## Start a Claude Session
 
 1. Create a [Workspace](using-k-bench.md#workspaces-and-sessions) for your project folder.
-2. Choose the **+** next to the Workspace's name, then **New Claude…**.
-3. Fill in the dialog (below) and choose **Launch**.
+2. Choose the **+** next to the Workspace's name. The New Session dialog opens.
+3. Choose **Claude TUI**, fill in the rest of the dialog (below) and choose **Create**, or press Enter.
 
-![The New Claude dialog, with a name, model, effort, advisor and the Focus view checkbox](../images/new-claude.png)
+![The New Session dialog on Claude TUI, with a name, model, effort, advisor and the Focus view checkbox](../images/new-session.png)
 
 The new Session opens in the Focused Pane, so you can start typing to Claude at once. Claude Code starts in the Workspace's folder, through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings and the account you are signed in to are the same as in a terminal window on that Mac.
 
@@ -20,6 +20,7 @@ The first time Claude Code runs in a folder it asks whether you trust it, and **
 
 | Field          | Choices                                                                                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Kind**       | Shell or Claude TUI. The rest of the dialog is for Claude TUI: for Shell the Launch options are hidden.                                                |
 | **Name**       | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused in the dialog, and your other choices stay. |
 | **Model**      | Default, Fable, Opus, Sonnet, Haiku                                                                                                                    |
 | **Effort**     | Default, Low, Medium, High, XHigh, Max                                                                                                                 |
@@ -32,7 +33,7 @@ The dialog's Model, Effort, Advisor and Focus view are the Session's **Launch op
 - **Off** (for the advisor) turns the advisor off for this conversation, even when your settings turn it on.
 - k-bench does not check which model can advise which. Claude Code does, when it starts: if it refuses a pairing, you see why (see [When Claude Code exits](#when-claude-code-exits)).
 
-The dialog opens with the Launch options you used last time, on whichever device, because your Mac remembers them. The name is never remembered. Before your first Claude Session every option is Default and Focus view is off.
+The dialog opens on the kind and the Launch options you used last time, on whichever device, because your Mac remembers them. Creating a shell keeps the Launch options for the next Claude TUI. The name is never remembered. The first time, the dialog opens on Shell, every option is Default and Focus view is off.
 
 The Launch options are fixed for the Session's life. To change the model or the view in the middle of a conversation, use Claude Code's own `/model` and `/focus`. A restart passes the original Launch options again.
 
@@ -66,7 +67,7 @@ Deleting a Claude Session ends it but leaves its conversation alone, so you can 
 
 ## Typing `claude` in an ordinary Session
 
-An ordinary Session, from **New shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no glyph and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
+An ordinary Session, made as a **Shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no glyph and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Make it a **Claude TUI** when you want k-bench to launch and resume Claude Code for you.
 
 ## Two things that can surprise you
 
@@ -75,7 +76,7 @@ An ordinary Session, from **New shell**, is a shell. If you type `claude` in it,
 
 ## Make Claude Code ring the Bell when it is waiting
 
-k-bench raises a [Bell](using-k-bench.md#bells) when the program in a Session rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and a Bell shows on that Session in the sidebar.
+k-bench raises a [Bell](using-k-bench.md#bells) when the program in a Session rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and that Session's row pulses in the sidebar.
 
 Add this to `~/.claude/settings.json` on the Host (merging it with any settings already in the file):
 
@@ -92,7 +93,7 @@ Sources, from Claude Code's current documentation:
 - [`preferredNotifChannel` in the settings reference](https://code.claude.com/docs/en/settings-reference#preferrednotifchannel), which lists its values and where it applies.
 - [Get a terminal bell or notification](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification), which says when Claude Code sends the notification: when it finishes a task or pauses for a permission prompt, and you appear to be away from the terminal.
 
-To check it, start a short task in a Session, then open a different Session. When Claude Code finishes, the first Session shows a Bell. Remember that a Session only raises a Bell while nothing is viewing it, so a tab left open on that Session elsewhere hides it. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
+To check it, start a short task in a Session, then open a different Session. When Claude Code finishes, the first Session's row pulses. Remember that a Session only raises a Bell while nothing is viewing it, so a tab left open on that Session elsewhere hides it. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 
 ## One Session per Claude conversation
 
@@ -107,7 +108,7 @@ Several Sessions can share one Workspace, and several Workspaces can point at th
 
 ## A second Pane for a dev server
 
-On a wide screen, put Claude Code in one [Pane](using-k-bench.md#panes) and a dev server, a test watcher or a log tail in the other. Create a shell Session in the same Workspace for it (**+**, then **New shell**), open it with `⌘`-click (or **Open in other pane**), and use `⌘\` to move between the two. You see Claude's changes take effect as they happen.
+On a wide screen, put Claude Code in one [Pane](using-k-bench.md#panes) and a dev server, a test watcher or a log tail in the other. Create a shell Session in the same Workspace for it (**+**, then **Shell**), open it with `⌘`-click (or **Open in other pane**), and use `⌘\` to move between the two. You see Claude's changes take effect as they happen.
 
 ## Driving Claude Code from your phone
 

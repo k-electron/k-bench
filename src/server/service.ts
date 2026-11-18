@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
-import type { State } from "../shared/state-protocol.ts";
+import type { SessionKind, State } from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
@@ -178,14 +178,23 @@ export class Service {
         throw error;
       }
     });
-    // Remembered for the next New Claude dialog, on any device.
+    // Remembered for the next New Session dialog, on any device. A shell leaves the Launch
+    // options as they were, so switching the dialog back to Claude finds them.
+    this.store.setLastSessionKind(launchOptions ? "claude" : "shell");
     if (launchOptions) this.store.setLastLaunchOptions(launchOptions);
     return { id, name };
   }
 
-  /** The Launch options last used for a Claude Session; all Default, Focus view off, if none. */
-  lastLaunchOptions(): LaunchOptions {
-    return this.store.getLastLaunchOptions() ?? DEFAULT_LAUNCH_OPTIONS;
+  /**
+   * What the New Session dialog opens on: the kind of Session created last, and the Launch
+   * options last used for a Claude Session. A shell, and all Default with Focus view off, if
+   * none has been created.
+   */
+  lastNewSession(): { kind: SessionKind; claude: LaunchOptions } {
+    return {
+      kind: this.store.getLastSessionKind() ?? "shell",
+      claude: this.store.getLastLaunchOptions() ?? DEFAULT_LAUNCH_OPTIONS,
+    };
   }
 
   renameSession(sessionId: string, requestedName: string): { id: string; name: string } {

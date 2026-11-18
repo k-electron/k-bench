@@ -186,20 +186,23 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
-  /** The Bell badge on a Session's row; present only while its Bell is raised. */
-  bellBadge(sessionName: string): Locator {
-    return this.sidebar.getByRole("img", {
-      name: `${sessionName} rang the bell`,
-      exact: true,
-    });
+  /**
+   * A Session's row is pulsing: it needs the owner (its Bell is raised). The pulse is
+   * animation, so this finds the status text the row carries for it, present only while it pulses.
+   */
+  rowPulse(sessionName: string): Locator {
+    return this.sidebar
+      .getByRole("status")
+      .and(this.page.getByText(`${sessionName} needs you`, { exact: true }));
   }
 
-  /** The hint on a Workspace row saying some Session in it rang the bell. */
-  workspaceBellHint(workspaceName: string): Locator {
-    return this.sidebar.getByRole("img", {
-      name: `${workspaceName} has a session that rang the bell`,
-      exact: true,
-    });
+  /** A collapsed Workspace's row is pulsing: some Session in it needs the owner. */
+  workspacePulse(workspaceName: string): Locator {
+    return this.sidebar.getByRole("status").and(
+      this.page.getByText(`${workspaceName} has a session that needs you`, {
+        exact: true,
+      }),
+    );
   }
 
   /** Collapses a Workspace's Sessions out of view. */
@@ -257,75 +260,78 @@ export class AppPage {
     await mouse.up();
   }
 
-  /** Opens the **+** menu on a Workspace's row; it offers New shell and New Claude…. */
-  async openNewSessionMenu(workspaceName: string): Promise<void> {
+  /** The New Session dialog, once a Workspace's **+** was pressed. */
+  get newSessionDialog(): Locator {
+    return this.page.getByRole("dialog", { name: "New Session", exact: true });
+  }
+
+  /** Opens the New Session dialog from a Workspace's **+** button. */
+  async openNewSessionDialog(workspaceName: string): Promise<void> {
     await this.sidebar
       .getByRole("button", { name: `New session in ${workspaceName}`, exact: true })
       .click();
+    await expect(this.newSessionDialog).toBeVisible();
   }
 
-  /** The **+** menu's entries, once it is open. */
-  get newSessionMenuItems(): Locator {
-    return this.page.getByRole("menuitem");
-  }
-
-  /** Creates an ordinary shell Session from the **+** menu. */
-  async createSession(workspaceName: string): Promise<void> {
-    await this.openNewSessionMenu(workspaceName);
-    await this.page.getByRole("menuitem", { name: "New shell", exact: true }).click();
-  }
-
-  /** The New Claude dialog, once **New Claude…** was picked. */
-  get claudeDialog(): Locator {
-    return this.page.getByRole("dialog", { name: "New Claude Session" });
-  }
-
-  /** Opens the New Claude dialog from the **+** menu. */
-  async openClaudeDialog(workspaceName: string): Promise<void> {
-    await this.openNewSessionMenu(workspaceName);
-    await this.page.getByRole("menuitem", { name: "New Claude…", exact: true }).click();
-    await expect(this.claudeDialog).toBeVisible();
+  /** The kinds the open New Session dialog offers, in order. */
+  get newSessionKinds(): Locator {
+    return this.newSessionDialog
+      .getByRole("radiogroup", { name: "Kind" })
+      .getByRole("radio");
   }
 
   /**
-   * Fills in the open New Claude dialog and presses Launch. Everything is optional: the name,
-   * and each Launch option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
+   * Fills in the open New Session dialog and presses Create. Everything is optional: the
+   * name, the kind by its label ("Shell", "Claude TUI"; left alone it is whatever the dialog
+   * opened on), and for Claude TUI each Launch option by the label of the choice ("XHigh",
+   * "Off") or, for Focus view, on/off.
    */
-  async launchClaude(
+  async createInDialog(
     options: {
       name?: string;
+      kind?: "Shell" | "Claude TUI";
       model?: string;
       effort?: string;
       advisor?: string;
       focusView?: boolean;
     } = {},
   ): Promise<void> {
+    const dialog = this.newSessionDialog;
     if (options.name !== undefined) {
-      await this.claudeDialog
-        .getByRole("textbox", { name: "Session name" })
-        .fill(options.name);
+      await dialog.getByRole("textbox", { name: "Session name" }).fill(options.name);
+    }
+    if (options.kind !== undefined) {
+      await dialog.getByRole("radio", { name: options.kind, exact: true }).check();
     }
     for (const field of ["Model", "Effort", "Advisor"] as const) {
       const choice = options[field.toLowerCase() as "model" | "effort" | "advisor"];
       if (choice !== undefined) {
-        await this.claudeDialog.getByLabel(field, { exact: true }).selectOption(choice);
+        await dialog.getByLabel(field, { exact: true }).selectOption(choice);
       }
     }
     if (options.focusView !== undefined) {
-      await this.claudeDialog
+      await dialog
         .getByRole("checkbox", { name: "Focus view" })
         .setChecked(options.focusView);
     }
-    await this.claudeDialog.getByRole("button", { name: "Launch", exact: true }).click();
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
   }
 
-  /** Launches a Claude Session in the Workspace from the **+** menu and the dialog. */
+  /** Creates an ordinary shell Session through the New Session dialog. */
+  async createSession(workspaceName: string, name?: string): Promise<void> {
+    await this.openNewSessionDialog(workspaceName);
+    await this.createInDialog({ kind: "Shell", name });
+    await expect(this.newSessionDialog).toBeHidden();
+  }
+
+  /** Creates a Claude TUI Session through the New Session dialog. */
   async createClaudeSession(
     workspaceName: string,
-    options: Parameters<AppPage["launchClaude"]>[0] = {},
+    options: Omit<Parameters<AppPage["createInDialog"]>[0], "kind"> = {},
   ): Promise<void> {
-    await this.openClaudeDialog(workspaceName);
-    await this.launchClaude(options);
+    await this.openNewSessionDialog(workspaceName);
+    await this.createInDialog({ ...options, kind: "Claude TUI" });
+    await expect(this.newSessionDialog).toBeHidden();
   }
 
   /** The Claude glyph on a Session's row; present on Claude Sessions only. */

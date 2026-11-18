@@ -64,3 +64,31 @@
     overflow: hidden;
   }
 }
+
+/*
+ * The pulse of a row that needs the owner (a Bell). Sky blue on purpose: the orange pulse is
+ * reserved for a Claude Agent Waiting for you. Under reduced motion it is a steady tint.
+ */
+@keyframes row-pulse {
+  0%,
+  100% {
+    background-color: oklch(0.746 0.16 232.661 / 8%);
+    box-shadow: inset 2px 0 0 oklch(0.746 0.16 232.661 / 50%);
+  }
+  50% {
+    background-color: oklch(0.746 0.16 232.661 / 30%);
+    box-shadow: inset 2px 0 0 oklch(0.746 0.16 232.661);
+  }
+}
+
+.row-pulse {
+  animation: row-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-pulse {
+    animation: none;
+    background-color: oklch(0.746 0.16 232.661 / 20%);
+    box-shadow: inset 2px 0 0 oklch(0.746 0.16 232.661);
+  }
+}

@@ -1,11 +1,11 @@
-// Claude Sessions: the New Claude dialog, and the sidebar with the Claude glyph.
+// Claude Sessions: the New Session dialog, and the sidebar with the Claude glyph.
 //
 // No real Claude Code runs here: a Claude Session runs the test stub, whose terminal shows
 // temporary paths. So neither image shows a Claude Session's terminal. The sidebar image is
 // the sidebar alone, and the Session is never opened.
 import { expect, test } from "./fixtures.ts";
 
-test("the New Claude dialog, and the Claude glyph in the sidebar", async ({
+test("the New Session dialog on Claude TUI, and the Claude glyph in the sidebar", async ({
   app,
   demo,
 }) => {
@@ -27,12 +27,13 @@ test("the New Claude dialog, and the Claude glyph in the sidebar", async ({
     height: last.y + last.height + 12 - sidebar.y,
   });
 
-  await app.openClaudeDialog("acme-api");
-  const dialog = app.claudeDialog;
+  await app.openNewSessionDialog("acme-api");
+  const dialog = app.newSessionDialog;
+  await dialog.getByRole("radio", { name: "Claude TUI" }).check();
   await dialog.getByRole("textbox", { name: "Session name" }).fill("api tests");
   await dialog.getByLabel("Model", { exact: true }).selectOption("Sonnet");
   await dialog.getByLabel("Effort", { exact: true }).selectOption("High");
   await dialog.getByLabel("Advisor", { exact: true }).selectOption("Opus");
   await dialog.getByRole("checkbox", { name: "Focus view" }).check();
-  await demo.shoot("new-claude.png", app.claudeDialog);
+  await demo.shoot("new-session.png", dialog);
 });

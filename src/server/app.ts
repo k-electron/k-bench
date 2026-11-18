@@ -140,7 +140,7 @@ export function createApp(
     return c.json(session, 201);
   });
 
-  app.get("/api/claude/launch-options", (c) => c.json(service.lastLaunchOptions()));
+  app.get("/api/new-session/last", (c) => c.json(service.lastNewSession()));
 
   app.patch("/api/sessions/:id", async (c) => {
     const body = await jsonBody(c.req.raw);

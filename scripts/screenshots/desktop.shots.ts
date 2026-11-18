@@ -32,6 +32,6 @@ test("desktop with two Panes, and a Session that rang the Bell", async ({
 
   // "tests" is in no Pane, so nobody is looking at it when its shell rings the bell.
   await kbench.ringBell("tests");
-  await expect(app.bellBadge("tests")).toBeVisible();
+  await expect(app.rowPulse("tests")).toBeVisible();
   await demo.shoot("bell.png");
 });
