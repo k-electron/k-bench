@@ -34,7 +34,7 @@ Neither touches the other: the install never touches `./.data/` or the `k-bench-
 pnpm install     # also restores the execute bit on node-pty's spawn-helper, and turns on the git hooks in .githooks
 pnpm dev         # Dev instance: server (watch mode) on port 7690 plus Vite on :5173, which proxies /api; data in ./.data, tmux socket "k-bench-dev"
 pnpm dev:serve   # publish the Dev instance on the tailnet at https port 8443
-pnpm build       # production build: the front end into dist/web, the server and the `k-bench` command compiled into dist/js
+pnpm build       # production build: the front end into dist/web, the Agent Runtime into dist/runtime, the server and the `k-bench` command compiled into dist/js
 pnpm build:web   # just the front end (Vite)
 pnpm build:server # just the compiled server and command (tsc -p tsconfig.build.json)
 pnpm start       # the server alone, run from the TypeScript source; serves dist/web when it exists

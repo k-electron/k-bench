@@ -2,6 +2,7 @@
 
 How k-bench works inside. For setup, commands and the pull request flow, see [CONTRIBUTING](../../CONTRIBUTING.md). The vocabulary is in [GLOSSARY.md](../../GLOSSARY.md) and the design decisions are in [docs/adr/](../adr/).
 
+- [Claude Agent internals](agent.md): the runtime, the wire protocol, the log and Agent folder, the relay and the browser side of a Claude Agent, and the interfaces later tickets build on.
 - [Source layout](layout.md): what lives where in `scripts/`, `src/server/`, `web/` and `test/`.
 - [The Bell](bell.md): the tmux-hook mechanism, why it works that way, and its known limitations.
 - [The API](api.md): the HTTP and WebSocket endpoints.
