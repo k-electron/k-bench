@@ -1,6 +1,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { agentFolder, agentsRoot } from "../src/agent/paths.ts";
+import { agentPath } from "../src/shared/agent-protocol.ts";
 import { isResult } from "./harness/agent.ts";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
 import type { FakeReceived } from "./harness/fake-claude.ts";
@@ -159,6 +160,19 @@ describe("a Claude Agent", () => {
     ]);
     const last = await (await server.request("/api/new-session/last")).json();
     expect(last).toEqual({ kind: "claude-agent", claude: options });
+  });
+
+  it("is reachable only with the owner's login and from the app's own origin", async () => {
+    const { server, workspace } = await boot();
+    const { id } = await server.createClaudeAgent(workspace.id);
+    const path = agentPath(id);
+
+    expect(await server.upgradeStatus(path)).toBe(101);
+    expect(await server.anonymous().upgradeStatus(path)).toBe(403);
+    expect(await server.as("stranger@example.com").upgradeStatus(path)).toBe(403);
+    // A page on another site, even with the owner's login.
+    const evil = server.withHeaders({ origin: "https://evil.example" });
+    expect(await evil.upgradeStatus(path)).toBe(403);
   });
 
   it("is never given a terminal", async () => {

@@ -41,12 +41,15 @@ test("a Claude Agent works in either Pane beside a shell", async ({ app, kbench 
   await app.createSession("project", "shell");
   await app.showTwoPanes();
   await app.createClaudeAgent("project", { name: "agent" });
-  await app.openInOtherPane("shell");
+  // Not through the row menu: closing it hands the focus back to its button a moment later,
+  // which would take the keystrokes meant for the shell.
+  await app.session("shell").click({ modifiers: ["Meta"] });
 
   await expect(
     app.pane(1).getByRole("region", { name: "Claude Agent agent" }),
   ).toBeVisible();
   await expect(app.terminalIn(2, "shell")).toBeVisible();
+  await app.runMarker(app.terminalIn(2, "shell"), "kb-shell-beside-agent-77");
   await app.agentInput("agent").fill("hello");
   await app.agentInput("agent").press("Enter");
   await expect(app.agentRegion("agent").getByRole("log")).toContainText(
