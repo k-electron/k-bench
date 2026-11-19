@@ -549,3 +549,46 @@ test("on a phone, a long-press on a Claude Agent's message shows its raw JSON, a
     message: { content: [{ type: "text", text: "fake claude heard: hello" }] },
   });
 });
+
+test("a Claude Agent's mode line is a button on the phone: a tap cycles the permission mode", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const line = app.agentModeLine("session 1");
+  await expect(line).toContainText("Ask before edits");
+
+  await line.tap();
+  await expect(line).toContainText("Accept edits");
+  await line.tap();
+  await expect(line).toContainText("Plan mode");
+  await line.tap();
+  await expect(line).toContainText("Ask before edits");
+});
+
+test("a Claude Agent on the phone has an Interrupt button by the input while Claude works", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const region = app.agentRegion("session 1");
+  const interrupt = region.getByRole("button", { name: "Interrupt" });
+  await expect(interrupt).toHaveCount(0);
+
+  kbench.instance.fakeClaude.script([
+    { text: "running it" },
+    { tool: { name: "Bash", input: { command: "sleep 99" } }, hold: "never" },
+  ]);
+  await app.agentInput("session 1").tap();
+  await app.page.keyboard.type("long job");
+  await region.getByRole("button", { name: "Send", exact: true }).tap();
+  await expect(region.getByRole("log")).toContainText("running it");
+  await interrupt.tap();
+
+  await expect(region.getByRole("log").getByText("Interrupted")).toBeVisible();
+  await expect(interrupt).toHaveCount(0);
+});

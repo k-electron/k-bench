@@ -1,9 +1,12 @@
 import {
+  type AgentPage,
+  type AgentReplay,
   type AgentServerMessage,
   type AgentSnapshot,
   type LogEntry,
   openPermissionAsks,
 } from "../../../src/shared/agent-protocol.ts";
+import { queuedPromptIds } from "./prompts";
 
 /**
  * What the conversation shows, built from the Agent's log entries and live fragments. This
@@ -15,8 +18,20 @@ import {
  * `transcriptItems` from entries the state already holds.
  */
 export type TranscriptItem =
-  /** A prompt the owner sent (from any device). */
-  | { kind: "prompt"; key: string; seq?: number; text: string; images?: string[] }
+  /**
+   * A prompt the owner sent (from any device). `queued` while Claude Code has not picked it
+   * up yet: it was sent during a turn (or an instant ago) and waits its turn.
+   */
+  | {
+      kind: "prompt";
+      key: string;
+      seq?: number;
+      text: string;
+      queued: boolean;
+      images?: string[];
+    }
+  /** The turn before this ended because the owner interrupted it. */
+  | { kind: "interrupted"; key: string; seq?: number }
   /** Text from Claude: complete, or still streaming in. */
   | { kind: "assistant"; key: string; seq?: number; text: string; streaming: boolean };
 
@@ -47,14 +62,27 @@ export interface TranscriptState {
   entries: readonly LogEntry[];
   /** The newest `seq` in `entries`: anything not above it is already held. */
   lastSeq: number;
+  /**
+   * Where the log is held from: every entry from here to `lastSeq` is in `entries`, and
+   * nothing earlier is, except the asks that were open when the page opened (`replay`).
+   * Undefined until the first replay. A fresh page holds only the latest turns, and
+   * scrolling up lowers this with `page` answers, until it is 1.
+   */
+  earliestSeq: number | undefined;
   live: LiveMessage | undefined;
 }
 
 export const emptyTranscript: TranscriptState = {
   entries: [],
   lastSeq: 0,
+  earliestSeq: undefined,
   live: undefined,
 };
+
+/** Whether the log has entries older than the ones held, which a `page` request fetches. */
+export function hasEarlier(state: TranscriptState): boolean {
+  return state.earliestSeq !== undefined && state.earliestSeq > 1;
+}
 
 interface StreamEvent {
   type?: string;
@@ -91,9 +119,37 @@ function addEntries(
     }
   }
   return {
+    ...state,
     entries: [...state.entries, ...fresh],
     lastSeq: fresh[fresh.length - 1]?.seq ?? state.lastSeq,
     live,
+  };
+}
+
+/**
+ * Takes in a replay: its entries come after what is held, and the first one tells where the
+ * log is held from. A replay after a reconnect asks for everything after `lastSeq`, so it
+ * leaves that alone.
+ */
+function addReplay(state: TranscriptState, replay: AgentReplay): TranscriptState {
+  const earliestSeq = state.earliestSeq ?? replay.from ?? 1;
+  return addEntries({ ...state, earliestSeq, live: undefined }, replay.entries);
+}
+
+/**
+ * Takes in the page of older entries that was asked for, ahead of what is held. The page ends
+ * where the held entries begin, so nothing is missing; an entry already held (an ask that was
+ * open when the page opened, carried from before) is not added twice. A page that reaches no
+ * further back than what is held (a repeated answer) changes nothing.
+ */
+function addPage(state: TranscriptState, page: AgentPage): TranscriptState {
+  if (state.earliestSeq === undefined || page.from >= state.earliestSeq) return state;
+  const held = new Set(state.entries.map((entry) => entry.seq));
+  const older = page.entries.filter((entry) => !held.has(entry.seq));
+  return {
+    ...state,
+    earliestSeq: page.from,
+    entries: [...older, ...state.entries].sort((a, b) => a.seq - b.seq),
   };
 }
 
@@ -173,7 +229,9 @@ export function applyServerMessage(
     case "replay":
       // Text streamed before a drop is stale: if a message is still streaming, a snapshot
       // follows this replay, and if not, the entries replayed hold what it became.
-      return addEntries({ ...state, live: undefined }, message.entries);
+      return addReplay(state, message);
+    case "page":
+      return addPage(state, message);
     case "snapshot":
       return addSnapshot(state, message);
     case "entry":
@@ -185,9 +243,31 @@ export function applyServerMessage(
   }
 }
 
+/**
+ * Claude Code's note that the owner interrupted: a synthetic `user` message, "[Request
+ * interrupted by user]" (or "... for tool use" when a tool was running), that closes the
+ * aborted turn.
+ */
+function isInterruptNotice(entry: LogEntry): boolean {
+  if (entry.kind !== "sdk" || entry.message.type !== "user") return false;
+  if (entry.message.parent_tool_use_id != null || !isObject(entry.message.message)) {
+    return false;
+  }
+  const { content } = entry.message.message;
+  const blocks = Array.isArray(content) ? content : [{ type: "text", text: content }];
+  return blocks.some(
+    (block) =>
+      isObject(block) &&
+      block.type === "text" &&
+      typeof block.text === "string" &&
+      block.text.startsWith("[Request interrupted by user"),
+  );
+}
+
 /** The conversation to show, in order: what the log holds, then what is still streaming in. */
 export function transcriptItems(state: TranscriptState): TranscriptItem[] {
   const items: TranscriptItem[] = [];
+  const queued = queuedPromptIds(state.entries);
   for (const entry of state.entries) {
     if (entry.kind === "prompt") {
       items.push({
@@ -196,7 +276,10 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
         seq: entry.seq,
         text: entry.text,
         ...(entry.images && { images: entry.images }),
+        queued: queued.has(entry.id),
       });
+    } else if (isInterruptNotice(entry)) {
+      items.push({ kind: "interrupted", key: `entry-${entry.seq}`, seq: entry.seq });
     } else if (
       entry.kind === "sdk" &&
       entry.message.type === "assistant" &&

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useAgentConversation } from "@/agent/useAgentConversation";
 import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
@@ -11,6 +11,7 @@ import {
   ShowRawProvider,
   useRawView,
 } from "./RawView";
+import { useScrollBack } from "./useScrollBack";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
 const STICK_TO_BOTTOM_PX = 80;
@@ -32,11 +33,21 @@ export function AgentPane({
   const atBottom = useRef(true);
   const { items, entries } = conversation;
   const rawView = useRawView();
+  const sentinel = useScrollBack({
+    scroller,
+    earliestSeq: conversation.earliestSeq,
+    canLoad:
+      conversation.hasEarlier &&
+      !conversation.loadingEarlier &&
+      !conversation.reconnecting,
+    loadEarlier: conversation.loadEarlier,
+  });
 
   // Follows the conversation down while the owner is at the bottom; once they scroll up to
-  // read, it stays where they are.
+  // read, it stays where they are. Before the paint, so the latest turns are what a page
+  // shows from its first frame, not the top of the history.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs whenever the conversation grows
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = scroller.current;
     if (element && atBottom.current) element.scrollTop = element.scrollHeight;
   }, [items, rawView.all]);
@@ -50,13 +61,14 @@ export function AgentPane({
         ref={scroller}
         role="log"
         aria-label="Conversation"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 text-sm"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 text-sm [overflow-anchor:none]"
         onScroll={(event) => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
           atBottom.current =
             scrollHeight - scrollTop - clientHeight <= STICK_TO_BOTTOM_PX;
         }}
       >
+        <div ref={sentinel} aria-hidden="true" className="h-px" />
         {rawView.all ? (
           <RawTranscript entries={entries} />
         ) : (
@@ -71,21 +83,33 @@ export function AgentPane({
                 {item.kind === "prompt" && (
                   <PromptImages sessionId={session.id} names={item.images} />
                 )}
-                {(item.text !== "" || item.kind !== "prompt") && (
-                  <p
-                    className={cn(
-                      "break-words whitespace-pre-wrap",
-                      item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-                    )}
-                  >
-                    {item.text}
-                  </p>
+                {item.kind === "interrupted" ? (
+                  <p className="text-xs text-muted-foreground">Interrupted</p>
+                ) : (
+                  (item.text !== "" || item.kind !== "prompt") && (
+                    <p
+                      className={cn(
+                        "break-words whitespace-pre-wrap",
+                        item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
+                      )}
+                    >
+                      {item.text}
+                      {item.kind === "prompt" && item.queued && (
+                        <span className="text-muted-foreground"> (queued)</span>
+                      )}
+                    </p>
+                  )
                 )}
               </RawMessage>
             ))}
           </ShowRawProvider>
         )}
       </div>
+      {conversation.loadingEarlier && (
+        <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
+          Loading earlier messages…
+        </p>
+      )}
       {conversation.state === "working" && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
           Claude is working…

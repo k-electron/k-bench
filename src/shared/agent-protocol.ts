@@ -165,15 +165,104 @@ export interface AgentHello {
   sdkClaudeCodeVersion: string;
 }
 
+/**
+ * Claude Code's permission modes, as the SDK names them. A Claude Code started with the
+ * owner's own settings can be in any of them; k-bench only ever switches among
+ * `PERMISSION_MODE_CYCLE`.
+ */
+export type PermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "plan"
+  | "auto"
+  | "dontAsk"
+  | "bypassPermissions";
+
+/**
+ * The modes Shift+Tab, and a tap on the mode line, step through, in the order Claude TUI
+ * offers them. `bypassPermissions` is not here: it needs an explicit opt-in the owner makes
+ * outside k-bench, and no client may switch it on. Nor is `auto`, which the TUI offers only
+ * where it is enabled and which nothing tells k-bench about: adding it later is one line here.
+ */
+export const PERMISSION_MODE_CYCLE: readonly PermissionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+];
+
+/**
+ * The mode after `current` in the cycle, wrapping round. A mode outside the cycle (the owner
+ * started Claude Code in `auto`, say) goes to `default`, as the TUI's Shift+Tab does.
+ */
+export function nextPermissionMode(current: PermissionMode): PermissionMode {
+  const index = PERMISSION_MODE_CYCLE.indexOf(current);
+  return PERMISSION_MODE_CYCLE[index + 1] ?? PERMISSION_MODE_CYCLE[0] ?? "default";
+}
+
+/** What the mode line says for each mode. */
+export const PERMISSION_MODE_LABEL: Record<PermissionMode, string> = {
+  default: "Ask before edits",
+  acceptEdits: "Accept edits",
+  plan: "Plan mode",
+  auto: "Auto mode",
+  dontAsk: "Don't ask",
+  bypassPermissions: "Bypass permissions",
+};
+
+const PERMISSION_MODES = Object.keys(PERMISSION_MODE_LABEL) as PermissionMode[];
+
+/** Whether a value read off the wire is one of the modes. */
+export function isPermissionMode(value: unknown): value is PermissionMode {
+  return PERMISSION_MODES.includes(value as PermissionMode);
+}
+
 /** What the Agent is doing, pushed to every connection whenever it changes (and on connect). */
 export interface AgentStatus {
   type: "status";
-  state: "idle" | "working";
+  /**
+   * `working`: a turn is running, one the owner sent or one nobody did (`/loop`). `waiting`:
+   * an Allow/Deny ask is open (it wins over `working`). The same three words as
+   * `SessionState.agent.state`.
+   */
+  state: "idle" | "working" | "waiting";
+  /**
+   * When the turn now running began, in milliseconds since the epoch on the runtime's clock
+   * (the Host's). Present while `working` or `waiting`, and kept across the two: it is the
+   * clock of the turn, not of the wait.
+   */
+  turnStartedAt?: number;
+  /**
+   * Claude Code's permission mode now, whoever changed it: a client's `set_permission_mode`,
+   * Claude Code itself (leaving plan mode), or the settings it started with. Absent only
+   * from a runtime older than this field.
+   */
+  mode?: PermissionMode;
 }
 
-/** Entries the client asked for with `sync`, in order. */
+/**
+ * Entries the client asked for with `sync`, in order. `from` is the first `seq` of the
+ * contiguous range the replay covers, through to the newest entry: the whole log when it is 1.
+ * What a `sync` with `tailTurns` leaves out is earlier than `from`, to be fetched with `page`.
+ * Entries below `from` can also be here, first: the permission asks still open
+ * (`openPermissionAsks`) that were made before it, so that an open ask is always known. A
+ * replay without `from` (a runtime built before paging existed) covers everything after the
+ * `afterSeq` asked.
+ */
 export interface AgentReplay {
   type: "replay";
+  entries: LogEntry[];
+  from?: number;
+}
+
+/**
+ * The answer to a `page` request: the entries from `from` up to, but not including,
+ * `beforeSeq` (which the request named, so a stale answer can be told), in order, with none
+ * missing. `from` is 1 when the page reaches the start of the log.
+ */
+export interface AgentPage {
+  type: "page";
+  beforeSeq: number;
+  from: number;
   entries: LogEntry[];
 }
 
@@ -218,6 +307,7 @@ export type AgentServerMessage =
   | AgentHello
   | AgentStatus
   | AgentReplay
+  | AgentPage
   | AgentEntry
   | AgentPartial
   | AgentSnapshot
@@ -232,8 +322,20 @@ export type AgentClientMessage =
    * connection every `entry` and `partial` from the same moment on, with no gap and no
    * repeat. A connection that never syncs receives `hello` and `status` only.
    * Once per connection.
+   *
+   * `tailTurns`, for a client that holds nothing (`afterSeq` 0; ignored otherwise, since a
+   * client that holds entries needs everything after them), limits the replay to the last
+   * that many turns (see `AgentLog.readTail`) plus the permission asks still open from
+   * before them. The replay says where it begins (`from`), and `page` fetches what is
+   * earlier. A runtime that does not know `tailTurns` replays everything, with no `from`.
    */
-  | { type: "sync"; afterSeq: number }
+  | { type: "sync"; afterSeq: number; tailTurns?: number }
+  /**
+   * Asks for the `limit` turns before `beforeSeq` (the `from` of what the client holds):
+   * answered to this connection alone with a `page`. Entries before `beforeSeq` never
+   * change, so a page needs no sync and cannot race the live entries.
+   */
+  | { type: "page"; beforeSeq: number; limit: number }
   /**
    * A prompt to send to Claude Code as typed. `id` is a UUID chosen by the client; it goes
    * to Claude Code as the message's `uuid`, which Claude Code echoes back when it takes the
@@ -251,10 +353,38 @@ export type AgentClientMessage =
    * What came of it arrives as the ask's `permission_answered` entry, to every device.
    */
   | { type: "answer"; requestId: string; decision: "allow" | "deny" }
+  /**
+   * Switches Claude Code to this permission mode. A target, not a "next": two devices that
+   * both tap at once ask for the same mode, and it is set once. Only the modes of
+   * `PERMISSION_MODE_CYCLE` are accepted. What came of it is the next `status`, on every
+   * connection; if Claude Code refuses, nothing changes.
+   */
+  | { type: "set_permission_mode"; mode: PermissionMode }
+  /**
+   * Stops the turn that is running, as Esc does in a terminal: its text so far is kept, its
+   * running tool ends unanswered, and the turn's `result` is an error. Prompts already sent
+   * and waiting are not taken back: they run next, in the order sent. Harmless when nothing
+   * is running.
+   */
+  | { type: "interrupt" }
   /** Ends the Agent: the turn is interrupted, the log finished, Claude Code closed. */
   | { type: "shutdown" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The most turns a `sync`'s `tailTurns` or a `page`'s `limit` may ask for. */
+export const MAX_TURNS_PER_REQUEST = 200;
+
+/** Whether `value` is an integer from `min` up to `max`. */
+function isCount(
+  value: unknown,
+  min: number,
+  max = Number.MAX_SAFE_INTEGER,
+): value is number {
+  return (
+    typeof value === "number" && Number.isInteger(value) && value >= min && value <= max
+  );
+}
 
 /** Longest `text` a prompt may carry. */
 export const MAX_PROMPT_CHARACTERS = 1_000_000;
@@ -292,11 +422,19 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
     return undefined;
   }
   switch (message.type) {
-    case "sync":
-      return typeof message.afterSeq === "number" &&
-        Number.isInteger(message.afterSeq) &&
-        message.afterSeq >= 0
-        ? { type: "sync", afterSeq: message.afterSeq }
+    case "sync": {
+      if (!isCount(message.afterSeq, 0)) return undefined;
+      if (message.tailTurns === undefined) {
+        return { type: "sync", afterSeq: message.afterSeq };
+      }
+      return isCount(message.tailTurns, 1, MAX_TURNS_PER_REQUEST)
+        ? { type: "sync", afterSeq: message.afterSeq, tailTurns: message.tailTurns }
+        : undefined;
+    }
+    case "page":
+      return isCount(message.beforeSeq, 1) &&
+        isCount(message.limit, 1, MAX_TURNS_PER_REQUEST)
+        ? { type: "page", beforeSeq: message.beforeSeq, limit: message.limit }
         : undefined;
     case "prompt": {
       const images = decodeImageNames(message.images);
@@ -321,6 +459,13 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         (message.decision === "allow" || message.decision === "deny")
         ? { type: "answer", requestId: message.requestId, decision: message.decision }
         : undefined;
+    case "set_permission_mode":
+      return isPermissionMode(message.mode) &&
+        PERMISSION_MODE_CYCLE.includes(message.mode)
+        ? { type: "set_permission_mode", mode: message.mode }
+        : undefined;
+    case "interrupt":
+      return { type: "interrupt" };
     case "shutdown":
       return { type: "shutdown" };
     default:
@@ -340,6 +485,7 @@ const SERVER_TYPES: readonly string[] = [
   "hello",
   "status",
   "replay",
+  "page",
   "entry",
   "partial",
   "snapshot",

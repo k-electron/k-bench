@@ -114,7 +114,11 @@ function make(template, changes = {}) {
 const system = (subtype, fields = {}) =>
   send({ type: "system", subtype, ...fields, session_id: sessionId, uuid: randomUUID() });
 
+// `sessionStateMessages: false` in the config makes the fake never send them, as a Claude Code
+// that does not would: it has not been confirmed that the real one sends them for a turn
+// nobody sent, so what the runtime shows must not depend on them.
 const stateEvents = () =>
+  readConfig().sessionStateMessages !== false &&
   Boolean(
     process.env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS ||
       process.env.CLAUDE_CODE_SDK_READS_SESSION_STATE,
@@ -348,6 +352,9 @@ async function runTool(turn, step) {
   stop.event.index = index;
   send(stop);
   closeMessage(turn, "tool_use");
+  // A tool still running: no result until the test releases it, or the turn is interrupted
+  // (which ends the turn with the tool unanswered).
+  if (step.hold) await waitForRelease(step.hold);
 
   let allowed = true;
   let answer;
@@ -412,6 +419,10 @@ async function runStep(turn, step) {
     await runTool(turn, step);
   } else if (step.hold) {
     await waitForRelease(step.hold);
+  } else if (step.mode) {
+    // Claude Code changing the mode itself (plan approval leaves plan mode): told in `status`.
+    permissionMode = step.mode;
+    system("status", { status: null, permissionMode });
   } else if (step.raw) {
     send({ session_id: sessionId, uuid: randomUUID(), ...step.raw });
   } else if (step.system) {

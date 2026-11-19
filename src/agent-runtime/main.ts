@@ -20,11 +20,13 @@ import {
   type AgentHello,
   openPermissionAsks,
 } from "../shared/agent-protocol.ts";
+import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { ClientHub } from "./hub.ts";
 import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
+import { PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
 
 /** Put in at build time from the SDK's package.json (`vite.runtime.config.ts`). */
@@ -38,8 +40,6 @@ const log = new AgentLog(agentLogFile(args.agentDir));
 
 let claudeVersion = "unknown";
 let finishing = false;
-/** Prompts sent whose turn has not ended yet. */
-let pendingTurns = 0;
 
 const hello = (): AgentHello => ({
   type: "hello",
@@ -60,13 +60,31 @@ const hub = new ClientHub({
   onCommand: (message) => void command(message),
 });
 
+// Idle, Working or Waiting for you: Waiting is an open ask (`asks`, below).
+const activity = new Activity({
+  openAsks: () => asks.count,
+  publish: () => publishStatus(),
+});
+
 /** Appends to the log and tells every synced client, in that order. */
 function record(entry: Parameters<AgentLog["append"]>[0]): void {
   hub.entry(log.append(entry));
+  // An ask opening or closing is what turns Working into Waiting for you and back.
+  if (entry.kind === "permission_asked" || entry.kind === "permission_answered") {
+    activity.asksChanged();
+  }
 }
 
+const asks = new PermissionAsks(record);
+
+const permissionMode = new PermissionModeTracker();
+
+/** Sends every connection the status: what the Agent is doing, and its permission mode. */
 function publishStatus(): void {
-  hub.setStatus({ type: "status", state: pendingTurns > 0 ? "working" : "idle" });
+  hub.setStatus({
+    ...activity.status,
+    ...(permissionMode.current && { mode: permissionMode.current }),
+  });
 }
 
 record({ kind: "runtime", event: "started" });
@@ -82,8 +100,6 @@ for (const ask of openPermissionAsks(log.readAfter(0))) {
   });
 }
 
-const asks = new PermissionAsks(record);
-
 // A conversation is saved by Claude Code only after its first message, so a resume of one
 // that never got a prompt starts it again under the same ID instead.
 const claude = new ClaudeSession(
@@ -98,6 +114,7 @@ const claude = new ClaudeSession(
   },
   {
     message(message) {
+      activity.message(message);
       if (message.type === "stream_event") {
         // Fragments go live and are never logged; the text so far is kept for late joiners.
         const fragment = message as unknown as Record<string, unknown>;
@@ -106,11 +123,8 @@ const claude = new ClaudeSession(
         return;
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
-      if (message.type === "result") {
-        live.turnEnded();
-        pendingTurns = Math.max(0, pendingTurns - 1);
-        publishStatus();
-      }
+      if (permissionMode.observe(message)) publishStatus();
+      if (message.type === "result") live.turnEnded();
     },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";
@@ -130,11 +144,20 @@ async function command(message: AgentClientMessage): Promise<void> {
       text: message.text,
       ...(message.images && { images: message.images }),
     });
-    pendingTurns += 1;
-    publishStatus();
+    activity.prompt();
     claude.prompt(message.id, content);
+  } else if (message.type === "interrupt") {
+    claude.interrupt();
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message.decision);
+  } else if (message.type === "set_permission_mode") {
+    try {
+      await claude.setPermissionMode(message.mode);
+      if (permissionMode.set(message.mode)) publishStatus();
+    } catch {
+      // Claude Code refused (the owner's settings can forbid a mode): nothing changes, and
+      // every Pane keeps showing the mode that is in force.
+    }
   } else if (message.type === "shutdown") {
     await finish("Stopped by k-bench", 0);
   }
@@ -177,6 +200,8 @@ process.on("unhandledRejection", (error) => {
 // If it dies first, `ended` above has already recorded why.
 try {
   claudeVersion = await claude.claudeVersion();
+  permissionMode.set(await claude.permissionMode());
+  publishStatus();
   await hub.listen();
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);
