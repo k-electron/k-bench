@@ -5,6 +5,7 @@ import { CommandOutput } from "./CommandOutput";
 import { Markdown } from "./Markdown";
 import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
+import { TaskLine } from "./TaskLine";
 import { ToolCall } from "./ToolCall";
 import { UncommonLine } from "./UncommonLine";
 import { UnsupportedRow } from "./UnsupportedRow";
@@ -110,6 +111,8 @@ export const TranscriptItemView = memo(function TranscriptItemView({
       );
     case "tool":
       return <ToolCall item={item} collapsed={focusView} />;
+    case "task":
+      return <TaskLine item={item} />;
     case "interrupted":
       return (
         <div className="my-1 flex gap-2 pl-5 text-red-300">

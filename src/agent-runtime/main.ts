@@ -32,6 +32,7 @@ import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
 import { PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
+import { TaskTracker } from "./tasks.ts";
 
 /** Put in at build time from the SDK's package.json (`vite.runtime.config.ts`). */
 declare const __SDK_VERSION__: string;
@@ -105,10 +106,15 @@ const commandList = new CommandList(
   ),
 );
 
-/** Sends every connection the status: what the Agent is doing, its mode and its Bell. */
+// The subagents and background tasks running now (#149): they outlive turns.
+const tasks = new TaskTracker();
+
+/** Sends every connection the status: what the Agent is doing, its mode, tasks and Bell. */
 function publishStatus(): void {
+  const running = tasks.list;
   hub.setStatus({
     ...activity.status,
+    ...(running.length > 0 && { tasks: running }),
     ...(permissionMode.current && { mode: permissionMode.current }),
     ...(bell.isRaised && { bell: true }),
     ...(context && { context }),
@@ -164,6 +170,8 @@ const claude = new ClaudeSession(
       // Any turn's `result` (done, failed or interrupted, sent by the owner or by nobody),
       // before the state goes Idle so that whoever sees Idle sees the Bell with it.
       if (message.type === "result") bell.attention();
+      // Before the state is read, so that a status sent for the turn's end has its tasks.
+      const tasksChanged = tasks.observe(message);
       activity.message(message);
       if (message.type === "stream_event") {
         // Fragments go live and are never logged; the text so far is kept for late joiners.
@@ -173,7 +181,9 @@ const claude = new ClaudeSession(
         return;
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
-      if (permissionMode.observe(message)) publishStatus();
+      // Either may change the status; once, not twice, when both do.
+      const modeChanged = permissionMode.observe(message);
+      if (tasksChanged || modeChanged) publishStatus();
       const afterPlan = permissionMode.afterPlan(message);
       if (afterPlan) void leavePlanMode(afterPlan);
       if (commandList.observe(message as unknown as Record<string, unknown>)) {
@@ -223,6 +233,8 @@ async function command(message: AgentClientMessage): Promise<void> {
     claude.prompt(message.id, content);
   } else if (message.type === "interrupt") {
     claude.interrupt();
+  } else if (message.type === "stop_task") {
+    claude.stopTask(message.taskId);
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message);
   } else if (message.type === "set_permission_mode") {

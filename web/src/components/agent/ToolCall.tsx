@@ -1,45 +1,15 @@
 import { memo } from "react";
 import { cn } from "@/lib/utils";
-import type { ToolItem, ToolStatus } from "../../agent/items";
+import type { ToolItem } from "../../agent/items";
+import { toolMarkWithTask } from "../../agent/tasks";
 import { toolDisplayName } from "../../agent/toolDisplay";
 import { Diff } from "./Diff";
 import { ExpandableLines } from "./ExpandableLines";
+import { StatusMark } from "./StatusMark";
+import { TaskDetail } from "./TaskLine";
 
 /** Lines of a tool's output shown before "+N lines, tap to expand". */
 const COLLAPSED_OUTPUT_LINES = 5;
-
-const STATUS_NAME: Record<ToolStatus, string> = {
-  running: "Running",
-  done: "Done",
-  denied: "Denied",
-  interrupted: "Interrupted",
-  failed: "Failed",
-};
-
-/**
- * The `⏺` of a tool call: a spinner while it runs, green when it is done, red when it was
- * denied, interrupted or failed. Named by its state, for people who cannot see the colour.
- */
-function StatusMark({ status }: { status: ToolStatus }) {
-  if (status === "running") {
-    return (
-      <span
-        role="img"
-        aria-label={STATUS_NAME.running}
-        className="mt-[0.3em] inline-block size-[0.8em] shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent text-muted-foreground"
-      />
-    );
-  }
-  return (
-    <span
-      role="img"
-      aria-label={STATUS_NAME[status]}
-      className={cn("shrink-0", status === "done" ? "text-green-400" : "text-red-400")}
-    >
-      ⏺
-    </span>
-  );
-}
 
 /**
  * `⏺ Bash(ls -la)`, and under it what came of it: `⎿` and the result's lines (collapsed to
@@ -68,7 +38,7 @@ export const ToolCall = memo(function ToolCall({
   return (
     <article aria-label={`${name}(${item.target})`} className="my-1.5">
       <div className="flex gap-2">
-        <StatusMark status={item.status} />
+        <StatusMark status={toolMarkWithTask(item.status, item.task)} />
         <span className="min-w-0 break-words">
           <strong>{name}</strong>
           <span className="text-muted-foreground">({item.target})</span>
@@ -93,6 +63,7 @@ export const ToolCall = memo(function ToolCall({
       {!collapsed && item.diff && item.diff.length > 0 && (
         <Diff lines={item.diff} label={`Diff of ${item.target}`} />
       )}
+      {item.task && <TaskDetail task={item.task} />}
     </article>
   );
 });

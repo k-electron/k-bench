@@ -5,6 +5,8 @@ interface MessageShape {
   type?: unknown;
   subtype?: unknown;
   state?: unknown;
+  parent_tool_use_id?: unknown;
+  task_id?: unknown;
 }
 
 /** The message types that only a running turn produces (a late `system` message is not one). */
@@ -83,7 +85,12 @@ export class Activity {
         this.turn = true;
       }
     } else if (
-      (typeof type === "string" && TURN_MESSAGES.has(type)) ||
+      (typeof type === "string" &&
+        TURN_MESSAGES.has(type) &&
+        // A subagent or background task works on after the turn that started it has ended
+        // (#149): its own messages are not a turn, and no `result` would ever end one.
+        (message.parent_tool_use_id ?? null) === null &&
+        message.task_id === undefined) ||
       (type === "system" && subtype === "init")
     ) {
       this.turn = true;
