@@ -20,6 +20,23 @@ export type ClaudeInterface = "tui" | "agent";
  */
 export type NewSessionKind = SessionKind | "claude-agent";
 
+/**
+ * What a running Claude Agent is doing. `waiting` is Waiting for you: an Allow/Deny ask is
+ * open. A Stopped Agent has none of these: its `status` is "stopped".
+ */
+export type AgentActivity = "idle" | "working" | "waiting";
+
+/** What the server reports of a running Claude Agent, from its runtime's status connection. */
+export interface AgentState {
+  state: AgentActivity;
+  /** When the turn now running began (ms since the epoch, the Host's clock), while it runs. */
+  turnStartedAt?: number;
+  /** The `claude` the runtime drives. */
+  claudeVersion?: string;
+  /** Which build of the Agent Runtime is running (the SHA-256 of its file). */
+  runtimeBuildId?: string;
+}
+
 export interface SessionState {
   id: string;
   name: string;
@@ -27,6 +44,11 @@ export interface SessionState {
   /** For a Claude Session, the interface it is in now; absent for a shell. */
   interface?: ClaudeInterface;
   status: "running" | "stopped";
+  /**
+   * For a running Claude Agent, what it is doing. Absent for anything else, and for an Agent
+   * whose runtime the server has not heard from yet (just started, or the server just did).
+   */
+  agent?: AgentState;
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
 }

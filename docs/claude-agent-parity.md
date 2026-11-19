@@ -174,7 +174,7 @@ Not capabilities of Claude TUI, but part of the line, so they are ticked here to
 
 | Done  | Capability                                                          | Where        | Ticket     | Notes                                                                                                                            |
 | :---- | :------------------------------------------------------------------ | :----------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------- |
-| `[ ]` | Idle, Working and Waiting for you on the row and the Pane's top bar | Claude Agent | #142       | Only Waiting for you pulses. A collapsed Workspace shows orange when any Agent inside waits.                                     |
+| `[x]` | Idle, Working and Waiting for you on the row and the Pane's top bar | Claude Agent | #142       | Only Waiting for you pulses. A collapsed Workspace shows orange when any Agent inside waits.                                     |
 | `[x]` | The Bell as a pulsing row, for every kind of Session                | Claude Agent | #131       | Replaces the bell badge.                                                                                                         |
 | `[ ]` | A Claude Agent raises the Bell                                      | Claude Agent | #145       | When a turn finishes or it becomes Waiting for you, only while no device is viewing it, cleared by viewing it anywhere.          |
 | `[ ]` | Stop, Restart, and the Stopped Transcript                           | Claude Agent | #144       | Stopped keeps the whole conversation read-only, with the reason. A crash is never restarted automatically.                       |

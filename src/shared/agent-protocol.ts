@@ -165,7 +165,18 @@ export interface AgentHello {
 /** What the Agent is doing, pushed to every connection whenever it changes (and on connect). */
 export interface AgentStatus {
   type: "status";
-  state: "idle" | "working";
+  /**
+   * `working`: a turn is running, one the owner sent or one nobody did (`/loop`). `waiting`:
+   * an Allow/Deny ask is open (it wins over `working`). The same three words as
+   * `SessionState.agent.state`.
+   */
+  state: "idle" | "working" | "waiting";
+  /**
+   * When the turn now running began, in milliseconds since the epoch on the runtime's clock
+   * (the Host's). Present while `working` or `waiting`, and kept across the two: it is the
+   * clock of the turn, not of the wait.
+   */
+  turnStartedAt?: number;
 }
 
 /** Entries the client asked for with `sync`, in order. */

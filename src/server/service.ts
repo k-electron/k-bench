@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { ClaudeInterface, NewSessionKind, State } from "../shared/state-protocol.ts";
+import type { AgentStatuses } from "./agent-status.ts";
 import { type AgentRuntimes, AgentStartError } from "./agents.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
@@ -39,14 +40,21 @@ export class Service {
   private readonly store: Store;
   private readonly tmux: TmuxDriver;
   private readonly agents: AgentRuntimes;
+  private readonly statuses: AgentStatuses;
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
 
-  constructor(store: Store, tmux: TmuxDriver, agents: AgentRuntimes) {
+  constructor(
+    store: Store,
+    tmux: TmuxDriver,
+    agents: AgentRuntimes,
+    statuses: AgentStatuses,
+  ) {
     this.store = store;
     this.tmux = tmux;
     this.agents = agents;
+    this.statuses = statuses;
     this.reconciler = new Reconciler(store, tmux);
   }
 
@@ -290,20 +298,50 @@ export class Service {
 
   async getState(): Promise<State> {
     const live = await this.reconciler.reconcile();
+    const workspaces = this.store.listWorkspaces().map((workspace) => ({
+      ...workspace,
+      sessions: this.store.listSessions(workspace.id),
+    }));
+    // A Claude Agent that runs is watched, so what it is doing can be reported below.
+    this.statuses.follow(
+      new Set(
+        workspaces.flatMap((workspace) =>
+          workspace.sessions
+            .filter((session) => session.interface === "agent" && live.has(session.id))
+            .map((session) => session.id),
+        ),
+      ),
+    );
     return {
-      workspaces: this.store.listWorkspaces().map((workspace) => ({
+      workspaces: workspaces.map((workspace) => ({
         ...workspace,
         missing: !isDirectory(workspace.folder),
-        sessions: this.store.listSessions(workspace.id).map((session) => ({
-          id: session.id,
-          name: session.name,
-          kind: session.kind,
-          ...(session.interface ? { interface: session.interface } : {}),
-          status: live.has(session.id) ? "running" : "stopped",
-          bell: live.get(session.id)?.bell ?? false,
-        })),
+        sessions: workspace.sessions.map((session) => {
+          const agent =
+            session.interface === "agent" && live.has(session.id)
+              ? this.statuses.stateOf(session.id)
+              : undefined;
+          return {
+            id: session.id,
+            name: session.name,
+            kind: session.kind,
+            ...(session.interface ? { interface: session.interface } : {}),
+            status: live.has(session.id) ? ("running" as const) : ("stopped" as const),
+            ...(agent ? { agent } : {}),
+            bell: live.get(session.id)?.bell ?? false,
+          };
+        }),
       })),
     };
+  }
+
+  /**
+   * Starts watching the Claude Agents that run (see `getState`) and waits briefly for what
+   * each says, so that the first state a restarted server shows already has it.
+   */
+  async watchAgents(): Promise<void> {
+    await this.getState();
+    await this.statuses.settled(3_000);
   }
 
   /**

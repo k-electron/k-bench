@@ -20,6 +20,7 @@ import {
   type AgentHello,
   openPermissionAsks,
 } from "../shared/agent-protocol.ts";
+import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { ClientHub } from "./hub.ts";
@@ -37,8 +38,6 @@ const log = new AgentLog(agentLogFile(args.agentDir));
 
 let claudeVersion = "unknown";
 let finishing = false;
-/** Prompts sent whose turn has not ended yet. */
-let pendingTurns = 0;
 
 const hello = (): AgentHello => ({
   type: "hello",
@@ -59,14 +58,22 @@ const hub = new ClientHub({
   onCommand: (message) => void command(message),
 });
 
+// Idle, Working or Waiting for you: Waiting is an open ask (`asks`, below).
+const activity = new Activity({
+  openAsks: () => asks.count,
+  publish: (status) => hub.setStatus(status),
+});
+
 /** Appends to the log and tells every synced client, in that order. */
 function record(entry: Parameters<AgentLog["append"]>[0]): void {
   hub.entry(log.append(entry));
+  // An ask opening or closing is what turns Working into Waiting for you and back.
+  if (entry.kind === "permission_asked" || entry.kind === "permission_answered") {
+    activity.asksChanged();
+  }
 }
 
-function publishStatus(): void {
-  hub.setStatus({ type: "status", state: pendingTurns > 0 ? "working" : "idle" });
-}
+const asks = new PermissionAsks(record);
 
 record({ kind: "runtime", event: "started" });
 
@@ -80,8 +87,6 @@ for (const ask of openPermissionAsks(log.readAfter(0))) {
     answer: { decision: "interrupted" },
   });
 }
-
-const asks = new PermissionAsks(record);
 
 // A conversation is saved by Claude Code only after its first message, so a resume of one
 // that never got a prompt starts it again under the same ID instead.
@@ -97,6 +102,7 @@ const claude = new ClaudeSession(
   },
   {
     message(message) {
+      activity.message(message);
       if (message.type === "stream_event") {
         // Fragments go live and are never logged; the text so far is kept for late joiners.
         const fragment = message as unknown as Record<string, unknown>;
@@ -105,11 +111,7 @@ const claude = new ClaudeSession(
         return;
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
-      if (message.type === "result") {
-        live.turnEnded();
-        pendingTurns = Math.max(0, pendingTurns - 1);
-        publishStatus();
-      }
+      if (message.type === "result") live.turnEnded();
     },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";
@@ -121,8 +123,7 @@ const claude = new ClaudeSession(
 async function command(message: AgentClientMessage): Promise<void> {
   if (message.type === "prompt") {
     record({ kind: "prompt", id: message.id, text: message.text });
-    pendingTurns += 1;
-    publishStatus();
+    activity.prompt();
     claude.prompt(message.id, message.text);
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message.decision);

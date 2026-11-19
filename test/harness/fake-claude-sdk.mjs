@@ -114,7 +114,11 @@ function make(template, changes = {}) {
 const system = (subtype, fields = {}) =>
   send({ type: "system", subtype, ...fields, session_id: sessionId, uuid: randomUUID() });
 
+// `sessionStateMessages: false` in the config makes the fake never send them, as a Claude Code
+// that does not would: it has not been confirmed that the real one sends them for a turn
+// nobody sent, so what the runtime shows must not depend on them.
 const stateEvents = () =>
+  readConfig().sessionStateMessages !== false &&
   Boolean(
     process.env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS ||
       process.env.CLAUDE_CODE_SDK_READS_SESSION_STATE,
