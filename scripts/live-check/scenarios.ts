@@ -296,7 +296,9 @@ const loop: Scenario = {
 
 const tasks: Scenario = {
   name: "tasks",
-  budget: 4,
+  // Enough that the session is not stopped while a background task is still running: the
+  // subagent's turn, the Bash turn, the interrupted count and what a task's end starts by itself.
+  budget: 7,
   async run(ctx) {
     const { run, cap } = ctx;
     const s = ctx.open({
@@ -382,7 +384,9 @@ const tasks: Scenario = {
       await s.next(isResult, 60_000, from);
       cap.notes.interruptTo = s.msgs.length;
       // Stop the task by its ID, as the Transcript's Stop does.
-      if (typeof started?.task_id === "string") {
+      if (s.stoppedForBudget) {
+        cap.notes.stopSkipped = "its budget was spent first";
+      } else if (typeof started?.task_id === "string") {
         cap.notes.stopFrom = s.msgs.length;
         try {
           await s.q.stopTask(started.task_id);

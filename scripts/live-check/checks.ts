@@ -450,8 +450,8 @@ const atPath: Check = {
   scenario: "at-path",
   fakeCannot: "the fake does not expand @path",
   assumption:
-    "web/src/agent/fileMentions.ts insertMention (inserts @path verbatim, a space in the path too)",
-  evaluate({ cap }) {
+    "web/src/agent/fileMentions.ts mentionOf (the spelling the picker inserts for a path with a space)",
+  async evaluate({ cap }) {
     const session = sessionOf(cap);
     if (!session) return notProvoked("the session did not run");
     const spans = noteOf<Record<string, [number, number]>>(cap, "spans") ?? {};
@@ -476,19 +476,35 @@ const atPath: Check = {
       );
     }
     if (!plainOk) return fail("@path was not expanded in an SDK prompt", facts);
-    if (works.verbatim) {
-      return pass("@path is expanded, a path with a space too, inserted verbatim", facts);
+    // What the shipped picker emits for a path with a space, and whether that spelling was expanded.
+    const { mentions } = await webModules();
+    const shipped = mentions.mentionOf("a b.txt");
+    const spelling = shipped.startsWith('@"')
+      ? "quoted"
+      : shipped.includes("\\ ")
+        ? "escaped"
+        : "verbatim";
+    facts.push(`web/src/agent/fileMentions.ts mentionOf emits the ${spelling} spelling`);
+    if (works[spelling] === undefined) {
+      return notProvoked(
+        `the ${spelling} spelling the picker emits was not tried`,
+        facts,
+      );
     }
-    const emit = works.quoted
-      ? 'quoted: @"path with spaces"'
-      : works.escaped
-        ? "backslash-escaped: @path\\ with\\ spaces"
-        : undefined;
+    if (works[spelling]) {
+      return pass(
+        `a path with a space is expanded in the spelling the picker emits (${spelling})`,
+        facts,
+      );
+    }
+    const other = (["quoted", "escaped", "verbatim"] as const).find(
+      (form) => works[form],
+    );
     facts.push(
-      `insertMention should emit a path with a space ${emit ?? "in none of the three spellings (none is expanded): leave such a path out of the picker, or insert it as text without the @"}`,
+      `the picker should emit ${other ?? "none of the three: they are all unexpanded, so leave such a path out of the picker"}`,
     );
     return fail(
-      "a path with a space is not expanded when inserted verbatim (web/src/agent/fileMentions.ts insertMention)",
+      `the picker's ${spelling} spelling of a path with a space is not expanded (web/src/agent/fileMentions.ts mentionOf)`,
       facts,
     );
   },
@@ -1163,6 +1179,24 @@ const openInWebAnchors: Check = {
   },
 };
 
+/** The tasks Claude Code's messages say are running after these messages: the whole list of `background_tasks_changed`, each backgrounded `task_started`, less each ended one. */
+function aliveAt(msgs: readonly Msg[]): Set<string> {
+  const alive = new Set<string>();
+  for (const m of msgs) {
+    if (isSystem(m, "background_tasks_changed")) {
+      alive.clear();
+      for (const t of Array.isArray(m.tasks) ? m.tasks : []) {
+        if (isObject(t) && typeof t.task_id === "string") alive.add(t.task_id);
+      }
+    } else if (isSystem(m, "task_started") && m.is_backgrounded === true) {
+      alive.add(String(m.task_id));
+    } else if (isSystem(m, "task_notification")) {
+      alive.delete(String(m.task_id));
+    }
+  }
+  return alive;
+}
+
 const tasks: Check = {
   name: "tasks",
   row: "A3",
@@ -1287,10 +1321,26 @@ const tasks: Check = {
       facts.push(
         `stopTask accepted: ${yesNo(noteOf<boolean>(cap, "stopAccepted") === true)}; a task_notification followed: ${yesNo(stopped !== undefined)}${stopped ? ` (status ${String(stopped.status)})` : ""}`,
       );
-      if (!outcome && noteOf<boolean>(cap, "stopAccepted") !== true)
-        outcome = fail("stopTask on a real background task was refused", facts);
-      else if (!outcome && !stopped)
+      const tried = noteOf<number>(cap, "stopFrom") !== undefined;
+      // Was the task still running when stopTask was tried? Replayed from the messages alone.
+      const stillListed = aliveAt(
+        session.msgs.slice(0, noteOf<number>(cap, "stopFrom") ?? 0),
+      ).has(bgId);
+      facts.push(
+        `the background task was still listed when stopTask was tried: ${tried ? yesNo(stillListed) : "stopTask was not tried"}`,
+      );
+      if (!outcome && !tried) {
+        outcome = notProvoked(
+          `stopTask was not tried: ${noteOf<string>(cap, "stopSkipped") ?? "no stop was possible"}`,
+          facts,
+        );
+      } else if (!outcome && noteOf<boolean>(cap, "stopAccepted") !== true) {
+        outcome = stillListed
+          ? fail("stopTask on a live background task was refused", facts)
+          : notProvoked("the task ended before it could be stopped", facts);
+      } else if (!outcome && !stopped) {
         outcome = fail("stopTask was accepted but no task_notification followed", facts);
+      }
     }
     return outcome ?? pass("the task shapes are as TaskTracker assumes", facts);
   },

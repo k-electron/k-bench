@@ -31,6 +31,7 @@ import {
 } from "./rails.ts";
 import type { SettingsChange, SettingsWatch } from "./settings-watch.ts";
 import { sdkLaunchOptions } from "./shipped.ts";
+import { processesIn } from "./sweep.ts";
 
 export type Msg = Record<string, unknown>;
 
@@ -180,6 +181,8 @@ export class LiveSession {
   readonly q: Query;
   /** The first `init` this session sent. */
   init: Msg | undefined;
+  /** Stopped because its scenario's turn budget was spent: nothing more can be asked of it. */
+  stoppedForBudget = false;
   /** `claude`'s process ID, as the check started it. */
   pid: number | undefined;
   stderrTail = "";
@@ -383,6 +386,7 @@ export class LiveSession {
         this.run.say(
           `  the budget of "${this.spec.name}" is spent: its session is stopped`,
         );
+        this.stoppedForBudget = true;
         this.kill();
       }
     }
@@ -518,10 +522,11 @@ export class LiveSession {
     }
     await Promise.race([this.done, new Promise((resolve) => setTimeout(resolve, 5000))]);
     killGroup(this.pid);
+    this.killWhatItStarted();
     this.run.sessions.delete(this);
   }
 
-  /** The quickest end there is, for an aborted run. */
+  /** The quickest end there is, for an aborted run or a budget stop. */
   kill(): void {
     this.closing = true;
     this.input.close();
@@ -531,6 +536,16 @@ export class LiveSession {
       // Already closed.
     }
     killGroup(this.pid);
+    this.killWhatItStarted();
+  }
+
+  /**
+   * A command `claude` ran in the background has a process group of its own, which killing
+   * `claude`'s group does not reach: whatever works in the throwaway folder is ended too, so
+   * that nothing is left for the end of the run to find.
+   */
+  private killWhatItStarted(): void {
+    for (const pid of processesIn(this.run.folder)) killGroup(pid);
   }
 
   /** The recording: every message either way, redacted, as JSON lines. */

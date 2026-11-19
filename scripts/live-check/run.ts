@@ -1,7 +1,6 @@
 // Setting a run up and ending it: the throwaway folder, the settings fingerprints and scan,
 // and, at the end (also after an abort or Ctrl-C), killing what the run started, asserting that
 // nothing survives and the owner's settings are as they were, and the cleanup by provenance.
-import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   existsSync,
@@ -23,6 +22,7 @@ import { planCleanup, type Removal, runCleanup } from "./provenance.ts";
 import { Budget, changedFiles, fileFingerprint, settingsRisk } from "./rails.ts";
 import { killGroup, type Run } from "./session.ts";
 import { SettingsWatch } from "./settings-watch.ts";
+import { processesIn } from "./sweep.ts";
 import type { Tmux } from "./tmux.ts";
 
 export interface RunOptions {
@@ -158,31 +158,6 @@ function alive(pid: number): boolean {
     return true;
   } catch {
     return false;
-  }
-}
-
-/** The processes that have the throwaway folder (or the run's temp folder) as their working folder: what the run left running, found by where it worked. */
-function processesIn(folder: string): number[] {
-  try {
-    const out = execFileSync("lsof", ["-a", "-d", "cwd", "-Fpn"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      maxBuffer: 64 * 1024 * 1024,
-    });
-    const found: number[] = [];
-    let pid = 0;
-    for (const line of out.split("\n")) {
-      if (line.startsWith("p")) pid = Number(line.slice(1));
-      else if (
-        line.startsWith("n") &&
-        (line.slice(1) === folder || line.slice(1).startsWith(`${folder}/`))
-      ) {
-        if (pid !== process.pid) found.push(pid);
-      }
-    }
-    return found;
-  } catch {
-    return [];
   }
 }
 

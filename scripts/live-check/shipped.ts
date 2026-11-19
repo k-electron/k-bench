@@ -74,7 +74,13 @@ interface WebActivity {
   }): number | undefined;
 }
 
+interface Mentions {
+  /** How the picker spells a mention of `path` (web/src/agent/fileMentions.ts). */
+  mentionOf(path: string): string;
+}
+
 export interface WebModules {
+  mentions: Mentions;
   items: Items;
   unsupported: Unsupported;
   prompts: Prompts;
@@ -108,6 +114,7 @@ export function webModules(): Promise<WebModules> {
       items: (await load("web/src/agent/items.ts")) as Items,
       unsupported: (await load("web/src/agent/unsupported.ts")) as Unsupported,
       prompts: (await load("web/src/agent/prompts.ts")) as Prompts,
+      mentions: (await load("web/src/agent/fileMentions.ts")) as Mentions,
       activity: (await load("web/src/agent/activity.ts")) as WebActivity,
     };
   })();
