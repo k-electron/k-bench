@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useAgentConversation } from "@/agent/useAgentConversation";
 import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
 import { PromptDock } from "./PromptDock";
+import { useScrollBack } from "./useScrollBack";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
 const STICK_TO_BOTTOM_PX = 80;
@@ -23,11 +24,21 @@ export function AgentPane({
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const { items } = conversation;
+  const sentinel = useScrollBack({
+    scroller,
+    earliestSeq: conversation.earliestSeq,
+    canLoad:
+      conversation.hasEarlier &&
+      !conversation.loadingEarlier &&
+      !conversation.reconnecting,
+    loadEarlier: conversation.loadEarlier,
+  });
 
   // Follows the conversation down while the owner is at the bottom; once they scroll up to
-  // read, it stays where they are.
+  // read, it stays where they are. Before the paint, so the latest turns are what a page
+  // shows from its first frame, not the top of the history.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs whenever the conversation grows
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = scroller.current;
     if (element && atBottom.current) element.scrollTop = element.scrollHeight;
   }, [items]);
@@ -38,13 +49,14 @@ export function AgentPane({
         ref={scroller}
         role="log"
         aria-label="Conversation"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 text-sm"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 text-sm [overflow-anchor:none]"
         onScroll={(event) => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
           atBottom.current =
             scrollHeight - scrollTop - clientHeight <= STICK_TO_BOTTOM_PX;
         }}
       >
+        <div ref={sentinel} aria-hidden="true" className="h-px" />
         {items.map((item) => (
           <p
             key={item.key}
@@ -57,6 +69,11 @@ export function AgentPane({
           </p>
         ))}
       </div>
+      {conversation.loadingEarlier && (
+        <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
+          Loading earlier messages…
+        </p>
+      )}
       {conversation.state === "working" && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
           Claude is working…
