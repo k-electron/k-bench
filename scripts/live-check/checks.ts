@@ -969,6 +969,13 @@ const modeCycle: Check = {
     );
     const base = all.get("baseline");
     const models = noteOf<Record<string, unknown>>(base ?? cap, "initReply")?.models;
+    // The list comes from the baseline scenario's first reply; a run that did not include it
+    // (--only) has nothing to compare with, which is not a failure.
+    if (!Array.isArray(models))
+      return notProvoked(
+        "this run has no model list (the baseline scenario did not run): add `baseline` to --only",
+        [],
+      );
     // The model the Session runs on is Haiku: the same lookup the runtime makes.
     const supportsAuto = autoModeSupported(models, undefined, "haiku");
     const ours = permissionModeCycle(supportsAuto).map(

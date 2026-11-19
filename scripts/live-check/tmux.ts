@@ -74,6 +74,10 @@ export class Tmux {
   /** Text as typed, with no key name read into it. */
   type(text: string): void {
     this.tmux(["send-keys", "-t", PANE, "-l", text]);
+    // The real TUI reads text that arrives all at once as a paste, and an Enter straight after it
+    // as a line break inside the paste, not a submit (found by hand: with a second's pause it
+    // submits). So typing is followed by a short pause.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 900);
   }
 
   /** The screen as it is now: no scrollback, where old dialogs and labels linger. */
