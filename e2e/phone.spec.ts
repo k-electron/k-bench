@@ -468,6 +468,50 @@ test("a Claude Agent on the phone has no Extra keys, Return starts a new line an
   await expect(input).toHaveValue("");
 });
 
+test("on a phone, a long-press on a Claude Agent's message shows its raw JSON, and a quick tap does not", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  await app.agentInput("session 1").fill("hello");
+  await app
+    .agentRegion("session 1")
+    .getByRole("button", { name: "Send", exact: true })
+    .tap();
+  const conversation = app.agentRegion("session 1").getByRole("log");
+  const reply = conversation.getByText("fake claude heard: hello", { exact: true });
+  await expect(reply).toBeVisible();
+  // No `</>` on a phone: the long-press is the way.
+  await expect(conversation.getByRole("button", { name: /raw message/i })).toHaveCount(0);
+
+  const box = await reply.boundingBox();
+  if (!box) throw new Error("the reply should show");
+  const finger = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const touch = await app.page.context().newCDPSession(app.page);
+  const send = (type: "touchStart" | "touchEnd") =>
+    touch.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: type === "touchStart" ? [finger] : [],
+    });
+
+  // A quick tap is not a long-press.
+  await send("touchStart");
+  await send("touchEnd");
+  await expect(conversation.getByLabel("Raw message")).toHaveCount(0);
+
+  // A finger that stays down shows the message Claude Code sent.
+  await send("touchStart");
+  const raw = conversation.getByLabel("Raw message", { exact: true });
+  await expect(raw).toBeVisible();
+  await send("touchEnd");
+  expect(JSON.parse((await raw.textContent()) ?? "")).toMatchObject({
+    type: "assistant",
+    message: { content: [{ type: "text", text: "fake claude heard: hello" }] },
+  });
+});
+
 test("a Claude Agent's mode line is a button on the phone: a tap cycles the permission mode", async ({
   app,
   kbench,

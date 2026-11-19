@@ -16,9 +16,16 @@ import {
  */
 export type TranscriptItem =
   /** A prompt the owner sent (from any device). */
-  | { kind: "prompt"; key: string; text: string }
+  | { kind: "prompt"; key: string; seq?: number; text: string }
   /** Text from Claude: complete, or still streaming in. */
-  | { kind: "assistant"; key: string; text: string; streaming: boolean };
+  | { kind: "assistant"; key: string; seq?: number; text: string; streaming: boolean };
+
+/**
+ * **The raw-message seam (#137).** An item built from a log entry carries that entry's `seq`
+ * (`TranscriptItem.seq`), so the Pane can offer that message's raw JSON (`web/src/agent/raw.ts`,
+ * `components/agent/RawView.tsx`). Text still streaming in has no entry yet and no `seq`. Every
+ * item kind a later ticket adds must set `seq` the same way, from the entry it was built from;
+ * a row built from several entries sets the one the owner would call "the message".
 
 /** Text streaming in for the SDK message now being written. */
 interface LiveMessage {
@@ -183,7 +190,12 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
   const items: TranscriptItem[] = [];
   for (const entry of state.entries) {
     if (entry.kind === "prompt") {
-      items.push({ kind: "prompt", key: `entry-${entry.seq}`, text: entry.text });
+      items.push({
+        kind: "prompt",
+        key: `entry-${entry.seq}`,
+        seq: entry.seq,
+        text: entry.text,
+      });
     } else if (
       entry.kind === "sdk" &&
       entry.message.type === "assistant" &&
@@ -197,6 +209,7 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
           items.push({
             kind: "assistant",
             key: `entry-${entry.seq}-${index}`,
+            seq: entry.seq,
             text: block.text,
             streaming: false,
           });
