@@ -454,6 +454,9 @@ function isNoSuchSession(error: unknown): boolean {
   return (
     isNoServer(error) ||
     stderrOf(error).includes("can't find") ||
-    stderrOf(error).includes("no such session")
+    stderrOf(error).includes("no such session") ||
+    // The last Session had just ended and tmux's server had not yet exited: alive, but with
+    // nothing left for a target to name.
+    stderrOf(error).includes("no current target")
   );
 }

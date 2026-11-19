@@ -7,7 +7,11 @@ import { bootWithWorkspace as boot } from "./harness/boot.ts";
 import type { FakeReceived } from "./harness/fake-claude.ts";
 import { createTestInstance } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
-import { killTmuxServer, tmuxSessionNames } from "./harness/tmux.ts";
+import {
+  endSessionLeavingEmptyServer,
+  killTmuxServer,
+  tmuxSessionNames,
+} from "./harness/tmux.ts";
 
 /** What the fake Claude Code was started with, one entry per start. */
 const starts = (received: FakeReceived[]) =>
@@ -324,6 +328,20 @@ describe("a Claude Agent", () => {
           .some((e) => e.kind === "closed" || e.kind === "terminated"),
       { description: "Claude Code to be closed" },
     );
+    expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
+  });
+
+  it("is deleted even when its tmux session ended an instant before, as tmux's server was exiting", async () => {
+    // A runtime that exits ends its own tmux session, and with the last one tmux's server
+    // exits a moment later: deleting the Agent in that moment must not fail on its own end.
+    const { instance, server, workspace } = await boot();
+    const session = await server.createClaudeAgent(workspace.id);
+    endSessionLeavingEmptyServer(instance.config.tmuxSocket, session.id);
+
+    const response = await server.deleteSession(session.id);
+
+    expect(response.status).toBe(204);
+    expect(readdirSync(agentsRoot(instance.config.dataDir))).toEqual([]);
     expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
   });
 
