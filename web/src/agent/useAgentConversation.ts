@@ -7,6 +7,7 @@ import {
   type PermissionMode,
 } from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
+import { pageViewing } from "../pageViewing";
 import { retryWhenAwake } from "../retryWhenAwake";
 import { promptHistory } from "./prompts";
 import {
@@ -178,6 +179,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
       sessionId,
       openSocket: (path) => new WebSocket(agentUrl(path)),
       wake: retryWhenAwake,
+      viewing: pageViewing,
     });
     connection.current = opened;
     const stop = opened.subscribe({

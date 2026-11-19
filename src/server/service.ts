@@ -330,7 +330,11 @@ export class Service {
             ...(session.interface ? { interface: session.interface } : {}),
             status: live.has(session.id) ? ("running" as const) : ("stopped" as const),
             ...(agent ? { agent } : {}),
-            bell: live.get(session.id)?.bell ?? false,
+            // An Agent's Bell is its runtime's (no terminal rings one); a terminal's is tmux's.
+            bell:
+              session.interface === "agent"
+                ? agent !== undefined && this.statuses.bellOf(session.id)
+                : (live.get(session.id)?.bell ?? false),
           };
         }),
       })),

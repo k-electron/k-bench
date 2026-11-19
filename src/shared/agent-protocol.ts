@@ -237,6 +237,12 @@ export interface AgentStatus {
    * from a runtime older than this field.
    */
   mode?: PermissionMode;
+  /**
+   * The Agent's Bell is raised: a turn ended, or an ask opened, while no device showed the
+   * Agent on a visible page, and no device has shown it since (`view`). Absent when it is
+   * not. Held by the runtime, so it outlives the server.
+   */
+  bell?: boolean;
 }
 
 /**
@@ -367,6 +373,15 @@ export type AgentClientMessage =
    * is running.
    */
   | { type: "interrupt" }
+  /**
+   * Says whether this connection's page shows the Agent in a Pane right now: the page is
+   * visible (not a background tab, not a locked phone) and the Pane is open. Sent when the
+   * connection opens and whenever it changes; a connection that never says it, such as the
+   * server's status connection, is not viewing. `visible: true` clears the Agent's Bell on
+   * every device, and while any connection is visible nothing raises it. A connection that
+   * closes stops viewing.
+   */
+  | { type: "view"; visible: boolean }
   /** Ends the Agent: the turn is interrupted, the log finished, Claude Code closed. */
   | { type: "shutdown" };
 
@@ -466,6 +481,10 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         : undefined;
     case "interrupt":
       return { type: "interrupt" };
+    case "view":
+      return typeof message.visible === "boolean"
+        ? { type: "view", visible: message.visible }
+        : undefined;
     case "shutdown":
       return { type: "shutdown" };
     default:

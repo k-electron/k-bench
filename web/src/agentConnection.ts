@@ -41,6 +41,16 @@ export interface AgentConnectionOptions {
    * the browser went online) and returns how to unsubscribe. Optional.
    */
   wake?: (retry: () => void) => () => void;
+  /**
+   * Whether this page shows the Agent now, and when that changes. The connection tells the
+   * runtime (`view`) after every sync and whenever it changes, which is what the Agent's
+   * Bell goes by. Left out, the connection never says it is viewing.
+   */
+  viewing?: {
+    visible(): boolean;
+    /** Calls `onChange` when `visible()` may have changed; returns how to stop. */
+    subscribe(onChange: () => void): () => void;
+  };
   /** The first retry's delay; each further one doubles it up to `retryMaxMs`. Defaults to 500. */
   retryFirstMs?: number;
   /** The longest retry delay. Defaults to 5000. */
@@ -97,6 +107,7 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
     sessionId,
     openSocket,
     wake,
+    viewing,
     retryFirstMs = DEFAULT_RETRY_FIRST_MS,
     retryMaxMs = DEFAULT_RETRY_MAX_MS,
     tailTurns = DEFAULT_TAIL_TURNS,
@@ -139,6 +150,10 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
             : { type: "sync", afterSeq: lastSeq },
         ),
       );
+      // Each socket is a new connection to the runtime, which has forgotten what the last said.
+      if (viewing) {
+        ws.send(encodeAgentClientMessage({ type: "view", visible: viewing.visible() }));
+      }
       for (const text of queued.splice(0)) ws.send(text);
       setReconnecting(false);
     };
@@ -176,6 +191,14 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
     if (waiting && !closed && !ended && attempts > 0) connect();
   });
 
+  // The runtime hears of a page being hidden or shown at once; while reconnecting there is no
+  // one to tell, and the next socket says it on opening.
+  const stopViewing = viewing?.subscribe(() => {
+    if (socket?.readyState === OPEN && !reconnecting) {
+      socket.send(encodeAgentClientMessage({ type: "view", visible: viewing.visible() }));
+    }
+  });
+
   connect();
 
   return {
@@ -197,6 +220,7 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
       closed = true;
       clearTimeout(retry);
       stopWaking?.();
+      stopViewing?.();
       listeners.clear();
       socket?.close();
     },
