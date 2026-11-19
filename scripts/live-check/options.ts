@@ -27,7 +27,7 @@ export const HELP = `pnpm live-check: runs the real \`claude\` (its Agent SDK us
   --fake           run the same script against the fake Claude of the test harness, in a temp folder and a temp Claude Code folder: no login, no turns. Exercises the rails, recording, redaction, cleanup and the checks; its verdicts say PASS (fake) and prove nothing about \`claude\`. Needs no --confirm.
   --only a,b       run only these checks (and the scenarios they need). Names: see the table the script prints without --confirm.
   --out <dir>      where results.md and the redacted recordings go (default: a new folder in the system temp folder, outside the repository).
-  --budget <n>     the most model turns the run may spend (default 25). The run stops the moment it is spent; checks that did not fit say NOT RUN (budget).
+  --budget <n>     the most model turns the run may spend (default 25; 40 with --fake). The run stops the moment it is spent; checks that did not fit say NOT RUN (budget).
   --claude <path>  the \`claude\` to run (default: the first on PATH).
   --fake-break <fault>
                    with --fake: make the fake misbehave, to show a rail catches it: ${FAKE_BREAKS.join(", ")}.
@@ -43,14 +43,15 @@ export function parseOptions(argv: string[]): Options {
       fake: { type: "boolean", default: false },
       only: { type: "string" },
       out: { type: "string" },
-      budget: { type: "string", default: "25" },
+      budget: { type: "string" },
       claude: { type: "string" },
       "fake-break": { type: "string" },
       help: { type: "boolean", default: false },
     },
     allowPositionals: false,
   });
-  const budget = Number(values.budget);
+  // The fake spends nothing, and plays every scenario: it gets room for all of them.
+  const budget = Number(values.budget ?? (values.fake ? "40" : "25"));
   if (!Number.isInteger(budget) || budget < 1 || budget > 200) {
     throw new Error("--budget must be a whole number of turns from 1 to 200");
   }
