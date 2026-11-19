@@ -51,6 +51,41 @@ if [ -n "$fresh" ] && [ -e "$saved/$fresh" ]; then
 fi
 id=${resume:-$fresh}
 
+# The folder-trust question, when the test asked for it (`FakeClaude.requireTrust()`): like
+# Claude Code's, its default option is "No, exit", which quits; the cursor (❯) moves with the
+# arrow keys and Enter confirms the option it is on.
+if [ -e "$here/trust-required" ]; then
+  sel=1
+  saved_tty=$(stty -g 2>/dev/null)
+  stty -icanon -echo min 1 time 0 2>/dev/null
+  esc=$(printf '\033')
+  while :; do
+    printf '\033[2J\033[H'
+    echo "Do you trust the files in this folder?"
+    if [ "$sel" = 1 ]; then
+      echo "❯ 1. No, exit"
+      echo "  2. Yes, I trust this folder"
+    else
+      echo "  1. No, exit"
+      echo "❯ 2. Yes, I trust this folder"
+    fi
+    key=$(dd bs=1 count=1 2>/dev/null)
+    if [ "$key" = "$esc" ]; then
+      dd bs=1 count=2 >/dev/null 2>&1
+      sel=$((3 - sel))
+    elif [ -z "$key" ]; then
+      if [ "$sel" = 1 ]; then
+        stty "$saved_tty" 2>/dev/null
+        echo "claude-stub trust refused"
+        exit 1
+      fi
+      break
+    fi
+  done
+  stty "$saved_tty" 2>/dev/null
+  printf '\033[2J\033[H'
+fi
+
 echo "claude-stub ready"
 while IFS= read -r line; do
   case $line in

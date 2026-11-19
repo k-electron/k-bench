@@ -282,6 +282,7 @@ function seedFakeWorld(
       },
     }),
   );
+  fake.requireTrust();
   fake.configure({
     plugins: [{ name: "demo-plugin", path: "/home/you/.claude/plugins/demo-plugin" }],
     terminalSlashCommands: ["heapdump", "doctor"],

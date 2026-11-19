@@ -15,6 +15,15 @@ import { join } from "node:path";
 import { getSessionMessages } from "@anthropic-ai/claude-agent-sdk";
 import type { FakeStep } from "../../test/harness/fake-claude.ts";
 import { BudgetExhausted, blockedTools, claudeEnvironment } from "./rails.ts";
+import {
+  afterLast,
+  cursorLine,
+  footerOf,
+  menuShown,
+  permissionKey,
+  TRUST_QUESTION,
+  trustKey,
+} from "./screen.ts";
 import { RunAborted } from "./session.ts";
 import { shellQuote, Tmux, until } from "./tmux.ts";
 import type { Ctx, Scenario } from "./types.ts";
@@ -27,7 +36,6 @@ export const WEB_MARKER = "WEBONE";
 
 const IDLE = /\? for shortcuts/;
 const WORKING = /esc to interrupt/i;
-const TRUST = /trust the files|Do you trust|Yes, proceed|Yes, I trust/i;
 const MODE_LABEL =
   /(accept edits on|plan mode on|auto mode on|auto-accept edits on|bypass permissions on|don't ask on)/i;
 
@@ -41,33 +49,25 @@ const readTrim = (path: string): string => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The text after the last place `marker` matches, or "" when it does not match. */
-function afterLast(text: string, marker: RegExp): string {
-  let end = -1;
-  for (const found of text.matchAll(new RegExp(marker.source, `${marker.flags}g`))) {
-    end = (found.index ?? 0) + found[0].length;
+/**
+ * Moves a dialog's cursor, by the option's text, to the option `want` names. For `allow` it
+ * also presses Enter on it; for `reply` it stops there (the reply is typed into that option).
+ * Bounded; false when the option was not reached.
+ */
+async function choose(tmux: Tmux, want: "allow" | "reply"): Promise<boolean> {
+  for (let i = 0; i < 5; i++) {
+    const key = permissionKey(tmux.capture(), want);
+    if (key === "type") return true;
+    if (key === "Enter") {
+      tmux.keys("Enter");
+      return true;
+    }
+    if (key === "none") return false;
+    tmux.keys("Down");
+    await sleep(300);
   }
-  return end < 0 ? "" : text.slice(end);
+  return false;
 }
-
-/** The line the menu cursor (`❯`) is on: the lowest one on the screen. */
-const cursorLine = (pane: string) =>
-  pane
-    .split("\n")
-    .filter((line) => /^\s*❯/.test(line))
-    .at(-1) ?? "";
-
-/** The footer, where the permission mode is named: the screen's last lines. */
-const footerOf = (pane: string) =>
-  pane
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .slice(-4)
-    .join("\n");
-
-/** A menu is open: text only a menu has, on a line that is not the command typed to open it. */
-const menuShown = (pane: string, menu: RegExp) =>
-  pane.split("\n").some((line) => menu.test(line) && !/\/rewind/.test(line));
 
 function newTmux(ctx: Ctx): Tmux {
   const { run, extras } = ctx;
@@ -111,7 +111,15 @@ async function steer(tmux: Tmux, ctx: Ctx, sid: string): Promise<void> {
   while (Date.now() < deadline) {
     const pane = tmux.capture();
     if (ready.test(pane)) return;
-    if (!run.fake && TRUST.test(pane)) tmux.keys("Enter");
+    // The folder-trust question: its default is "No, exit". Move to "Yes, I trust this folder"
+    // and press Enter only once the cursor is on it (`--fake-break trust-enter` presses Enter
+    // blindly, as the first real run did, to show the terminal then quits).
+    if (ctx.extras.breakMode === "trust-enter" && TRUST_QUESTION.test(pane)) {
+      tmux.keys("Enter");
+    } else {
+      const key = trustKey(pane);
+      if (key !== "none") tmux.keys(key);
+    }
     if (!tmux.alive() || run.abort.signal.aborted) break;
     await sleep(500);
   }
@@ -170,15 +178,7 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
           // The reply makes Claude try again: that is a second model call, so a second turn.
           run.budget.spendUnobserved("terminal");
           // Move the cursor to "No, and tell Claude what to do differently" and type the reply.
-          for (
-            let i = 0;
-            i < 4 && !/tell Claude/i.test(cursorLine(tmux.capture()));
-            i++
-          ) {
-            tmux.keys("Down");
-            await sleep(300);
-          }
-          if (/tell Claude/i.test(cursorLine(tmux.capture()))) {
+          if (await choose(tmux, "reply")) {
             tmux.type(DENY_FEEDBACK);
             await sleep(500);
             tmux.keys("Enter");
@@ -186,8 +186,11 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
           } else {
             tmux.keys("Escape");
           }
-        } else {
-          tmux.keys("Enter");
+        } else if (!(await choose(tmux, "allow"))) {
+          // The plain "Yes" could not be found on the screen: nothing is pressed blindly.
+          tmux.keys("Escape");
+          visit.details.dialog = "the Yes option of a permission dialog was not found";
+          break;
         }
         // The dialog is answered: let the screen move on before it is looked at again.
         await sleep(1500);

@@ -1,6 +1,12 @@
 import { parseArgs } from "node:util";
 
-export const FAKE_BREAKS = ["model", "settings", "risky-settings", "leftover"] as const;
+export const FAKE_BREAKS = [
+  "model",
+  "settings",
+  "risky-settings",
+  "leftover",
+  "trust-enter",
+] as const;
 
 export interface Options {
   confirm: boolean;

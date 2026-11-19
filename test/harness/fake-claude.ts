@@ -265,6 +265,15 @@ export class FakeClaude {
     );
   }
 
+  /**
+   * Makes the terminal stand-in (`fake-claude.sh`) ask the folder-trust question before it is
+   * ready, as Claude Code does in a folder it has not seen: its default option is "No, exit",
+   * which quits it, so pressing Enter on the question as it first appears fails.
+   */
+  requireTrust(): void {
+    this.write(join(this.folder, "trust-required"), {});
+  }
+
   /** Waits for a received entry the check accepts, and returns it. */
   waitForReceived<T extends FakeReceived>(
     check: (entry: FakeReceived) => entry is T,

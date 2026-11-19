@@ -972,6 +972,12 @@ const openInWebAnchors: Check = {
     const saved2 = (noteOf<unknown[]>(cap, "savedAfterCompact") ?? []) as SavedMessage[];
     if (!web || !ids || saved1.length === 0)
       return notProvoked("the conversation was not read back after the terminal");
+    const visitOne = noteOf<{ reached: Record<string, boolean> }>(cap, "visitOne");
+    if (!visitOne?.reached.turn) {
+      return notProvoked(
+        "the terminal turn did not happen, so there was nothing to import",
+      );
+    }
     const savedIds = new Set(saved1.map((m) => m.uuid));
     const streamed = web.msgs
       .filter((m) => m.type === "assistant" && typeof m.uuid === "string")
@@ -1011,8 +1017,13 @@ const openInWebAnchors: Check = {
       );
     }
     // The compaction heuristic: a chain that starts with a system message.
-    if (saved2.length === 0)
-      return notProvoked("the terminal's /compact was not read back", facts);
+    const visitTwo = noteOf<{ reached: Record<string, boolean> }>(cap, "visitTwo");
+    if (saved2.length === 0 || !visitTwo?.reached.compacted) {
+      return notProvoked(
+        "the terminal's /compact did not happen or was not read back",
+        facts,
+      );
+    }
     const startsWithSystem = saved2[0]?.type === "system";
     const entries = [
       ...log,
