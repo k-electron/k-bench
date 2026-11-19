@@ -61,6 +61,17 @@ const CHECKBOX_STATE = {
  */
 export const UncommonLine = memo(function UncommonLine({ item }: { item: UncommonItem }) {
   switch (item.kind) {
+    case "divider":
+      return (
+        <article
+          aria-label={item.label}
+          className="my-3 flex items-center gap-3 text-xs text-muted-foreground"
+        >
+          <span aria-hidden className="h-px flex-1 bg-border" />
+          <span>{item.label}</span>
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </article>
+      );
     case "compaction": {
       const summary = compactionSummary(item);
       return (

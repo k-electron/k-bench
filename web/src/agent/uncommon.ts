@@ -85,7 +85,14 @@ export interface TodosItem extends ItemBase {
   todos: Array<{ content: string; activeForm: string; status: TodoStatus }>;
 }
 
+/** Where the conversation reset (`/clear`): what is above it is not in Claude's context any more. */
+export interface DividerItem extends ItemBase {
+  kind: "divider";
+  label: string;
+}
+
 export type UncommonItem =
+  | DividerItem
   | CompactionItem
   | HookItem
   | McpItem
@@ -559,9 +566,15 @@ export function readUncommonMessage(host: UncommonHost, entry: SdkEntry): boolea
       return false;
     }
     case "conversation_reset":
-      // A new conversation starts a new task list.
+      // A new conversation starts a new task list, and a divider where it begins.
       uncommon.todos = undefined;
-      return false;
+      push(host, {
+        kind: "divider",
+        key: `entry-${entry.seq}`,
+        seq: entry.seq,
+        label: message.trigger === "clear" ? "Conversation cleared" : "New conversation",
+      });
+      return true;
     case "result":
       readResult(host, entry);
       return false; // items.ts ends the tool calls still running

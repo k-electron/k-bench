@@ -63,6 +63,12 @@ export class Service {
     this.tmux = tmux;
     this.agents = agents;
     this.statuses = statuses;
+    // `/clear` moves an Agent to a new conversation: a Restart resumes the one it is in.
+    statuses.onConversation((sessionId, conversationId) => {
+      if (this.store.getSession(sessionId)?.conversationId !== conversationId) {
+        this.store.setConversationId(sessionId, conversationId);
+      }
+    });
     this.reconciler = new Reconciler(store, tmux);
   }
 

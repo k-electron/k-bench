@@ -328,6 +328,13 @@ export interface AgentStatus {
    * terminal lists as "what would stop" (#155).
    */
   tasks?: AgentTask[];
+  /**
+   * The Claude conversation the Agent is in now. `/clear` moves it to a new one, which the
+   * runtime knows from the next `system/init` (not from `conversation_reset`), so the server
+   * keeps it for Restart and Open in terminal to resume. Absent only from a runtime older
+   * than this field.
+   */
+  conversationId?: string;
 }
 
 /**

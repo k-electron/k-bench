@@ -10,6 +10,7 @@ import {
   type PermissionMode,
   type PermissionReply,
 } from "../../../src/shared/agent-protocol.ts";
+import { claudeVersionWarning } from "../../../src/shared/claude-version.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
 import { pageViewing } from "../pageViewing";
 import { retryWhenAwake } from "../retryWhenAwake";
@@ -64,7 +65,13 @@ export interface AgentConversation {
    * model and folder of the latest turn (from its `system/init`, so the model is absent before
    * the first prompt, and the folder then comes from the hello).
    */
-  header: { version?: string; model?: string; folder?: string };
+  header: {
+    version?: string;
+    /** Set only when that `claude` is older than the Claude Code the Agent SDK was made for. */
+    versionWarning?: string;
+    model?: string;
+    folder?: string;
+  };
   /** Whether Claude Code is in Focus view: the Transcript shows a tool call as one line. */
   focusView: boolean;
   /**
@@ -318,11 +325,15 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   const info = useMemo(() => transcriptInfo(model.transcript), [model.transcript]);
   const { hello } = model;
   const folder = info.cwd ?? hello?.folder;
+  const versionWarning = hello
+    ? claudeVersionWarning(hello.claudeVersion, hello.sdkClaudeCodeVersion)
+    : undefined;
   return {
     items,
     focusView: info.focusView,
     header: {
       ...(hello ? { version: hello.claudeVersion } : {}),
+      ...(versionWarning === undefined ? {} : { versionWarning }),
       ...(info.model === undefined ? {} : { model: info.model }),
       ...(folder === undefined ? {} : { folder }),
     },

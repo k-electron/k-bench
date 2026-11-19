@@ -20,6 +20,7 @@ A Claude Agent shows the conversation as a **Transcript** in the Pane instead of
 - You can show Claude a screenshot or photo: paste it into the input or drop it on it on a desktop, or tap the picture button to choose from the photo library on a phone. A thumbnail shows before you send, and its ✕ takes it off. Claude takes PNG, JPEG, GIF and WebP up to about 3.9 MB (5 MB as base64, which is how Claude counts) and 8000 pixels on the longest side; one over that shows a message and is not attached. Sent images stay in the conversation, and are deleted with the Session.
 - It keeps going when you close the browser, lock your phone or restart k-bench, and every device is an equal view of the same conversation.
 - **Stop** is in the Session's row menu. If Claude is working it asks "Claude is working. Stop anyway?" first, then interrupts the turn. A Stopped Agent keeps its whole conversation, read-only, with `⏹ Stopped: <why>` and a **Restart** button where the input was; a prompt that was waiting for your answer shows as "Not answered, the Agent stopped". **Restart** carries on the same conversation with the same Launch options. If Claude Code or the Agent's runtime ends by itself, or the Mac restarts, the Session is Stopped with the reason and is never started again for you: restarting k-bench leaves it as it was.
+- **`/clear`** works as in the terminal. A line across the conversation marks where it reset, and a Restart carries on the new conversation, not the one you cleared.
 
 - **Updating k-bench is safe at any time.** A running Claude Agent carries on through it, exactly as it was. When an update changed the part of k-bench that runs Agents, the Agent's Pane says "Update available"; **Restart** there moves it to the new version, carrying on the same conversation, and it asks first if Claude is working. Nothing restarts for you, and an update that didn't change it shows nothing. (A k-bench too new to talk to an old Agent shows **Restart** in place of the conversation instead; it does the same.)
 
@@ -37,9 +38,13 @@ Whenever a Claude Agent meets something k-bench can't show or answer, it says so
 
 ## Subscription only
 
-A Claude Agent runs on your Claude subscription login and refuses to run on anything else. When it starts, it checks which account `claude` would use. If that is an API key, another provider, or a login with no subscription, the Session is Stopped and says why, so k-bench never costs you API pricing.
+A Claude Agent runs on your Claude subscription login and refuses to run on anything else. Each time it starts (new, or restarted), it asks `claude` which account it would use. If that is an API key, another provider, or a login with no subscription, no turn runs and k-bench says why: a new Agent is not created, and the New Session dialog shows the reason; an existing one stays Stopped, with the reason in its conversation (**Restart** works again once you are signed in with your subscription). So k-bench never costs you API pricing.
 
-k-bench never holds, asks for or passes on your credentials. Log in the way you always do, with `claude` in a terminal.
+k-bench never holds, asks for or passes on your credentials, and it changes none of your environment variables for this: it only reads what `claude` says about its own login. Log in the way you always do, with `claude` in a terminal. (A `ANTHROPIC_API_KEY` set in the environment the Agent starts in makes `claude` use that key, and the Agent refuses it.)
+
+## The `claude` version
+
+A Claude Agent runs your own installed `claude`, and the header over the conversation shows which version (`claude 2.1.325 · <model> · <folder>`). Each k-bench release is built with an Agent SDK made for one Claude Code version. If your `claude` is **older** than that, a warning shows under the header, because an older `claude` can quietly ignore something the SDK asks for. It is only a warning: the Agent starts and works, and a `claude` that is the same or newer shows none. Updating `claude` clears it.
 
 ## Folder trust
 
