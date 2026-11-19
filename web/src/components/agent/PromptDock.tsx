@@ -1,5 +1,6 @@
 import type { AgentConversation } from "@/agent/useAgentConversation";
 import { Composer } from "./Composer";
+import { ModeLine } from "./ModeLine";
 import { PermissionPrompt } from "./PermissionPrompt";
 
 /**
@@ -33,8 +34,16 @@ export function PromptDock({
           disabled={conversation.ended}
           offline={conversation.reconnecting}
           autoFocus={focused && ask === undefined}
+          onShiftTab={conversation.cycleMode}
         />
       </div>
+      {conversation.mode !== undefined && (
+        <ModeLine
+          mode={conversation.mode}
+          onCycle={conversation.cycleMode}
+          disabled={conversation.ended || conversation.reconnecting}
+        />
+      )}
     </>
   );
 }

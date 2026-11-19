@@ -14,6 +14,7 @@ export function Composer({
   disabled,
   offline,
   autoFocus,
+  onShiftTab,
 }: {
   /** Sends the text; false when it could not be sent (reconnecting), and the box keeps it. */
   onSend: (text: string) => boolean;
@@ -22,6 +23,8 @@ export function Composer({
   /** The connection is down: the box stays editable, but Send waits for it to come back. */
   offline: boolean;
   autoFocus: boolean;
+  /** Shift+Tab on desktop: the box keeps the key for this (and the focus) when it is given. */
+  onShiftTab?: () => void;
 }) {
   const phone = useIsPhone();
   const [text, setText] = useState("");
@@ -57,6 +60,11 @@ export function Composer({
         className="field-sizing-content max-h-48 min-h-9 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
+          if (!phone && onShiftTab && event.key === "Tab" && event.shiftKey) {
+            event.preventDefault();
+            onShiftTab();
+            return;
+          }
           // Not while an input method is composing (its Enter confirms a character).
           if (
             !phone &&

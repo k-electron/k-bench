@@ -11,6 +11,7 @@ import {
   type LogEntry,
   openPermissionAsks,
   type PermissionAskEntry,
+  type PermissionMode,
 } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
@@ -84,6 +85,14 @@ export class AgentClient {
     return this.messages.filter((m): m is AgentSnapshot => m.type === "snapshot");
   }
 
+  /** The permission mode the newest `status` named: what a Pane's mode line shows. */
+  get mode(): PermissionMode | undefined {
+    for (const message of this.messages.toReversed()) {
+      if (message.type === "status" && message.mode !== undefined) return message.mode;
+    }
+    return undefined;
+  }
+
   /** The `seq` of the newest entry received: what a reconnecting client syncs from. */
   get lastSeq(): number {
     return this.entries.at(-1)?.seq ?? 0;
@@ -131,6 +140,11 @@ export class AgentClient {
   /** Resolves with the oldest open ask, once there is one. */
   waitForAsk(): Promise<PermissionAskEntry> {
     return pollUntil(() => this.openAsks[0], { description: "a permission ask" });
+  }
+
+  /** Asks for a permission mode, as the mode line's tap or Shift+Tab does. */
+  setPermissionMode(mode: PermissionMode): void {
+    this.send({ type: "set_permission_mode", mode });
   }
 
   /** Answers an ask as a Pane's Allow or Deny button does. */
