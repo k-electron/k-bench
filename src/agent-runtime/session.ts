@@ -85,6 +85,9 @@ export class ClaudeSession {
         enableFileCheckpointing: true,
         extraArgs: { "replay-user-messages": null },
         canUseTool,
+        // The owner's own environment, plus a request that Claude Code report when a turn
+        // starts and ends (`session_state_changed`), which `Activity` believes when it comes.
+        env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1" },
         ...(conversation.resume
           ? { resume: conversation.id }
           : { sessionId: conversation.id }),

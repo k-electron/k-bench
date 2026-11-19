@@ -92,6 +92,8 @@ export interface FakeClaudeConfig {
   contextUsage?: Record<string, unknown>;
   /** More fields for every `system/init`. */
   initFields?: Record<string, unknown>;
+  /** Whether it sends `system/session_state_changed` (default true); false, as a Claude Code that does not. */
+  sessionStateMessages?: boolean;
 }
 
 /** What the fake wrote to `received.jsonl`: `kind` says which. */
