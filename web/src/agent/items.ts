@@ -165,6 +165,11 @@ export interface BuiltTranscript {
   /** Claude Code's working folder (`system/init.cwd`); absent before the first turn. */
   cwd?: string;
   /**
+   * The `claude` that ran the latest turn (`system/init.claude_code_version`), for a Stopped
+   * Agent's header, which has no `hello` to take it from; absent before the first turn.
+   */
+  claudeVersion?: string;
+  /**
    * Whether Claude Code runs in Focus view (`system/init.view_mode` is `focus`), where a tool
    * call is one collapsed line. Its own report, so it holds however the Agent was launched.
    */
@@ -216,6 +221,7 @@ interface BuildState {
   items: TranscriptItem[];
   model?: string;
   cwd?: string;
+  claudeVersion?: string;
   focusView: boolean;
   /** The tool calls by `tool_use` id, to pair results with. */
   tools: Map<string, OpenTool>;
@@ -366,6 +372,9 @@ function readSdkMessage(
       } else if (message.subtype === "init") {
         if (typeof message.model === "string") state.model = message.model;
         if (typeof message.cwd === "string") state.cwd = message.cwd;
+        if (typeof message.claude_code_version === "string") {
+          state.claudeVersion = message.claude_code_version;
+        }
         // Claude Code says which commands only work in a terminal: one just typed is Unsupported.
         // The row's raw is this `init`, which says it.
         const last = state.items.at(-1);
@@ -629,6 +638,7 @@ export function buildItems(
     items: state.items,
     ...(state.model === undefined ? {} : { model: state.model }),
     ...(state.cwd === undefined ? {} : { cwd: state.cwd }),
+    ...(state.claudeVersion === undefined ? {} : { claudeVersion: state.claudeVersion }),
     focusView: state.focusView,
   };
 }

@@ -277,13 +277,15 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
 export function transcriptInfo(state: TranscriptState): {
   model?: string;
   cwd?: string;
+  claudeVersion?: string;
   focusView: boolean;
 } {
-  const { model, cwd, focusView } = builtTranscript(state);
+  const { model, cwd, claudeVersion, focusView } = builtTranscript(state);
   return {
     focusView,
     ...(model === undefined ? {} : { model }),
     ...(cwd === undefined ? {} : { cwd }),
+    ...(claudeVersion === undefined ? {} : { claudeVersion }),
   };
 }
 
