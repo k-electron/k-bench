@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { conversationOf } from "../agent/conversation.ts";
 import { writeExitRecord } from "../agent/exit.ts";
 import { AgentLog } from "../agent/log.ts";
 import { agentLogFile, agentSocketFile, runtimeBuildId } from "../agent/paths.ts";
@@ -85,9 +86,16 @@ const activity = new Activity({
   publish: () => publishStatus(),
 });
 
+// The conversation the Agent is in. The log says (`/clear` moves it on), so a store that
+// missed a move, because k-bench was down or this runtime was killed, is corrected here.
+const conversation = conversationOf(args.conversation, log.readAfter(0));
+
 /** Appends to the log and tells every synced client, in that order. */
 function record(entry: Parameters<AgentLog["append"]>[0]): void {
-  hub.entry(log.append(entry));
+  const written = log.append(entry);
+  hub.entry(written);
+  // The `init` after a `/clear` names the new conversation: tell the server, which keeps it.
+  if (conversation.observe(written)) publishStatus();
   // An ask opening or closing is what turns Working into Waiting for you and back.
   if (entry.kind === "permission_asked" || entry.kind === "permission_answered") {
     // Before the state changes, so that whoever sees Waiting for you sees the Bell with it.
@@ -118,6 +126,7 @@ function publishStatus(): void {
   const running = tasks.list;
   hub.setStatus({
     ...activity.status,
+    conversationId: conversation.id,
     ...(running.length > 0 && { tasks: running }),
     ...(permissionMode.current && { mode: permissionMode.current }),
     ...(bell.isRaised && { bell: true }),
@@ -162,9 +171,11 @@ const claude = new ClaudeSession(
   {
     claude: args.claude,
     folder: args.folder,
+    // The conversation the owner was last in, which after a `/clear` is not the one this
+    // Agent was created with. One nothing was sent in was never saved: start it instead.
     conversation: {
-      id: args.conversation,
-      resume: args.mode === "resume" && log.hasPrompt(),
+      id: conversation.id,
+      resume: args.mode === "resume" && conversation.saved,
     },
     canUseTool: asks.canUseTool,
     launch: args.launch,

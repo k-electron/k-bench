@@ -120,6 +120,7 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           <span>Interrupted</span>
         </div>
       );
+    case "divider":
     case "compaction":
     case "hook":
     case "mcp":
