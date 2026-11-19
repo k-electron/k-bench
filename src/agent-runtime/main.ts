@@ -24,6 +24,7 @@ import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { ClientHub } from "./hub.ts";
 import { LiveText } from "./live.ts";
+import { PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
 
 /** Put in at build time from the SDK's package.json (`vite.runtime.config.ts`). */
@@ -64,8 +65,14 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
   hub.entry(log.append(entry));
 }
 
+const permissionMode = new PermissionModeTracker();
+
 function publishStatus(): void {
-  hub.setStatus({ type: "status", state: pendingTurns > 0 ? "working" : "idle" });
+  hub.setStatus({
+    type: "status",
+    state: pendingTurns > 0 ? "working" : "idle",
+    ...(permissionMode.current && { mode: permissionMode.current }),
+  });
 }
 
 record({ kind: "runtime", event: "started" });
@@ -105,6 +112,7 @@ const claude = new ClaudeSession(
         return;
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
+      if (permissionMode.observe(message)) publishStatus();
       if (message.type === "result") {
         live.turnEnded();
         pendingTurns = Math.max(0, pendingTurns - 1);
@@ -126,6 +134,14 @@ async function command(message: AgentClientMessage): Promise<void> {
     claude.prompt(message.id, message.text);
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message.decision);
+  } else if (message.type === "set_permission_mode") {
+    try {
+      await claude.setPermissionMode(message.mode);
+      if (permissionMode.set(message.mode)) publishStatus();
+    } catch {
+      // Claude Code refused (the owner's settings can forbid a mode): nothing changes, and
+      // every Pane keeps showing the mode that is in force.
+    }
   } else if (message.type === "shutdown") {
     await finish("Stopped by k-bench", 0);
   }
@@ -168,6 +184,8 @@ process.on("unhandledRejection", (error) => {
 // If it dies first, `ended` above has already recorded why.
 try {
   claudeVersion = await claude.claudeVersion();
+  permissionMode.set(await claude.permissionMode());
+  publishStatus();
   await hub.listen();
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);

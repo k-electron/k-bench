@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { PermissionMode } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 import type { TerminalClient } from "./terminal.ts";
 
@@ -58,6 +59,8 @@ export type FakeStep =
     }
   /** Waits until the test calls `release(name)`, or the turn is interrupted. */
   | { hold: string }
+  /** Claude Code changes its own permission mode (as leaving plan mode does) and says so. */
+  | { mode: PermissionMode }
   /** Sends this message as it is: a type the browser does not know, for instance. */
   | { raw: Record<string, unknown> }
   /** Sends a `system` message of this subtype (`api_retry`, `compact_boundary`, ...). */

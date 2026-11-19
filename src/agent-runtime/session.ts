@@ -1,5 +1,6 @@
 import {
   type CanUseTool,
+  type PermissionMode,
   type Query,
   query,
   type SDKMessage,
@@ -104,6 +105,18 @@ export class ClaudeSession {
   async claudeVersion(): Promise<string> {
     const init = await this.query.initializationResult();
     return init.claude_code_version ?? "unknown";
+  }
+
+  /** The mode Claude Code started in (the owner's settings decide it), from the same first reply. */
+  async permissionMode(): Promise<unknown> {
+    const init = await this.query.initializationResult();
+    // Not in the SDK's types, but in what `claude` answers; the caller checks it.
+    return (init as { current_permission_mode?: unknown }).current_permission_mode;
+  }
+
+  /** Switches Claude Code's permission mode. Rejects if Claude Code refuses. */
+  setPermissionMode(mode: PermissionMode): Promise<void> {
+    return this.query.setPermissionMode(mode);
   }
 
   /**

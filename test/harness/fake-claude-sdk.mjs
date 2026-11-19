@@ -412,6 +412,10 @@ async function runStep(turn, step) {
     await runTool(turn, step);
   } else if (step.hold) {
     await waitForRelease(step.hold);
+  } else if (step.mode) {
+    // Claude Code changing the mode itself (plan approval leaves plan mode): told in `status`.
+    permissionMode = step.mode;
+    system("status", { status: null, permissionMode });
   } else if (step.raw) {
     send({ session_id: sessionId, uuid: randomUUID(), ...step.raw });
   } else if (step.system) {
