@@ -10,6 +10,13 @@ import {
   toolTarget,
 } from "./toolDisplay";
 import {
+  newUncommonState,
+  readUncommonBlock,
+  readUncommonMessage,
+  type UncommonItem,
+  type UncommonState,
+} from "./uncommon";
+import {
   terminalOnlyCommand,
   type Unsupported,
   unsupportedInMessage,
@@ -121,7 +128,8 @@ export type TranscriptItem =
   | InterruptedItem
   | TaskItem
   | PermissionItem
-  | UnsupportedItem;
+  | UnsupportedItem
+  | UncommonItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -180,6 +188,8 @@ interface BuildState {
   denied: Set<string>;
   /** The subagents and background tasks (`tasks.ts`, #149). */
   tasks: TaskBuilder;
+  /** What the readers of the less common lines (`uncommon.ts`) carry. */
+  uncommon: UncommonState;
 }
 
 /**
@@ -287,6 +297,8 @@ function readSdkMessage(
   );
   // A subagent's own messages are not the conversation's: its task line (#149) shows how it goes.
   if (message.parent_tool_use_id != null) return;
+  // The less common messages (#148) have their own reader; it says whether it handled one.
+  if (readUncommonMessage(state, entry)) return;
   switch (message.type) {
     case "system":
       if (isTaskMessage(message)) {
@@ -322,6 +334,7 @@ function readSdkMessage(
           : undefined;
       blocksOf(inner.content).forEach((block, index) => {
         if (!isObject(block)) return;
+        if (readUncommonBlock(state, entry, block, index)) return;
         const key = `entry-${entry.seq}-${index}`;
         if (block.type === "text" && typeof block.text === "string") {
           if (block.text.trim() === "") return;
@@ -403,9 +416,8 @@ function readSdkMessage(
       state.tasks.turnEnded();
       return;
     default:
-      // Everything else that Claude Code sends and k-bench knows (status, rate limits, hooks,
-      // ...) shows nothing yet: the later tickets (#148, #152) each give their kinds a line.
-      // What it does not know is an Unsupported row (above).
+      // Everything else that Claude Code sends and k-bench knows shows nothing yet: the later
+      // tickets (#152) give theirs a line. What it does not know is an Unsupported row (above).
       return;
   }
 }
@@ -432,6 +444,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     askTool: new Map(),
     denied: new Set(),
     tasks: new TaskBuilder(),
+    uncommon: newUncommonState(),
   };
   for (const entry of entries) {
     switch (entry.kind) {
