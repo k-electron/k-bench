@@ -1,4 +1,4 @@
-import type { LogEntry } from "../../../src/shared/agent-protocol.ts";
+import type { LogEntry, PermissionReply } from "../../../src/shared/agent-protocol.ts";
 import { queuedPromptIds } from "./prompts";
 import {
   contentLines,
@@ -84,12 +84,24 @@ export interface InterruptedItem extends ItemBase {
   kind: "interrupted";
 }
 
+/**
+ * `⎿ permission: allowed`: how an ask the owner answered ended, left in the Transcript where
+ * the answer came. Not made for an ask nobody answered (withdrawn, or the Agent stopped): the
+ * tool's own red mark says that.
+ */
+export interface PermissionItem extends ItemBase {
+  kind: "permission";
+  /** What was answered: `allowed`, `allowed, and won't ask again`, `denied: <reply>`. */
+  answer: string;
+}
+
 export type TranscriptItem =
   | PromptItem
   | AssistantItem
   | ThinkingItem
   | ToolItem
-  | InterruptedItem;
+  | InterruptedItem
+  | PermissionItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -314,6 +326,14 @@ function readSdkMessage(
   }
 }
 
+/** How the permission line reads an owner's answer. */
+function permissionAnswerText(answer: PermissionReply): string {
+  if (answer.decision === "allow") {
+    return answer.alwaysAllow ? "allowed, and won't ask again" : "allowed";
+  }
+  return answer.message === undefined ? "denied" : `denied: ${answer.message}`;
+}
+
 /**
  * The items of the entries, in order. Pure and complete: it reads every entry each time, so
  * a fix here changes how the whole history reads on the next load, as ADR-0008 wants.
@@ -348,7 +368,16 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
         break;
       case "permission_answered": {
         const toolUseId = state.askTool.get(entry.requestId);
-        if (toolUseId && entry.answer.decision === "deny") state.denied.add(toolUseId);
+        const { answer } = entry;
+        if (toolUseId && answer.decision === "deny") state.denied.add(toolUseId);
+        if (answer.decision === "allow" || answer.decision === "deny") {
+          state.items.push({
+            kind: "permission",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            answer: permissionAnswerText(answer),
+          });
+        }
         break;
       }
       case "runtime":

@@ -109,6 +109,15 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           <span>Interrupted</span>
         </div>
       );
+    case "permission":
+      return (
+        <div className="my-0.5 flex gap-2 pl-5 text-xs text-muted-foreground">
+          <Gutter>⎿</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            permission: {item.answer}
+          </span>
+        </div>
+      );
     default: {
       // Every kind of item has a case above: a new kind fails to compile here until it has one.
       const missing: never = item;

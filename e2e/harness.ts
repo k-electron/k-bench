@@ -414,7 +414,7 @@ export class AppPage {
     return this.agentRegion(sessionName).getByRole("textbox", { name: "Message Claude" });
   }
 
-  /** The Allow/Deny card that takes over the named Claude Agent's input while Claude waits on an ask. */
+  /** The permission panel that takes over the named Claude Agent's input while Claude waits on an ask. */
   permissionPrompt(sessionName: string): Locator {
     return this.agentRegion(sessionName).getByRole("region", {
       name: "Permission prompt",
