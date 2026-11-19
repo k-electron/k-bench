@@ -1,6 +1,7 @@
 import type { Socket } from "node:net";
 import { LineSplitter } from "../agent/lines.ts";
 import {
+  AGENT_PROTOCOL_VERSION,
   type AgentHello,
   type AgentStatus,
   decodeAgentServerMessage,
@@ -69,10 +70,15 @@ export class AgentStatuses {
     }
   }
 
-  /** What the Agent's runtime last said, as `SessionState.agent`; undefined if it has said nothing. */
+  /**
+   * What the Agent's runtime last said, as `SessionState.agent`; undefined if it has said
+   * nothing, or if it speaks a protocol number this k-bench does not (what it says is not
+   * read: the Pane offers Restart instead, see `docs/internals/agent.md`).
+   */
   stateOf(sessionId: string): AgentState | undefined {
     const { hello, status } = this.heard.get(sessionId) ?? {};
-    if (!status) return undefined;
+    if (!status || hello?.protocol !== AGENT_PROTOCOL_VERSION) return undefined;
+    const current = this.agents.current?.buildId;
     return {
       state: status.state,
       ...(status.turnStartedAt === undefined
@@ -81,7 +87,27 @@ export class AgentStatuses {
       ...(status.tasks === undefined ? {} : { tasks: status.tasks }),
       ...(hello ? { claudeVersion: hello.claudeVersion } : {}),
       ...(hello ? { runtimeBuildId: hello.runtimeBuildId } : {}),
+      // Only a runtime that differs from the one installed now: an update that left the
+      // runtime's code alone changes nothing for a running Agent.
+      ...(current !== undefined && hello.runtimeBuildId !== current
+        ? { updateAvailable: true }
+        : {}),
     };
+  }
+
+  /**
+   * The runtime builds the Agents in `running` run, so that a build's folder is kept while one
+   * does. Undefined while any of them has not said hello yet, as then what it runs is not
+   * known (nothing is deleted on a guess).
+   */
+  buildsInUse(running: Iterable<string>): Set<string> | undefined {
+    const builds = new Set<string>();
+    for (const id of running) {
+      const hello = this.heard.get(id)?.hello;
+      if (!hello) return undefined;
+      builds.add(hello.runtimeBuildId);
+    }
+    return builds;
   }
 
   /**
@@ -89,7 +115,8 @@ export class AgentStatuses {
    * knows which pages show the Agent), so an Agent it has not said anything yet has none.
    */
   bellOf(sessionId: string): boolean {
-    return this.heard.get(sessionId)?.status?.bell === true;
+    const { hello, status } = this.heard.get(sessionId) ?? {};
+    return hello?.protocol === AGENT_PROTOCOL_VERSION && status?.bell === true;
   }
 
   /** Resolves once every Agent watched has said its status, or after `timeoutMs`. */

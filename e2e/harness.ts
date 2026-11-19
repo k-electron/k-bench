@@ -520,8 +520,12 @@ export interface Kbench {
   url: string;
   /** Stops the server like a crash or restart would; Sessions keep running in tmux. */
   stopServer(): Promise<void>;
-  /** Starts the server again on the same address, data folder and tmux socket. */
-  startServer(): Promise<void>;
+  /**
+   * Starts the server again on the same address, data folder and tmux socket. With
+   * `agentRuntimeFile` (`instance.runtimeVariant(...)`) it is a k-bench updated to another
+   * build of the Agent Runtime.
+   */
+  startServer(options?: { agentRuntimeFile?: string }): Promise<void>;
   /**
    * Rings the terminal bell in the named Session's shell, with no browser involved, once no
    * terminal is viewing it (one that just moved to another Session can take a moment to let
@@ -567,8 +571,8 @@ export const test = base.extend<Fixtures>({
             "Tailscale-User-Login": LOGIN,
           }),
         stopServer: () => server.stop(),
-        startServer: async () => {
-          server = await instance.start({ webDir: WEB_DIR });
+        startServer: async (options) => {
+          server = await instance.start({ webDir: WEB_DIR, ...options });
         },
       });
     } finally {

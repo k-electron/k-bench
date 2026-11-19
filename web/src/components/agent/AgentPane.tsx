@@ -12,6 +12,7 @@ import { StatusLine } from "./StatusLine";
 import { StoppedBar } from "./StoppedBar";
 import { StopTaskProvider } from "./TaskLine";
 import { Transcript } from "./Transcript";
+import { UpdateBar } from "./UpdateBar";
 import { useScrollBack } from "./useScrollBack";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
@@ -113,18 +114,32 @@ export function AgentPane({
         </p>
       )}
       {conversation.stoppedReason === undefined ? (
-        <>
-          {conversation.ended && (
-            <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
-              This Session has ended.
-            </p>
-          )}
-          <PromptDock
-            sessionId={session.id}
-            conversation={conversation}
-            focused={focused}
-          />
-        </>
+        conversation.incompatible ? (
+          <UpdateBar sessionId={session.id} reason="incompatible" midTurn={false} />
+        ) : (
+          <>
+            {conversation.ended && (
+              <p
+                role="status"
+                className="shrink-0 px-3 pb-1 text-xs text-muted-foreground"
+              >
+                This Session has ended.
+              </p>
+            )}
+            {session.agent?.updateAvailable && !conversation.ended && (
+              <UpdateBar
+                sessionId={session.id}
+                reason="update"
+                midTurn={session.agent.state !== "idle"}
+              />
+            )}
+            <PromptDock
+              sessionId={session.id}
+              conversation={conversation}
+              focused={focused}
+            />
+          </>
+        )
       ) : (
         <StoppedBar sessionId={session.id} reason={conversation.stoppedReason} />
       )}

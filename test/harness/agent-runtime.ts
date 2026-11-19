@@ -5,11 +5,13 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
 const FOLDER = join(REPO_ROOT, "node_modules/.cache/k-bench/agent-runtime");
@@ -80,4 +82,28 @@ export function buildAgentRuntime(): void {
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/**
+ * Writes another build of the runtime to `<folder>/<label>/agent-runtime.mjs` and returns its
+ * path: the harness build with a comment appended, so it is the same code under another build
+ * ID (an update that changed the runtime), or, with `protocol`, one whose hello names a
+ * protocol number other than the one this k-bench speaks. For a test of an update under a
+ * running Agent: pass the path as `instance.start({ agentRuntimeFile })`.
+ */
+export function writeRuntimeVariant(
+  folder: string,
+  label: string,
+  options: { protocol?: number } = {},
+): string {
+  let code = readFileSync(HARNESS_RUNTIME_FILE, "utf8");
+  if (options.protocol !== undefined) {
+    const hello = /(type: "hello",\s*protocol: )\d+,/;
+    if (!hello.test(code)) throw new Error("The built runtime's hello has changed shape");
+    code = code.replace(hello, `$1${options.protocol},`);
+  }
+  const file = join(folder, label, "agent-runtime.mjs");
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${code}\n// variant: ${label}\n`);
+  return file;
 }

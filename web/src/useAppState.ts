@@ -35,6 +35,8 @@ export interface Actions {
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   restartSession(sessionId: string): Promise<void>;
+  /** Restarts a running Claude Agent onto the runtime installed now, resuming its conversation. */
+  restartAgent(sessionId: string): Promise<void>;
   /** Stops a Claude Agent (the Session stays, Stopped). */
   stopSession(sessionId: string): Promise<void>;
   /** Switches a Claude Agent to Claude TUI in the same Session; every device follows. */
@@ -116,6 +118,9 @@ export function useAppState(): {
       deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {
         await reporting(() => act(api.restartSession(sessionId)));
+      },
+      restartAgent: async (sessionId) => {
+        await reporting(() => act(api.restartAgent(sessionId)));
       },
       stopSession: async (sessionId) => {
         await reporting(() => act(api.stopSession(sessionId)));
