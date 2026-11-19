@@ -1,5 +1,6 @@
 import { SendIcon, SquareIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { loadDraft, saveDraft } from "@/agent/drafts";
 import { Button } from "@/components/ui/button";
 import { useIsPhone } from "@/useIsPhone";
 
@@ -13,8 +14,10 @@ import { useIsPhone } from "@/useIsPhone";
  * its turn. While a turn runs an Interrupt button sits by the box (and Esc does the same on
  * desktop). In an empty box, Up recalls the prompts typed in this Agent, newest first, and
  * Down goes back, as in a terminal.
+ * What is typed and not sent is kept as a draft on this device, per Agent, until it is sent.
  */
 export function Composer({
+  sessionId,
   onSend,
   disabled,
   offline,
@@ -24,6 +27,8 @@ export function Composer({
   interrupting,
   onInterrupt,
 }: {
+  /** The Agent's Session ID: whose draft the box keeps. */
+  sessionId: string;
   /** Sends the text; false when it could not be sent (reconnecting), and the box keeps it. */
   onSend: (text: string) => boolean;
   /** The Agent has ended: nothing can be sent. */
@@ -41,7 +46,7 @@ export function Composer({
   onInterrupt: () => boolean;
 }) {
   const phone = useIsPhone();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => loadDraft(sessionId));
   /**
    * Which earlier prompt the box shows, counted back from the newest (1 is the newest); none
    * when the box holds what was typed. Editing the recalled text ends the recall.
@@ -68,16 +73,21 @@ export function Composer({
     caretAtEnd.current = false;
   }, [text]);
 
+  const edit = (next: string) => {
+    setText(next);
+    saveDraft(sessionId, next);
+  };
+
   const recall = (next: number | undefined) => {
     setBack(next);
-    setText(next === undefined ? "" : (history[history.length - next] ?? ""));
+    edit(next === undefined ? "" : (history[history.length - next] ?? ""));
     caretAtEnd.current = true;
   };
 
   const send = () => {
     if (disabled || offline || text.trim() === "") return;
     if (onSend(text)) {
-      setText("");
+      edit("");
       setBack(undefined);
     }
   };
@@ -99,7 +109,7 @@ export function Composer({
         placeholder="Message Claude"
         // `field-sizing` makes the box as tall as its text, up to the cap.
         className="field-sizing-content max-h-48 min-h-9 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => edit(event.target.value)}
         onKeyDown={(event) => {
           // Not while an input method is composing (its Enter confirms a character).
           if (event.nativeEvent.isComposing) return;

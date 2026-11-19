@@ -3,6 +3,13 @@ import { useAgentConversation } from "@/agent/useAgentConversation";
 import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
 import { PromptDock } from "./PromptDock";
+import {
+  RawMessage,
+  RawSwitch,
+  RawTranscript,
+  ShowRawProvider,
+  useRawView,
+} from "./RawView";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
 const STICK_TO_BOTTOM_PX = 80;
@@ -22,7 +29,8 @@ export function AgentPane({
   const conversation = useAgentConversation(session.id);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
-  const { items } = conversation;
+  const { items, entries } = conversation;
+  const rawView = useRawView();
 
   // Follows the conversation down while the owner is at the bottom; once they scroll up to
   // read, it stays where they are.
@@ -30,10 +38,13 @@ export function AgentPane({
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom.current) element.scrollTop = element.scrollHeight;
-  }, [items]);
+  }, [items, rawView.all]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 justify-end border-b px-3 py-1">
+        <RawSwitch on={rawView.all} onChange={rawView.setAll} />
+      </div>
       <div
         ref={scroller}
         role="log"
@@ -45,25 +56,35 @@ export function AgentPane({
             scrollHeight - scrollTop - clientHeight <= STICK_TO_BOTTOM_PX;
         }}
       >
-        {items.map((item) =>
-          item.kind === "interrupted" ? (
-            <p key={item.key} className="text-xs text-muted-foreground">
-              Interrupted
-            </p>
-          ) : (
-            <p
-              key={item.key}
-              className={cn(
-                "break-words whitespace-pre-wrap",
-                item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-              )}
-            >
-              {item.text}
-              {item.kind === "prompt" && item.queued && (
-                <span className="text-muted-foreground"> (queued)</span>
-              )}
-            </p>
-          ),
+        {rawView.all ? (
+          <RawTranscript entries={entries} />
+        ) : (
+          <ShowRawProvider value={rawView.show}>
+            {items.map((item) => (
+              <RawMessage
+                key={item.key}
+                seq={item.seq}
+                entries={entries}
+                rawView={rawView}
+              >
+                {item.kind === "interrupted" ? (
+                  <p className="text-xs text-muted-foreground">Interrupted</p>
+                ) : (
+                  <p
+                    className={cn(
+                      "break-words whitespace-pre-wrap",
+                      item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
+                    )}
+                  >
+                    {item.text}
+                    {item.kind === "prompt" && item.queued && (
+                      <span className="text-muted-foreground"> (queued)</span>
+                    )}
+                  </p>
+                )}
+              </RawMessage>
+            ))}
+          </ShowRawProvider>
         )}
       </div>
       {conversation.state === "working" && (
@@ -81,7 +102,7 @@ export function AgentPane({
           This Session has ended.
         </p>
       )}
-      <PromptDock conversation={conversation} focused={focused} />
+      <PromptDock sessionId={session.id} conversation={conversation} focused={focused} />
     </div>
   );
 }

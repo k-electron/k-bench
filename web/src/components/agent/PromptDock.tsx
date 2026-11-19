@@ -10,9 +10,11 @@ import { PermissionPrompt } from "./PermissionPrompt";
  * back.
  */
 export function PromptDock({
+  sessionId,
   conversation,
   focused,
 }: {
+  sessionId: string;
   conversation: AgentConversation;
   focused: boolean;
 }) {
@@ -29,6 +31,8 @@ export function PromptDock({
       )}
       <div className={ask === undefined ? "contents" : "hidden"}>
         <Composer
+          key={sessionId}
+          sessionId={sessionId}
           onSend={conversation.send}
           disabled={conversation.ended}
           offline={conversation.reconnecting}

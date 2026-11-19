@@ -13,6 +13,7 @@ A Claude Agent shows the conversation as a **Transcript** in the Pane instead of
 - While Claude works you can keep typing: each message goes straight to Claude Code and shows "(queued)" until Claude picks it up. You can't take a queued message back. An **Interrupt** button by the input (and Esc on a desktop) stops the turn, as Esc does in the terminal; messages already queued then run, in the order you sent them. In an empty input, Up and Down step through the prompts you sent before, on any device.
 - When Claude needs an answer, an Allow/Deny, a question or a plan to approve takes over the input, so you answer with one tap.
 - Each Claude Agent's row in the sidebar shows whether it is **Idle**, **Working** or **Waiting for you**, and pulses when something happened that you haven't seen.
+- If something looks wrong, the raw JSON of any message is one gesture away: long-press it on a phone, or press `</>` beside it on desktop. The **Raw** switch above the conversation turns the whole Transcript into JSON and back.
 - It keeps going when you close the browser, lock your phone or restart k-bench, and every device is an equal view of the same conversation.
 
 It runs your own installed `claude`, with the same `CLAUDE.md`, skills, plugins, hooks, MCP servers and permission rules you have in a terminal. Claude Code's commands are typed, as `/compact`, `/context`, `/usage`, `/model <name>`, `/effort <level>` and `/rename`, and their replies show in the conversation, without panels.
