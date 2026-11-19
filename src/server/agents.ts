@@ -22,7 +22,6 @@ import { AgentLogReader } from "../agent/log.ts";
 import {
   agentFolder,
   agentLogFile,
-  agentSocketFile,
   agentsRoot,
   ensureOwnerOnlyFolder,
   makeOwnerOnlyFolder,
@@ -36,6 +35,12 @@ import {
   encodeAgentClientMessage,
 } from "../shared/agent-protocol.ts";
 import type { LaunchOptions } from "../shared/launch-options.ts";
+import {
+  AgentSocketPathError,
+  agentSocketFile,
+  removeAgentSocketLink,
+  removeDanglingAgentLinks,
+} from "./agent-socket-path.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
 /** How long a new runtime has to answer with its hello before it is given up on. */
@@ -144,6 +149,19 @@ export class AgentRuntimes {
   }
 
   /**
+   * The short path the Agent's socket is reached by, with its link made (see
+   * `agent-socket-path.ts`). Throws `AgentStartError` if `/tmp/kb-<uid>` cannot be trusted.
+   */
+  private socketFile(sessionId: string): string {
+    try {
+      return agentSocketFile(this.folder(sessionId));
+    } catch (error) {
+      if (error instanceof AgentSocketPathError) throw new AgentStartError(error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Starts the Agent Runtime in its hidden tmux session, and returns without waiting for it
    * (`waitUntilReady` does). Makes the Agent's folder, owner-only, if it is not there: a
    * restart finds its log in it.
@@ -175,6 +193,7 @@ export class AgentRuntimes {
       node: process.execPath,
       runtimeFile: runtime.file,
       agentFolder: folder,
+      socketFile: this.socketFile(input.sessionId),
       conversationId: input.conversationId,
       mode: input.mode,
       options: input.options,
@@ -192,7 +211,7 @@ export class AgentRuntimes {
     stillWanted: () => Promise<boolean>,
     timeoutMs = START_TIMEOUT_MS,
   ): Promise<Socket | undefined> {
-    const file = agentSocketFile(this.folder(sessionId));
+    const file = this.socketFile(sessionId);
     const deadline = Date.now() + timeoutMs;
     for (let attempt = 1; ; attempt++) {
       const socket = await tryConnect(file);
@@ -274,20 +293,21 @@ export class AgentRuntimes {
   /**
    * Deletes every Agent folder that `known` does not name a Session for: left behind by a
    * Session that was deleted while the server was down, or by one whose creation never
-   * finished. For the server's start, before it takes requests: a folder is made before its
+   * finished. Also removes the socket links whose folder is gone. For the server's start, before it takes requests: a folder is made before its
    * Session's row, so run later it could take one being made.
    */
   removeStrayFolders(known: (sessionId: string) => boolean): void {
-    const root = agentsRoot(this.dataDir);
-    let names: string[];
+    let names: string[] = [];
     try {
-      names = readdirSync(root);
+      names = readdirSync(agentsRoot(this.dataDir));
     } catch {
-      return;
+      // No Agent was ever made here.
     }
     for (const name of names) {
       if (!known(name)) this.removeFolder(name);
     }
+    // Links to folders that are gone: from before this start, or from a data folder deleted.
+    removeDanglingAgentLinks();
   }
 
   /**
@@ -296,7 +316,13 @@ export class AgentRuntimes {
    * session. Fine for an Agent that is not running.
    */
   async shutdown(sessionId: string): Promise<void> {
-    const socket = await tryConnect(agentSocketFile(this.folder(sessionId)));
+    let socket: Socket | undefined;
+    try {
+      socket = await tryConnect(this.socketFile(sessionId));
+    } catch (error) {
+      // /tmp/kb-<uid> cannot be trusted: nothing can be asked, but the session still dies.
+      if (!(error instanceof AgentStartError)) throw error;
+    }
     if (socket) {
       socket.on("error", () => undefined);
       socket.write(`${encodeAgentClientMessage({ type: "shutdown" })}\n`);
@@ -309,8 +335,9 @@ export class AgentRuntimes {
     await this.tmux.killSession(sessionId);
   }
 
-  /** Deletes the Agent's folder: its log, socket and everything else. Call after `shutdown`. */
+  /** Deletes the Agent's folder: its log, socket, link and everything else. Call after `shutdown`. */
   removeFolder(sessionId: string): void {
+    removeAgentSocketLink(this.folder(sessionId));
     rmSync(this.folder(sessionId), { recursive: true, force: true });
   }
 }

@@ -12,7 +12,10 @@ export function agentsRoot(dataDir: string): string {
   return join(dataDir, "agents");
 }
 
-/** One Agent's folder, named by its Session's ID: its log, socket and exit record. */
+/**
+ * One Agent's folder, named by its Session's ID: its log, socket (`agent.sock`, reached by
+ * a short link: src/server/agent-socket-path.ts) and exit record.
+ */
 export function agentFolder(dataDir: string, sessionId: string): string {
   return join(agentsRoot(dataDir), sessionId);
 }
@@ -20,11 +23,6 @@ export function agentFolder(dataDir: string, sessionId: string): string {
 /** The append-only log inside an Agent's folder (`AgentLog`). */
 export function agentLogFile(folder: string): string {
   return join(folder, "log.jsonl");
-}
-
-/** The unix socket the Agent Runtime listens on inside an Agent's folder. */
-export function agentSocketFile(folder: string): string {
-  return join(folder, "agent.sock");
 }
 
 /** The images uploaded for the Agent's prompts: `<agent folder>/images/`. Created by the server. */

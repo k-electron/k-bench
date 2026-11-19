@@ -193,6 +193,8 @@ export interface AgentLaunch {
   runtimeFile: string;
   /** The Agent's folder. The server has made it; nothing launched here may. */
   agentFolder: string;
+  /** The short path the runtime listens on (`agentSocketFile`): the folder's own could be too long. */
+  socketFile: string;
   /** The program `claude` is found as: a name the login shell resolves, or a path. */
   claudeProgram: string;
   conversationId: string;
@@ -223,7 +225,7 @@ export function agentLaunchArguments(options: LaunchOptions): string[] {
  * Starts the Agent Runtime and, when it ends, notes it if the runtime did not. Arguments,
  * never script text, in this order: the Workspace folder, Node, the runtime file, the
  * Agent's folder, the `claude` program, the mode, the conversation ID, then the runtime's
- * Launch option flags (`agentLaunchArguments`). It is POSIX `sh` too.
+ * Launch option flags (`agentLaunchArguments`), `--socket-file` and the rest. It is POSIX `sh` too.
  *
  * It resolves `claude` with `command -v` inside the login shell, so the Agent gets the same
  * `claude` a terminal on the Host would (the SDK needs an absolute path), and without one it
@@ -285,6 +287,8 @@ export function agentCommand(input: {
     launch.mode,
     launch.conversationId,
     ...agentLaunchArguments(launch.options),
+    "--socket-file",
+    launch.socketFile,
     ...(launch.importTerminal ? ["--import-terminal"] : []),
     ...(launch.claudeConfigDir ? ["--claude-config-dir", launch.claudeConfigDir] : []),
   ]);

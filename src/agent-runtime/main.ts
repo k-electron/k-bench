@@ -15,7 +15,7 @@ import { getSessionMessages } from "@anthropic-ai/claude-agent-sdk";
 import { conversationOf } from "../agent/conversation.ts";
 import { writeExitRecord } from "../agent/exit.ts";
 import { AgentLog } from "../agent/log.ts";
-import { agentLogFile, agentSocketFile, runtimeBuildId } from "../agent/paths.ts";
+import { agentLogFile, runtimeBuildId } from "../agent/paths.ts";
 import {
   AGENT_PROTOCOL_VERSION,
   type AgentClientMessage,
@@ -71,7 +71,7 @@ const hello = (): AgentHello => ({
 const live = new LiveText();
 
 const hub = new ClientHub({
-  socketFile: agentSocketFile(args.agentDir),
+  socketFile: args.socketFile,
   log,
   hello,
   snapshot: () => live.snapshot(),

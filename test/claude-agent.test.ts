@@ -1,4 +1,5 @@
-import { readdirSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, readlinkSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { agentFolder, agentsRoot } from "../src/agent/paths.ts";
 import { agentPath } from "../src/shared/agent-protocol.ts";
@@ -57,6 +58,53 @@ describe("a Claude Agent", () => {
     expect(entries[0]?.kind).toBe("runtime");
     expect(entries.findIndex((e) => e.kind === "prompt")).toBeLessThan(sdk("assistant"));
     expect(sdk("assistant")).toBeLessThan(sdk("result"));
+  });
+
+  it("works whatever the length of the data folder's path, across a restart, and leaves no socket link behind when deleted", async () => {
+    // A unix socket's path is limited (macOS: 103 characters, or about 253 on the newest),
+    // and the folder is as long as the owner's login or K_BENCH_DATA_DIR makes it. Well past
+    // any such limit here.
+    const instance = createTestInstance();
+    // 400 characters in all, however long the temp folder is: SQLite takes paths up to 512.
+    const deepDataDir = join(
+      instance.root,
+      "d".repeat(Math.floor((400 - instance.root.length - "/data".length - 2) / 2)),
+      "e".repeat(Math.ceil((400 - instance.root.length - "/data".length - 2) / 2)),
+      "data",
+    );
+    mkdirSync(deepDataDir, { recursive: true });
+    instance.config.dataDir = deepDataDir;
+    const server = await instance.start();
+    const workspace = await server.createWorkspace({
+      folder: instance.makeFolder("project"),
+    });
+    const session = await server.createClaudeAgent(workspace.id);
+    const first = await server.openAgent(session.id);
+    await first.sync();
+    first.prompt("one");
+    await first.waitForEntry(isResult, "the first turn's result");
+
+    // A k-bench that restarts finds the runtime that kept running, from the Session alone.
+    await server.stop();
+    const restarted = await instance.start();
+    const second = await restarted.openAgent(session.id);
+    await second.sync();
+    second.prompt("two");
+    await pollUntil(() => second.entries.filter(isResult).length === 2, {
+      description: "the second turn's result",
+    });
+
+    expect((await restarted.deleteSession(session.id)).status).toBe(204);
+    // Nothing is left in the short, shared folder that points into this instance's data.
+    const links = join("/tmp", `kb-${process.getuid?.()}`);
+    const left = readdirSync(links).filter((name) => {
+      try {
+        return readlinkSync(join(links, name)).startsWith(deepDataDir);
+      } catch {
+        return false;
+      }
+    });
+    expect(left).toEqual([]);
   });
 
   it("is driven with checkpointing, partial and replayed messages, and the folder it belongs to", async () => {

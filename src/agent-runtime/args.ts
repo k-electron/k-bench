@@ -13,6 +13,11 @@ import {
 export interface RuntimeArgs {
   /** The Agent's folder: the log and the socket are in it, and `exit.json` goes there. */
   agentDir: string;
+  /**
+   * The path to listen on: a short one through a link to `agentDir`, because a socket's path
+   * is limited in length (src/server/agent-socket-path.ts). Given, never worked out here.
+   */
+  socketFile: string;
   /** The Workspace's folder, where Claude Code runs. */
   folder: string;
   /** The absolute path of the owner's installed `claude`. */
@@ -47,6 +52,7 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
     args: argv,
     options: {
       "agent-dir": { type: "string" },
+      "socket-file": { type: "string" },
       folder: { type: "string" },
       claude: { type: "string" },
       conversation: { type: "string" },
@@ -61,13 +67,14 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
     strict: true,
   });
   const agentDir = values["agent-dir"];
+  const socketFile = values["socket-file"];
   const folder = values.folder;
   const claude = values.claude;
   const conversation = values.conversation;
   const mode = values.mode;
-  if (!agentDir || !folder || !claude || !conversation) {
+  if (!agentDir || !socketFile || !folder || !claude || !conversation) {
     throw new Error(
-      "Usage: --agent-dir --folder --claude --conversation --mode [--model --effort --advisor --focus-view --import-terminal --claude-config-dir]",
+      "Usage: --agent-dir --socket-file --folder --claude --conversation --mode [--model --effort --advisor --focus-view --import-terminal --claude-config-dir]",
     );
   }
   if (mode !== "start" && mode !== "resume") {
@@ -89,6 +96,7 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
   const claudeConfigDir = values["claude-config-dir"];
   return {
     agentDir,
+    socketFile,
     folder,
     claude,
     conversation,

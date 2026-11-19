@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
+import { removeDanglingAgentLinks } from "../../src/server/agent-socket-path.ts";
 import type { InstanceConfig } from "../../src/server/config.ts";
 import {
   type RunningServer,
@@ -422,6 +423,8 @@ export class TestInstance {
       // Shells killed with the tmux server die after kill-server returns, so one may still
       // be touching the folder for a moment.
       rmSync(this.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+      // The Agents' socket links outside it (src/server/agent-socket-path.ts), now dangling.
+      removeDanglingAgentLinks();
     }
   }
 }
