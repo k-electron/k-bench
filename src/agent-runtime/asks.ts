@@ -9,6 +9,12 @@ import type {
   PermissionAskEntry,
   PermissionReply,
 } from "../shared/agent-protocol.ts";
+import {
+  ASK_USER_QUESTION,
+  answersFit,
+  askedQuestions,
+  EXIT_PLAN_MODE,
+} from "../shared/agent-questions.ts";
 
 /** What Claude Code is told when the owner denies, which Claude reads as the tool's error. */
 const DENIED_MESSAGE =
@@ -27,6 +33,7 @@ const DENIED_WITH_REPLY =
 
 /** An ask Claude Code is waiting on: what it takes to answer it later. */
 interface OpenAsk {
+  toolName: string;
   input: Record<string, unknown>;
   toolUseId: string;
   /** The rule changes Claude Code suggested for "don't ask again"; none if it offered none. */
@@ -55,9 +62,19 @@ interface OpenAsk {
 export class PermissionAsks {
   private readonly open = new Map<string, OpenAsk>();
   private readonly record: (entry: NewLogEntry) => void;
+  private readonly planApproved: (toolUseId: string) => void;
 
-  constructor(record: (entry: NewLogEntry) => void) {
+  /**
+   * `planApproved` hears of a plan the owner approved (an allowed ExitPlanMode), with the id of
+   * its tool call: Claude Code leaves plan mode then, and the runtime keeps the mode line
+   * right ([Permission mode](../../docs/internals/agent.md)).
+   */
+  constructor(
+    record: (entry: NewLogEntry) => void,
+    planApproved: (toolUseId: string) => void = () => {},
+  ) {
     this.record = record;
+    this.planApproved = planApproved;
   }
 
   /** How many asks are open: what #142's Waiting state is. */
@@ -75,6 +92,7 @@ export class PermissionAsks {
       }
       const known = this.open.has(requestId);
       this.open.set(requestId, {
+        toolName,
         input,
         toolUseId: options.toolUseID,
         // "Don't ask again" is offered only where Claude Code offers it.
@@ -121,6 +139,23 @@ export class PermissionAsks {
     const ask = this.open.get(requestId);
     if (!ask) return;
     if (reply.decision === "allow") {
+      const questions =
+        ask.toolName === ASK_USER_QUESTION ? askedQuestions(ask.input) : undefined;
+      if (questions) {
+        // The answers must be to these questions, all of them: anything else is not an
+        // answer, and the ask stays open for a proper one.
+        const { answers } = reply;
+        if (!answers || !answersFit(questions, answers)) return;
+        this.close(requestId, { decision: "allow", answers });
+        ask.resolve({
+          behavior: "allow",
+          updatedInput: { ...ask.input, answers },
+          toolUseID: ask.toolUseId,
+        });
+        return;
+      }
+      // Answers to an ask that has no questions are not an answer either.
+      if (reply.answers) return;
       const always = reply.alwaysAllow === true && ask.suggestions.length > 0;
       this.close(
         requestId,
@@ -132,6 +167,7 @@ export class PermissionAsks {
         toolUseID: ask.toolUseId,
         ...(always && { updatedPermissions: ask.suggestions }),
       });
+      if (ask.toolName === EXIT_PLAN_MODE) this.planApproved(ask.toolUseId);
       return;
     }
     const said = reply.message?.trim() ?? "";

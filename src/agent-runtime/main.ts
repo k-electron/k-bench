@@ -20,6 +20,7 @@ import {
   type AgentContextUsage,
   type AgentHello,
   openPermissionAsks,
+  type PermissionMode,
 } from "../shared/agent-protocol.ts";
 import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
@@ -91,9 +92,11 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
   }
 }
 
-const asks = new PermissionAsks(record);
-
 const permissionMode = new PermissionModeTracker();
+
+const asks = new PermissionAsks(record, (toolUseId) =>
+  permissionMode.planApproved(toolUseId),
+);
 
 // The `/` menu. Which commands are terminal-only is known only from a turn's `init`, so an
 // Agent that has had a turn starts from what its log says (CommandList).
@@ -181,6 +184,8 @@ const claude = new ClaudeSession(
       // Either may change the status; once, not twice, when both do.
       const modeChanged = permissionMode.observe(message);
       if (tasksChanged || modeChanged) publishStatus();
+      const afterPlan = permissionMode.afterPlan(message);
+      if (afterPlan) void leavePlanMode(afterPlan);
       if (commandList.observe(message as unknown as Record<string, unknown>)) {
         hub.setCommands(commandList.commands);
       }
@@ -198,6 +203,20 @@ const claude = new ClaudeSession(
     },
   },
 );
+
+/**
+ * Claude Code has run an approved ExitPlanMode and the runtime still shows plan mode: set the
+ * mode plan approval returns to, so that Claude Code's mode and the mode line agree. If Claude
+ * Code refuses, nothing changes.
+ */
+async function leavePlanMode(mode: PermissionMode): Promise<void> {
+  try {
+    await claude.setPermissionMode(mode);
+    if (permissionMode.set(mode)) publishStatus();
+  } catch {
+    // Claude Code refused: the line keeps showing what was last known.
+  }
+}
 
 async function command(message: AgentClientMessage): Promise<void> {
   if (message.type === "prompt") {
