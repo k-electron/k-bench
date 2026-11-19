@@ -1,4 +1,5 @@
 import type { LogEntry, PermissionReply } from "../../../src/shared/agent-protocol.ts";
+import { type GoalItem, readGoalMessage } from "./goal";
 import { queuedPromptIds } from "./prompts";
 import {
   contentLines,
@@ -125,6 +126,7 @@ export type TranscriptItem =
   | InterruptedItem
   | PermissionItem
   | UnsupportedItem
+  | GoalItem
   | UncommonItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
@@ -291,6 +293,8 @@ function readSdkMessage(
   );
   // A subagent's messages (#149 shows them) are not the conversation's own.
   if (message.parent_tool_use_id != null) return;
+  // `/goal`'s lines (#152): its re-prompts are not the owner's, whatever flags they carry.
+  if (readGoalMessage(state, entry)) return;
   // The less common messages (#148) have their own reader; it says whether it handled one.
   if (readUncommonMessage(state, entry)) return;
   switch (message.type) {
@@ -401,7 +405,7 @@ function readSdkMessage(
       return;
     default:
       // Everything else that Claude Code sends and k-bench knows shows nothing yet: the later
-      // tickets (#149, #152) each give their kinds a line. What it does not know is an
+      // ticket (#149) gives its kinds a line. What it does not know is an
       // Unsupported row (above).
       return;
   }
