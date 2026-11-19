@@ -120,7 +120,7 @@ export const TranscriptItemView = memo(function TranscriptItemView({
         <div className="my-0.5 flex gap-2 pl-5 text-xs text-muted-foreground">
           <Gutter>⎿</Gutter>
           <span className="min-w-0 break-words whitespace-pre-wrap">
-            permission: {item.answer}
+            {item.topic}: {item.answer}
           </span>
         </div>
       );

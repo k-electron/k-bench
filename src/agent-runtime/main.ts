@@ -20,6 +20,7 @@ import {
   type AgentContextUsage,
   type AgentHello,
   openPermissionAsks,
+  type PermissionMode,
 } from "../shared/agent-protocol.ts";
 import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
@@ -89,9 +90,11 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
   }
 }
 
-const asks = new PermissionAsks(record);
-
 const permissionMode = new PermissionModeTracker();
+
+const asks = new PermissionAsks(record, (toolUseId) =>
+  permissionMode.planApproved(toolUseId),
+);
 
 /** Sends every connection the status: what the Agent is doing, its mode and its Bell. */
 function publishStatus(): void {
@@ -162,6 +165,8 @@ const claude = new ClaudeSession(
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
       if (permissionMode.observe(message)) publishStatus();
+      const afterPlan = permissionMode.afterPlan(message);
+      if (afterPlan) void leavePlanMode(afterPlan);
       if (message.type === "result") {
         live.turnEnded();
         void refreshContext();
@@ -176,6 +181,20 @@ const claude = new ClaudeSession(
     },
   },
 );
+
+/**
+ * Claude Code has run an approved ExitPlanMode and the runtime still shows plan mode: set the
+ * mode plan approval returns to, so that Claude Code's mode and the mode line agree. If Claude
+ * Code refuses, nothing changes.
+ */
+async function leavePlanMode(mode: PermissionMode): Promise<void> {
+  try {
+    await claude.setPermissionMode(mode);
+    if (permissionMode.set(mode)) publishStatus();
+  } catch {
+    // Claude Code refused: the line keeps showing what was last known.
+  }
+}
 
 async function command(message: AgentClientMessage): Promise<void> {
   if (message.type === "prompt") {

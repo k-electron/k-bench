@@ -424,6 +424,20 @@ export class AppPage {
     });
   }
 
+  /** The panel with Claude's questions (AskUserQuestion) that takes over the named Claude Agent's input. */
+  questionPrompt(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("region", {
+      name: "Question from Claude",
+    });
+  }
+
+  /** The panel with Claude's plan (ExitPlanMode) to approve, in place of the named Claude Agent's input. */
+  planPrompt(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("region", {
+      name: "Plan for approval",
+    });
+  }
+
   /** The line under the named Claude Agent's input that shows its permission mode; a button that cycles it. */
   agentModeLine(sessionName: string): Locator {
     return this.agentRegion(sessionName).getByRole("button", {
