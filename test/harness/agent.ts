@@ -185,6 +185,11 @@ export class AgentClient {
     this.send({ type: "interrupt" });
   }
 
+  /** Says whether this client's page shows the Agent in a Pane, as a browser's does. */
+  view(visible: boolean): void {
+    this.send({ type: "view", visible });
+  }
+
   /** Sends a prompt and returns the ID it was sent with. */
   prompt(text: string, id: string = randomUUID()): string {
     this.send({ type: "prompt", id, text });
