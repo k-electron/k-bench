@@ -142,6 +142,14 @@ Note for whoever reviews dependencies: the bundle contains the SDK's code, which
 
 `TmuxDriver.createAgentSession(id, folder, launch)` starts the runtime as the Session's only program. The command is the same three-hop chain as a Claude TUI (`loginChain`): zsh with no startup files changes into the folder, the owner's login shell (`-l -i`) gives the owner's environment, and `/bin/sh` runs the Agent launcher with positional arguments only (never spliced into script text). The launcher resolves `claude` with `command -v` inside the login shell (the SDK needs an absolute path; a name with a slash is used as given), then **runs Node as a child, not with `exec`**, so it outlives the runtime and writes the `exit.json` gap record for an exit the runtime did not record. It is POSIX `sh`, so it runs under macOS's bash-as-sh and CI.
 
+### Launch options
+
+A Claude Agent takes the same Launch options as a Claude TUI, with the same meaning (#143). They are stored on the Session (`sessions.launch_options`), shared by both interfaces, and passed again at every start: `AgentRuntimes.launch` takes `options`, and Restart (`startStopped`) and Open in terminal reuse the stored ones.
+
+- **To the runtime:** `agentLaunchArguments` (`src/server/claude.ts`) appends `--model`, `--effort`, `--advisor` and `--focus-view` to the runtime's command line after the launcher's seven positional arguments (Default adds nothing; the launcher does `shift 7` and passes the rest on as `"$@"`). `parseRuntimeArgs` reads them into `RuntimeArgs.launch`; a flag left out is Default.
+- **To Claude Code:** `sdkLaunchOptions` (`src/agent-runtime/session.ts`) turns them into SDK options: `model`, `effort`, `extraArgs: {advisor}` (`--advisor <model>`) and `settings: {viewMode: "focus"}`. Advisor Off is `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` in the environment the SDK gives `claude`. All of these are for that launch only: **never `/advisor <model>`, which saves the owner's default**, and nothing writes the owner's settings files.
+- **In the Transcript:** Focus view is read back from the log, not from the Session: `buildItems` takes it from the latest `system/init`'s `view_mode` (`BuiltTranscript.focusView`, `transcriptInfo`, `useAgentConversation().focusView`), and `ToolCall` with `collapsed` shows a call as its one line (status mark, name, target), with no output or diff; the raw message has the rest.
+
 ## The server
 
 - `src/server/agents.ts`, **`AgentRuntimes`**: everything the server does to an Agent. It keeps no state about a running Agent (tmux says what runs):
@@ -152,7 +160,7 @@ Note for whoever reviews dependencies: the bundle contains the SDK's code, which
   - `isRunning`, `shutdown(sessionId)` (send `shutdown`, wait for the tmux session to go, kill it after four seconds), `removeFolder`.
 - `src/server/agent-sockets.ts`, **`AgentSockets`**: `GET /api/sessions/:id/agent`, behind the same access guard and Origin check as the terminal (`server.on("upgrade")` in `server.ts`). For each browser socket it opens one connection to the runtime's socket and forwards whole frames both ways unread. It closes with **4410** only when the Session ended (not a running Agent when asked, or the runtime hung up and its tmux session went); a runtime that hung up while its Session is still running, or one that did not start, closes with 1011; a stopping server drops the socket with no 4410 so that the browser reconnects (#134).
 - `service.ts`: `createSession(workspaceId, name, claude?: {options, interface})`; Claude Agent is `interface: "agent"`. Delete (of a Session or a Workspace) shuts the runtime down, removes the row, then removes the folder. Restart of a Stopped Agent starts the runtime with `mode: "resume"` (#144 extends it: Stop, the Stopped Transcript, confirms). `getState()` adds `interface` for Claude Sessions.
-- `store.ts`: `sessions.interface` (`tui` or `agent`, null for a shell; existing Claude Sessions became `tui`). The New Session dialog's remembered kind can be `claude-agent`; creating an Agent leaves the remembered Launch options as they were.
+- `store.ts`: `sessions.interface` (`tui` or `agent`, null for a shell; existing Claude Sessions became `tui`). The New Session dialog's remembered kind can be `claude-agent`; creating an Agent remembers its Launch options, the same ones as a Claude TUI's (one set, shared by both).
 - `config.ts` / `ServerOptions.agentRuntimeFile`: the built runtime to install. `main.ts` passes `dist/runtime/agent-runtime.mjs` relative to its working directory, as it does `dist/web`. It is an option, not an instance setting, so a test can start a server on a second runtime build (#158).
 
 ## The browser

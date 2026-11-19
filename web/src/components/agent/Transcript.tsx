@@ -18,11 +18,14 @@ export function Transcript({
   items,
   entries,
   rawView,
+  focusView,
 }: {
   items: readonly TranscriptItem[];
   /** The log's entries, for the raw JSON of the message an item comes from (#137). */
   entries: readonly LogEntry[];
   rawView: RawView;
+  /** Claude Code is in Focus view: a tool call is one collapsed line. */
+  focusView: boolean;
 }) {
   return (
     // `break-words` is inherited: a path or output line with no space in it wraps at the edge
@@ -31,7 +34,7 @@ export function Transcript({
       <div className="font-mono text-[13px] leading-relaxed break-words">
         {items.map((item) => (
           <RawMessage key={item.key} seq={item.seq} entries={entries} rawView={rawView}>
-            <TranscriptItemView item={item} />
+            <TranscriptItemView item={item} focusView={focusView} />
           </RawMessage>
         ))}
       </div>
@@ -50,8 +53,10 @@ function Gutter({ children, className }: { children: string; className?: string 
 
 export const TranscriptItemView = memo(function TranscriptItemView({
   item,
+  focusView,
 }: {
   item: TranscriptItem;
+  focusView: boolean;
 }) {
   switch (item.kind) {
     case "prompt":
@@ -91,7 +96,7 @@ export const TranscriptItemView = memo(function TranscriptItemView({
         </article>
       );
     case "tool":
-      return <ToolCall item={item} />;
+      return <ToolCall item={item} collapsed={focusView} />;
     case "interrupted":
       return (
         <div className="my-1 flex gap-2 pl-5 text-red-300">

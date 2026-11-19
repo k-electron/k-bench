@@ -8,7 +8,7 @@ A [Claude Session](claude-code.md) operated through Claude Code's own terminal i
 
 A Claude Agent shows the conversation as a **Transcript** in the Pane instead of a terminal. It is built for a phone as much as for a desktop:
 
-- Claude's replies stream in, with prose in a reading font and real markdown. Tool output collapses, edits show as coloured diffs, and thinking is one muted line.
+- Claude's replies stream in, with prose in a reading font and real markdown. Tool output collapses, edits show as coloured diffs, and thinking is one muted line. With **Focus view** chosen when you create the Session, each tool call is a single line, with no output.
 - You type into an ordinary input box. On a phone there are no Extra keys, and the keyboard's own typing aids work.
 - A line under the input shows the permission mode, the same on every device. Tap it, or press Shift+Tab in the input on a desktop, to go through Ask before edits, Accept edits and Plan mode. A mode Claude Code changes itself, such as leaving plan mode, shows there too.
 - While Claude works you can keep typing: each message goes straight to Claude Code and shows "(queued)" until Claude picks it up. You can't take a queued message back. An **Interrupt** button by the input (and Esc on a desktop) stops the turn, as Esc does in the terminal; messages already queued then run, in the order you sent them. In an empty input, Up and Down step through the prompts you sent before, on any device.
@@ -17,7 +17,7 @@ A Claude Agent shows the conversation as a **Transcript** in the Pane instead of
 - If something looks wrong, the raw JSON of any message is one gesture away: long-press it on a phone, or press `</>` beside it on desktop. The **Raw** switch above the conversation turns the whole Transcript into JSON and back.
 - It keeps going when you close the browser, lock your phone or restart k-bench, and every device is an equal view of the same conversation.
 
-It runs your own installed `claude`, with the same `CLAUDE.md`, skills, plugins, hooks, MCP servers and permission rules you have in a terminal. Claude Code's commands are typed, as `/compact`, `/context`, `/usage`, `/model <name>`, `/effort <level>` and `/rename`, and their replies show in the conversation, without panels.
+The New Session dialog offers the same Launch options as for a Claude TUI: model, effort, advisor and Focus view, with the same meaning, remembered together with the kind. The advisor applies to that Session only and never changes your saved default. It runs your own installed `claude`, with the same `CLAUDE.md`, skills, plugins, hooks, MCP servers and permission rules you have in a terminal. Claude Code's commands are typed, as `/compact`, `/context`, `/usage`, `/model <name>`, `/effort <level>` and `/rename`, and their replies show in the conversation, without panels.
 
 ## Open in terminal: for everything else
 

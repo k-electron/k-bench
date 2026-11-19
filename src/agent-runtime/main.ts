@@ -144,6 +144,7 @@ const claude = new ClaudeSession(
       resume: args.mode === "resume" && log.hasPrompt(),
     },
     canUseTool: asks.canUseTool,
+    launch: args.launch,
   },
   {
     message(message) {
