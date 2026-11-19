@@ -39,6 +39,10 @@ export function PromptDock({
           offline={conversation.reconnecting}
           autoFocus={focused && ask === undefined}
           onShiftTab={conversation.cycleMode}
+          history={conversation.history}
+          working={conversation.state === "working"}
+          interrupting={conversation.interrupting}
+          onInterrupt={conversation.interrupt}
         />
       </div>
       {conversation.mode !== undefined && (

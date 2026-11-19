@@ -348,6 +348,9 @@ async function runTool(turn, step) {
   stop.event.index = index;
   send(stop);
   closeMessage(turn, "tool_use");
+  // A tool still running: no result until the test releases it, or the turn is interrupted
+  // (which ends the turn with the tool unanswered).
+  if (step.hold) await waitForRelease(step.hold);
 
   let allowed = true;
   let answer;

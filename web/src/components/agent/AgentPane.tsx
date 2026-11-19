@@ -67,14 +67,21 @@ export function AgentPane({
                 entries={entries}
                 rawView={rawView}
               >
-                <p
-                  className={cn(
-                    "break-words whitespace-pre-wrap",
-                    item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-                  )}
-                >
-                  {item.text}
-                </p>
+                {item.kind === "interrupted" ? (
+                  <p className="text-xs text-muted-foreground">Interrupted</p>
+                ) : (
+                  <p
+                    className={cn(
+                      "break-words whitespace-pre-wrap",
+                      item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
+                    )}
+                  >
+                    {item.text}
+                    {item.kind === "prompt" && item.queued && (
+                      <span className="text-muted-foreground"> (queued)</span>
+                    )}
+                  </p>
+                )}
               </RawMessage>
             ))}
           </ShowRawProvider>

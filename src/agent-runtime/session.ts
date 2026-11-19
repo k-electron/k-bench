@@ -132,6 +132,17 @@ export class ClaudeSession {
     });
   }
 
+  /**
+   * Stops the turn that is running. Prompts waiting are left to run after it, in order (the
+   * SDK's plain interrupt does not cancel them). With nothing running it does nothing, so
+   * it is always safe to send.
+   */
+  interrupt(): void {
+    this.query.interrupt().catch(() => {
+      // Claude Code is gone or refused: `ended` reports the first, and a refusal changes nothing.
+    });
+  }
+
   /** Ends Claude Code: its input is closed and the process killed. */
   close(): void {
     this.prompts.close();
