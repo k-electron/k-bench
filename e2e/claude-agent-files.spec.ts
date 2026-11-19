@@ -76,3 +76,26 @@ test("typing @ and part of a name lists the Workspace's files, picking one inser
   await expect(input).toHaveValue("you@app");
   await expect(picker).toHaveCount(0);
 });
+
+test("picking a file whose name has a space inserts it quoted, which is how Claude Code reads a mention with a space", async ({
+  app,
+  kbench,
+}) => {
+  const folder = kbench.instance.makeFolder("project");
+  makeRepository(folder, ["docs/my notes.md"]);
+  await app.createWorkspace(folder);
+  await app.createClaudeAgent("project");
+  const region = app.agentRegion("session 1");
+  const input = app.agentInput("session 1");
+  const picker = region.getByRole("listbox", { name: "Files" });
+
+  await input.fill("read @notes");
+  await expect(picker.getByRole("option", { name: /my notes\.md/ })).toBeVisible();
+  await input.press("Enter");
+  await expect(input).toHaveValue('read @"docs/my notes.md" ');
+  await input.pressSequentially("now");
+  await input.press("Enter");
+  await expect(region.getByRole("log")).toContainText(
+    'fake claude heard: read @"docs/my notes.md" now',
+  );
+});

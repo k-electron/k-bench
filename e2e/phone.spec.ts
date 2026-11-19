@@ -565,6 +565,9 @@ test("a Claude Agent's mode line is a button on the phone: a tap cycles the perm
   await expect(line).toContainText("Accept edits");
   await line.tap();
   await expect(line).toContainText("Plan mode");
+  // Auto mode follows plan mode where the model supports it (the fake's does), as in the TUI.
+  await line.tap();
+  await expect(line).toContainText("Auto mode");
   await line.tap();
   await expect(line).toContainText("Ask before edits");
 });

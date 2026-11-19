@@ -19,6 +19,15 @@ export interface SavedMessage {
   session_id: string;
   message: unknown;
   parent_tool_use_id: string | null;
+  /**
+   * What Claude Code marks a message with, as the live check saw a terminal's compacted chain
+   * (#161, kinds only): the summary has `isCompactSummary` and `is_meta`, and the output of a
+   * local command (`/compact` itself) has `isCompletedLocalCommand`. None of them is something
+   * anyone typed.
+   */
+  isCompactSummary?: boolean;
+  is_meta?: boolean;
+  isCompletedLocalCommand?: boolean;
 }
 
 export const IN_THE_TERMINAL = "In the terminal";
@@ -45,9 +54,16 @@ function textOf(message: SavedMessage): string {
     .join("");
 }
 
-/** A turn starts with what someone typed: not a tool's result, and not the interrupt note. */
+/** A turn starts with what someone typed: not a tool's result, not the interrupt note, and not what Claude Code wrote itself (the compaction summary, a local command's output). */
 function startsATurn(message: SavedMessage): boolean {
   if (message.type !== "user") return false;
+  if (
+    message.isCompactSummary === true ||
+    message.is_meta === true ||
+    message.isCompletedLocalCommand === true
+  ) {
+    return false;
+  }
   if (
     blocksOf(message).some((block) => isObject(block) && block.type === "tool_result")
   ) {
@@ -67,8 +83,12 @@ function asEntry(message: SavedMessage, options: { summary: boolean }): NewLogEn
   };
   // What someone typed shows as a prompt, as the echo of one k-bench sent does.
   if (startsATurn(message)) sdk.isReplay = true;
-  // Claude Code's own summary of everything before it, which the Transcript shows as such.
-  if (options.summary) sdk.isCompactSummary = true;
+  // What Claude Code wrote itself keeps its marks, whichever way the import was anchored: its
+  // summary of everything before a compaction (which the Transcript shows as a line of output,
+  // not as a prompt) and the output of a local command.
+  if (message.isCompactSummary === true || options.summary) sdk.isCompactSummary = true;
+  if (message.is_meta === true) sdk.is_meta = true;
+  if (message.isCompletedLocalCommand === true) sdk.isCompletedLocalCommand = true;
   return { kind: "sdk", message: sdk };
 }
 
@@ -102,6 +122,9 @@ export function planTerminalImport(
   }
   for (const id of promptIds) known.add(id);
 
+  // A compaction summary the log has not seen: the terminal compacted.
+  const unseenSummary = (message: SavedMessage) =>
+    message.isCompactSummary === true && !known.has(message.uuid);
   let start = 0;
   let firstLabel = IN_THE_TERMINAL;
   let summary = false;
@@ -110,7 +133,12 @@ export function planTerminalImport(
     start = anchor + 1;
     const anchored = saved[anchor];
     if (anchored && promptIds.has(anchored.uuid) && startsATurn(anchored)) {
-      while (start < saved.length && !startsATurn(saved[start] as SavedMessage)) start++;
+      // Skip the prompt's own reply, up to the next thing someone typed or a summary of a compaction.
+      while (start < saved.length) {
+        const next = saved[start] as SavedMessage;
+        if (startsATurn(next) || unseenSummary(next)) break;
+        start++;
+      }
     }
   } else if (known.size > 0) {
     // The SDK gives a system message no more than its type, so a chain that begins with one is
@@ -128,14 +156,19 @@ export function planTerminalImport(
   }
 
   const turns: NewLogEntry[] = [];
-  for (const message of saved.slice(start)) {
+  // A compaction summary the log has not seen means the terminal compacted, wherever the import
+  // was anchored (the saved chain still holds the web's prompts after a compaction, as the live
+  // check found). One that lies before the anchor is imported first, so that it is not lost.
+  const compacted = firstLabel === COMPACTED_IN_THE_TERMINAL || saved.some(unseenSummary);
+  const earlier = saved.slice(0, start).filter(unseenSummary);
+  for (const message of [...earlier, ...saved.slice(start)]) {
     if (message.type === "system" || known.has(message.uuid)) continue;
     // The summary is the first thing the chain holds after the boundary.
     turns.push(asEntry(message, { summary: summary && turns.length === 0 }));
   }
   if (turns.length === 0) return [];
   return [
-    { kind: "divider", label: firstLabel },
+    { kind: "divider", label: compacted ? COMPACTED_IN_THE_TERMINAL : firstLabel },
     ...turns,
     { kind: "divider", label: BACK_IN_WEB },
   ];

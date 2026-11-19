@@ -11,4 +11,5 @@ How k-bench works inside. For setup, commands and the pull request flow, see [CO
 - [Releasing](releasing.md): `pnpm release`, the release workflow, the changelog, and the owner's one-off npm setup.
 - [Claude Agent parity checklist](../claude-agent-parity.md): every Claude TUI capability, and whether a Claude Agent does it, it goes through Open in terminal, or it is out of scope. Tick rows as tickets land.
 - [Test seams](test-seams.md): the Seam 1, 2 and 3 harnesses, and how to write a test with them (see also [Testing](../testing.md)).
+- [The live check](live-check.md): `pnpm live-check`, the by-hand script that runs the real `claude` through the Agent SDK against what a Claude Agent assumes (issue #161): what it checks, its rails, how to run it and read it.
 - [Install verification](install-verification.md): the manual checklist for the Installed instance, and how to remove it.

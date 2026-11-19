@@ -9,6 +9,7 @@
 - `tailscale-serve.ts`: reads the `tailscale serve` configuration (pure parsing plus one thin call to the CLI); shared by the `k-bench` commands: see [Packaging](packaging.md#the-tailscale-serve-configuration).
 - `smoke.ts`: `pnpm smoke`.
 - `release.ts`: `pnpm release <version>`. `release-plan.ts` and `check-npm.ts` are steps of the release workflow; `release-lib.ts` holds the pure parts they share. See [Releasing](releasing.md).
+- `live-check.ts` and `live-check/`: `pnpm live-check`, the by-hand live check of a real `claude` (see [The live check](live-check.md)); `redaction.ts` is what it and `record-fake-claude.ts` (the fake Claude's fixture recorder, with `tee-claude.mjs`) share to take the person and machine out of a recording.
 - `fix-node-pty.mjs`: restores the execute bit on node-pty's `spawn-helper`.
 
 The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsconfig.build.json`) for the npm package: see [Packaging](packaging.md).

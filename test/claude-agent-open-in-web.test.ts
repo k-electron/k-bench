@@ -37,6 +37,12 @@ function transcript(entries: LogEntry[]): string[] {
       if (message.type === "assistant") lines.push(textOf(inner.content));
       else if (message.type === "user" && message.isCompactSummary === true) {
         lines.push(`summary: ${textOf(inner.content).slice(0, 30)}`);
+      } else if (message.type === "user" && message.isCompletedLocalCommand === true) {
+        lines.push(
+          `output: ${textOf(inner.content)
+            .replace(/<[^>]+>/g, "")
+            .slice(0, 30)}`,
+        );
       } else if (
         message.type === "user" &&
         message.isReplay === true &&
@@ -164,8 +170,13 @@ describe("Open in web", () => {
     expect(transcript(await loggedIn(server, session.id))).toEqual([
       "> before",
       "fake claude heard: before",
+      // The saved chain still holds what k-bench sent, as a real terminal's does after a
+      // compaction; the terminal's compaction is said all the same, the summary is Claude's
+      // (never a prompt), and nothing already shown is shown twice.
       "--- Compacted in the terminal: earlier turns above are from before ---",
       "summary: This session is being continue",
+      "output: Caveat: these messages were ge",
+      "output: Compacted",
       "> after compacting",
       "claude-stub heard: after compacting",
       "--- Back in web ---",

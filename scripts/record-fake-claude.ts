@@ -23,6 +23,7 @@ import {
   query,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { redact, scrub } from "./redaction.ts";
 
 const TEE = join(import.meta.dirname, "tee-claude.mjs");
 const FIXTURES = join(import.meta.dirname, "..", "test", "harness", "fixtures");
@@ -276,61 +277,6 @@ function pick(messages: Json[], what: string, match: (m: Json) => boolean): Json
   const found = messages.find(match);
   if (!found) throw new Error(`no ${what} in the recordings: record again`);
   return found;
-}
-
-/** Replaces what identifies the person or machine in a recorded value. */
-function redact(value: unknown, outDir: string): unknown {
-  const json = JSON.stringify(value)
-    .split(join(outDir, "work"))
-    .join("/home/you/project")
-    .split(outDir)
-    .join("/home/you/recording")
-    .split(homedir())
-    .join("/home/you")
-    .replace(/\/Users\/[^/"\\]+/g, "/home/you")
-    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "you@example.com")
-    .replace(/"signature":"[^"]+"/g, '"signature":"ZmFrZS1zaWduYXR1cmU="')
-    .replace(/"signature":"[^"]+"/g, '"signature":"ZmFrZS1zaWduYXR1cmU="');
-  return JSON.parse(json);
-}
-
-/** Empties the lists that hold the recorder's own plugins, skills, commands and servers. */
-function scrub(message: Json): Json {
-  const copy = structuredClone(message);
-  const reply = asJson(asJson(copy.response ?? {}).response ?? {});
-  for (const target of [copy, reply]) {
-    for (const key of ["plugins", "skills", "slash_commands", "agents", "mcp_servers"]) {
-      if (key in target) target[key] = [];
-    }
-    for (const key of ["memory_paths", "messaging_socket_path"]) delete target[key];
-    if (Array.isArray(target.commands)) {
-      target.commands = (target.commands as Json[]).filter((c) => c.builtin);
-    }
-    if (Array.isArray(target.tools)) {
-      target.tools = (target.tools as string[]).filter((t) => !t.startsWith("mcp__"));
-    }
-    if (Array.isArray(target.terminal_slash_commands)) {
-      target.terminal_slash_commands = [];
-    }
-  }
-  if (reply.account) {
-    reply.account = {
-      email: "you@example.com",
-      organization: "Example Org",
-      subscriptionType: "Claude Max",
-      apiProvider: "firstParty",
-    };
-  }
-  if ("pid" in reply) reply.pid = 4242;
-  if (copy.type === "rate_limit_event") {
-    copy.rate_limit_info = {
-      status: "allowed",
-      resetsAt: 1795048200,
-      rateLimitType: "five_hour",
-      isUsingOverage: false,
-    };
-  }
-  return copy;
 }
 
 function fixtures(outDir: string): void {

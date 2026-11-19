@@ -1,0 +1,103 @@
+# The live check
+
+`pnpm live-check` is part A of [issue #161](https://github.com/k-electron/k-bench/issues/161): a script, run by hand, that drives the owner's installed `claude` through the Agent SDK and says, for each line of the issue, whether what k-bench's Claude Agent **assumes** about Claude Code holds. It spends a few Haiku turns on the owner's subscription, so it does nothing real without `--confirm`. It is not part of `pnpm check`, `pnpm test`, `pnpm test:e2e` or CI: it lives in `scripts/` (`live-check.ts`, with its parts in `scripts/live-check/`), has no `*.test.ts` name, and nothing imports it.
+
+```
+pnpm live-check                       # prints what it would do, spends nothing
+pnpm live-check --fake                # rehearses against the fake Claude: no login, no turns
+pnpm live-check --confirm             # the real run
+pnpm live-check --confirm --only plan-approval,clear --budget 6
+```
+
+| Flag                 |                                                                                                                                                                                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--confirm`          | Required for the real `claude`. Without it (and without `--fake`) the script prints the scenarios, the checks, the model, the budget and the rails, and exits 0.                                                                                                                                   |
+| `--fake`             | The same orchestration against the test harness's fake `claude`, in a temp folder and a temp Claude Code folder (`installFakeClaude`). Verdicts read `PASS (fake)`: they prove the script, not `claude`, and `results.md` says so at the top. Checks the fake cannot play say `NEEDS REAL CLAUDE`. |
+| `--only a,b`         | Only these checks, and the scenarios they need.                                                                                                                                                                                                                                                    |
+| `--budget n`         | The most model turns the run may spend (default 25).                                                                                                                                                                                                                                               |
+| `--out dir`          | Where `results.md` and the redacted recordings go (default: a new folder in the system temp folder, outside the repository).                                                                                                                                                                       |
+| `--claude path`      | The `claude` to run (default: the first on `PATH`).                                                                                                                                                                                                                                                |
+| `--fake-break fault` | With `--fake`: make the fake misbehave, to see a rail catch it: `model` (reports a non-Haiku model), `settings` (a prompt writes the owner's settings file), `risky-settings` (allow rules for Bash and an MCP tool in the settings), `leftover` (a check leaves a process behind).                |
+
+## Reading the output
+
+Each check prints one line, and `results.md` repeats them with the reason, **the assumption in k-bench's code the answer confirms or refutes** (file and name) and a few facts, as labels only:
+
+- **PASS**: what the code assumes is what `claude` does.
+- **FAIL**: it is not; the line says which assumption, so the code named can be fixed and the fake's fixtures re-recorded (`scripts/record-fake-claude.ts`).
+- **NOT PROVOKED**: the situation did not come up (the model did not call the tool, a TUI menu did not appear in time, the owner has no plugin to look for), or is costly to force (usage limit, API retry, folder trust, MCP): the reason is given and nothing is forced.
+- **NEEDS REAL CLAUDE**: fake mode only; the fake cannot play it.
+- **NOT RUN**: the run was aborted for a broken rail, or the turn budget did not fit it.
+
+`results.md` holds verdicts, labels and counts only (no account details, no paths with a user name) and is meant to be posted to #161. The recordings (`recordings/<scenario>.jsonl`, every message either way except streamed fragments and keep-alives) are redacted the same way. Nothing from a terminal pane is written.
+
+The checks are the issue's A2 rows (`plugins`, `plan-approval`, `focus-view`, `advisor`, `open-in-terminal`, `rewind`, `clear`, `at-path`, `goal`, `loop`, `subscription`) and A3 rows (`unavailable-reply`, `command-output`, `tasks`, `session-state`, `midturn-send`, `model-command`, `deny-reply`, `context-left`, `mode-cycle`, `open-in-web-anchors`, `terminal-commands`, `folder-trust`, `compaction`, `todowrite`, `uncommon-kinds`), plus `known-kinds` (no real message becomes an Unsupported row) and `deny-list` (fake only). Several checks share a scenario (one session): `baseline` answers `plugins`, `subscription`, `terminal-commands`, `context-left`, `model-command`, `unavailable-reply` and `command-output`.
+
+**A3 tests the shipped code.** The recordings are not read by eye: the log the runtime would have written is fed to the browser's `buildItems` and `unsupportedInMessage`, `queuedPromptIds`, `contextLeftPercent`, and to the runtime's `Activity`, `TaskTracker`, `ConversationTracker`, `CommandList`, `planTerminalImport` and `subscriptionProblem`; SDK options come from `sdkLaunchOptions` (`scripts/live-check/shipped.ts`). The browser's modules use extension-less imports for Vite, so `shipped.ts` registers a resolve hook that adds `.ts` and imports them by URL.
+
+## The rails
+
+Every one is enforced in code. `test/live-check.test.ts` tests the decisions directly (the Haiku assertion, the budget, the tool policy, the settings scan, the settings fingerprint, cleanup by provenance and the privacy guard), because the script itself must not run under `pnpm test`; `--fake` and `--fake-break` show the whole script's rails working, by hand.
+
+1. **Opt-in.** `scripts/live-check.ts` returns after printing the plan unless `--confirm` or `--fake`.
+2. **Haiku, low effort, advisor off, on every query.** `LiveSession` (`scripts/live-check/session.ts`) builds every query's options from `sdkLaunchOptions({ model: "haiku", effort: "low", advisor: "off", ... })` and sets `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`, except for the advisor check, whose session turns it on with `--advisor opus` (and never calls the advisor). After the first `system/init` of each session the run is aborted if `init.model` does not contain `haiku` (`modelProblem` in `rails.ts`; the check is on what Claude Code reports, not on the option). A turn typed into a terminal has no `init`, so the model is read from the assistant messages it saved. Before the first prompt the run prints what the model list says about Haiku and effort levels; whether `claude` ignores `effort` on Haiku is unverified.
+3. **Budget.** `Budget` (`rails.ts`) counts `result` messages, per scenario and for the run (default 25). A turn is reserved before its prompt is sent, so a prompt that does not fit is not sent; a `result` nobody reserved (what `/goal` and `/loop` start by themselves) is counted as it arrives; turns typed into a terminal are counted when sent. The moment the cap is reached the run stops: sessions are closed and their process groups killed. Scenarios are ordered so that the issue's A2 rows come first; what does not fit says NOT RUN (budget). Each query also sets `maxTurns` and `maxBudgetUsd` of its own.
+4. **Tools.** `canUseTool` is `decideTool` (`rails.ts`): every `mcp__*` tool is denied, always, even if a policy lists it; Read, Write and Edit are allowed only where the real path of `file_path` is inside the throwaway folder (symlinks and `..` resolved); `ExitPlanMode`, the cron tools, `TodoWrite` and the subagent tool are allowed only in the scenario that needs them; one fixed Bash command is allowed, exactly, in the background-task check. The permission mode is `default` (never `acceptEdits` or `bypassPermissions`; `plan` in the plan check; the terminal part answers its dialogs by keystroke only when the dialog names the file the check asked about). Because an allow rule in the owner's settings skips `canUseTool`, the settings are also read (read-only; `settingsRisk`): an allow rule that could cover Bash or an MCP tool is reported **by category only** (the rule text is never printed), the same rule is added to `disallowedTools`, and a broad Bash rule means the background-task check does not use Bash. A settings file that is not valid JSON ends the run before the first query. Also `disallowedTools` (`mcp__*` in three spellings, Bash, WebFetch, WebSearch, NotebookEdit), `strictMcpConfig`, and `disableClaudeAiConnectors` in the session's `settings` overlay (never the owner's file) keep the claude.ai connectors from loading. How `claude` reads the `mcp__*` patterns is unverified; the layers do not depend on it.
+5. **No autonomous turns left running.** `/goal` uses a goal the first reply meets; `/loop` is interrupted and its session closed after its first iteration. Every `claude` the run starts is spawned by the script itself (`spawnClaudeCodeProcess`), in its own process group (`detached`), and its ID is recorded; at the end the groups are killed, and anything left (the recorded IDs, and any process whose working folder is inside the throwaway folder, found with `lsof`) is killed and reported.
+6. **Throwaway folder.** `<system temp>/kb-livecheck-<run id>/work`, made for the run, removed at the end. File edits happen there.
+7. **Terminal.** The TUI part runs on its own tmux server, `tmux -L kb-livecheck-<run id>`, with no config file, never `k-bench`; it is killed (and its socket file removed) when the visit ends, on abort and on Ctrl-C. Every wait polls the pane for text and has a timeout; a menu that does not appear is NOT PROVOKED, not a hang.
+8. **Settings untouched.** `settings.json` and `settings.local.json` of Claude Code's folder are hashed before and after (`fileFingerprint`); if either differs the run FAILS loudly and says so at the top of `results.md`.
+9. **Cleanup by provenance, no globs** (`provenance.ts`). Only: the one `projects/<folder>` derived from the throwaway folder's path (Claude Code's own rule, every character but letters and digits becomes `-`; asserted to be a direct child of `projects/` and to contain this run's ID); plan files `ExitPlanMode` named during the run, and plan files made after the run started whose content mentions the throwaway folder; and `file-history/<id>` and `session-env/<id>` of the conversation IDs this run saw. What was removed is printed (and, as a label, in `results.md`). What the run cannot clean: Claude Code also writes to its own global files (a project entry for the throwaway folder in `~/.claude.json`, and the prompts typed in the terminal in `history.jsonl`); those are the owner's to tidy, and the folder in them no longer exists.
+10. **Redaction.** `scripts/redaction.ts` (shared with the fixture recorder) takes out folders, the home folder, `/Users/<name>`, emails and signatures; `privacy.ts` adds the run's paths, tailnet names, API keys and plan names, drops hook output, and then runs the screenshot scrubber's `findPrivate` (this machine's user name, home folder and host name, emails, tailnet names, Claude plan names). A file that still looks private is **not written**, and the message names the kinds found, never the text.
+
+The environment `claude` gets is the owner's own, without the variables of a Claude Code session the script was started from (`CLAUDE_*`, `CLAUDECODE`), except the login's (`CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_*`), `CLAUDE_CONFIG_DIR` is set only in `--fake` (to a temp folder); with the real `claude` the owner's own value, or none, reaches it, as it does the shipped runtime, and the script only reads, hashes and cleans up in the folder that names.
+
+## Driving the terminal: never Enter on a default
+
+The first real run pressed Enter on the folder-trust question, whose **default option is "No, exit"** (the second is "Yes, I trust this folder"), and the terminal quit, so every terminal check came out NOT PROVOKED. Since then no dialog is answered by pressing Enter blindly (`scripts/live-check/screen.ts`): on the trust question the script moves the cursor (`❯`) with Down and presses Enter only once the cursor is on "Yes, I trust this folder"; on the write-permission dialog (read from a real TUI, claude 2.1.328: `Do you want to overwrite story.txt?`, `❯ 1. Yes`, `2. Yes, and switch to accept edits ...`, `3. No`, footer `Esc to cancel · Tab to amend`) it allows with Enter only while the cursor is on exactly `1. Yes` (never option 2, which switches the session to accept edits) and denies with a reply as the real TUI does it, one step at a time and each step looked at again: Down, Down (cursor on `3. No`), Tab (the row becomes `3. No, and tell Claude what to do differently`), the reply typed (the row must show it), Enter; it refuses a dialog that does not name the file it asked about, and any step the screen does not confirm ends the attempt as NOT PROVOKED; in the `/rewind` menus Enter is pressed only on the line it chose. `fake-claude.sh` also draws that write dialog with the same Tab-to-amend behaviour (`FakeClaude.requireDialogs()`, always on in `--fake`), so `--fake` runs the whole sequence and `deny-reply` passes there from the saved transcript (the denial's tool result compared with `DENIED_WITH_REPLY` plus the reply; confirmed against a real TUI by hand). It asks the same trust question with the same default when a test calls `FakeClaude.requireTrust()` (a `--fake` run always does), so `--fake-break trust-enter`, which presses Enter blindly, shows the terminal quitting and the checks saying NOT PROVOKED. `test/live-check-terminal.test.ts` shows both in a real tmux.
+
+## A settings change is named by scenario and key, never by value
+
+The script keeps the text of `settings.json` and `settings.local.json` in memory (never written) and looks at them after each scenario. A change is reported as the scenario it happened in and the **key paths** that changed (`modelSettings.some-model`, never a value), on the terminal, in `results.md`, and as a run-level FAIL (exit 1): _another running Claude Code may be the cause_ (the owner's own sessions rewrite these files to save defaults, say) as well as a per-session option of the run. The `advisor` check fails only for a change in its own scenario. `--fake-break settings` shows it (the fake's `/advisor` writes the file during `baseline`). The final byte comparison is kept too, for a change no scenario saw.
+
+## Probes that settle what a recording could not
+
+- **`at-path`** tries a path with a space three ways, each with its own file and a model that may not read files: verbatim (`@my note.txt`, what `insertMention` emits today), quoted (`@"my quoted note.txt"`) and backslash-escaped (`@my\ escaped\ note.txt`), and says in the verdict which spelling is expanded without a tool call, so which one `web/src/agent/fileMentions.ts` `insertMention` should emit.
+- **`open-in-web-anchors`**, once the terminal's `/compact` is done, lists the shape of the saved chain's first messages (type, subtype, role, what the content is made of, which flags such as `isCompactSummary` are present, the other field names; never a text), so the compaction heuristic in `src/agent-runtime/terminal-import.ts` can be set from evidence.
+
+A prompt ends at its `command_lifecycle` `completed` (or `cancelled`), not at a `result`: a prompt folded into a running turn shares that turn's `result`, and a finished background task can start a turn nobody sent.
+
+## What it cannot do for you
+
+- The scenarios were written against the SDK's types, the earlier spike and the fake; the real `claude` has not run them. The terminal's menus (`/rewind`, the permission dialog's "tell Claude what to do differently", the trust question, the Shift+Tab footer labels) are matched by text that is a best guess, and every wait is bounded for that reason.
+- It cannot provoke a usage limit, an API retry, MCP activity or the folder-trust warning on purpose; those stay marked "from SDK types" in [Test seams](test-seams.md).
+- Fake mode shows the rails and the evaluators work; it says nothing about `claude`.
+
+See also [Test seams](test-seams.md) (the fake Claude and how its messages were recorded) and the parity checklist's [live check section](../claude-agent-parity.md).
+
+## Live check results (claude 2.1.328, Haiku, 2026-11-19)
+
+The first full real run of the final script (29 of 40 turns) and the offline replays after it, against the Agent SDK 0.3.325.
+
+**Confirmed on a real `claude`:**
+
+- the user's plugins appear in the first `init`; the subscription login passes `subscriptionProblem()`
+- plan approval reaches `canUseTool`; Focus view (`settings.viewMode`) reads as `init.view_mode: focus`; `--advisor` is per-session, `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` turns it off, the settings files untouched
+- Open in terminal and back (one conversation, `claude --resume`), and the terminal's `/rewind` restoring a file the Agent edited
+- `/clear` (the new session ID first appears on the next turn's `init`), `/goal`, `/loop`, `/compact`
+- `@path` is expanded; a path with a space only when **quoted** (`@"my file.txt"`), which is what the picker now inserts
+- a typed command's reply is an assistant message of model `<synthetic>` (`local_command_source`), the unavailable-command wording and carrier, and `/model` followed by an `init`
+- a message sent during a tool-using turn is folded into the running turn, and every "(queued)" signal came
+- context-left is in tokens; `terminal_slash_commands` first appears on a turn's `init`
+- the deny-with-reply wording is identical to `DENIED_WITH_REPLY` (by hand on the TUI, and from the saved transcript)
+- the permission-mode cycle is manual, accept edits, plan, auto (auto only where the model supports it), and k-bench's matches it
+- Open in web after a terminal `/compact`: the saved chain starts with a system boundary and holds the summary marked `isCompactSummary`; the import now says the terminal compacted and shows the summary as Claude's own
+- the Agent tool launches a subagent asynchronously (backgrounded, in `background_tasks_changed`, ended by `task_notification`); `TaskTracker` agrees with the messages at every `result`
+- the run's rails held: Haiku asserted on every `init`, the budget stopped it, nothing left running
+
+**Still unverified:**
+
+- a subagent that blocks its turn (`is_backgrounded: false`), and `stopTask` on a task that is still running (the run's tasks session was stopped by its budget before it was tried; the scenario now has room, and says NOT PROVOKED when the task has ended)
+- `TodoWrite`, which the model did not call
+- the folder-trust warning's shape, a usage limit, an API retry and MCP activity (costly or unsafe to provoke on purpose; they stay "from SDK types" in [Test seams](test-seams.md))
+- the `deny-list` rail, which only `--fake` exercises

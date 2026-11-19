@@ -106,18 +106,11 @@ test("a typed command's reply shows in the conversation, and /model changes the 
   await input.press("Enter");
   await expect(
     conversation.getByRole("article", { name: "Command output" }),
-  ).toContainText("Set model to fake-opus");
+  ).toContainText("for this session only");
   await expect(header).toContainText("fake-opus");
 
   await input.fill("/compact");
-  fakeClaude.script([
-    {
-      system: {
-        subtype: "local_command_output",
-        content: "Compacted\nfrom 90k to 12k tokens",
-      },
-    },
-  ]);
+  fakeClaude.script([{ commandReply: "Compacted\nfrom 90k to 12k tokens" }]);
   await input.press("Enter");
   await expect(
     conversation.getByRole("article", { name: "Command output" }).last(),

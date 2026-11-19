@@ -29,12 +29,7 @@ test("what Claude Code says that k-bench can't show or answer becomes an Unsuppo
     { text: "Trying a few things." },
     { raw: { type: "mystery_kind", payload: { n: 42 } } },
     { elicit: { serverName: "docs", message: "Which workspace should I use?" } },
-    {
-      system: {
-        subtype: "local_command_output",
-        content: "/plugin isn't available in this environment.",
-      },
-    },
+    { commandReply: "/plugin isn't available in this environment." },
     { text: "That is all." },
   ]);
   await send("try things");

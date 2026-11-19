@@ -602,6 +602,8 @@ async function runStep(turn, step) {
     system(subtype, fields);
   } else if (step.elicit) {
     await runElicitation(step.elicit);
+  } else if (step.commandReply !== undefined) {
+    commandReply(step.commandReply);
   } else if (step.reset) {
     reset(turn);
   } else if (step.result) {
@@ -612,6 +614,52 @@ async function runStep(turn, step) {
     await new Promise(() => {});
   } else {
     throw new Error(`unknown script step: ${JSON.stringify(step)}`);
+  }
+}
+
+/**
+ * What a typed command prints, in the shape recorded from a real Claude Code (the live check,
+ * #161): an assistant message of model `<synthetic>` holding the output, with the same text
+ * wrapped in `<local-command-stdout>` as `local_command_source`, and then the echo of the typed
+ * command as its own markup (when the SDK asked for replayed messages).
+ */
+function commandReply(output) {
+  send({
+    type: "assistant",
+    message: {
+      id: randomUUID(),
+      type: "message",
+      role: "assistant",
+      model: "<synthetic>",
+      content: [{ type: "text", text: output }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 0, output_tokens: 0 },
+    },
+    parent_tool_use_id: null,
+    local_command_source: `<local-command-stdout>${output}</local-command-stdout>`,
+    session_id: sessionId,
+    uuid: randomUUID(),
+  });
+  const prompt = currentPrompt;
+  if (
+    prompt?.uuid &&
+    hasFlag("replay-user-messages") &&
+    /^\/\S+/.test(promptText(prompt))
+  ) {
+    const [, name = "", args = ""] =
+      /^\/(\S+)\s*([\s\S]*)$/.exec(promptText(prompt)) ?? [];
+    send({
+      type: "user",
+      message: {
+        role: "user",
+        content: `<command-name>/${name}</command-name>\n            <command-message>${name}</command-message>\n            <command-args>${args}</command-args>`,
+      },
+      parent_tool_use_id: null,
+      isReplay: true,
+      session_id: sessionId,
+      uuid: prompt.uuid,
+    });
   }
 }
 
@@ -630,7 +678,10 @@ function saveConversation() {
   writeFileSync(join(conversations, sessionId), "");
 }
 
+let currentPrompt;
+
 async function runTurn(prompt, scripted) {
+  currentPrompt = prompt;
   const config = readConfig();
   const turn = newTurn(prompt);
   sessionState("running");
@@ -655,10 +706,15 @@ async function runTurn(prompt, scripted) {
   }
   const clearing = isClear(prompt);
   // `/model <name>` is Claude Code's own: it takes effect at once, so this turn's `init` (and
-  // every later one) names the new model. It has not been recorded against the real Claude
-  // Code whether its `init` follows the change that early; docs/internals/agent.md says so.
+  // every later one) names the new model: recorded from a real Claude Code (the live check, #161).
   const switchedTo = /^\/model\s+(\S+)/.exec(text)?.[1];
   if (switchedTo) modelSwitched = switchedTo;
+  // A typed command that answers with its own output is echoed as its markup, not as typed.
+  const commandEcho =
+    /^\/\S+/.test(text) &&
+    Boolean(
+      switchedTo || scripted?.steps?.some((step) => step.commandReply !== undefined),
+    );
   if (!clearing) {
     sendInit(config);
     startOfTurn();
@@ -670,7 +726,7 @@ async function runTurn(prompt, scripted) {
       });
     }
   }
-  if (prompt?.uuid && hasFlag("replay-user-messages") && !clearing) {
+  if (prompt?.uuid && hasFlag("replay-user-messages") && !clearing && !commandEcho) {
     send(make(fixture.userEcho, { uuid: prompt.uuid, message: prompt.message }));
   }
   let result = { ...fixture.resultSuccess };
@@ -683,14 +739,7 @@ async function runTurn(prompt, scripted) {
       const steps =
         scripted?.steps ??
         (switchedTo
-          ? [
-              {
-                system: {
-                  subtype: "local_command_output",
-                  content: `Set model to ${switchedTo}`,
-                },
-              },
-            ]
+          ? [{ commandReply: `Set model to \`${switchedTo}\` for this session only` }]
           : [{ text: `fake claude heard: ${text}` }]);
       for (const step of steps) await runStep(turn, step);
       mark();
@@ -795,6 +844,10 @@ function onControlRequest(message) {
         current_permission_mode: permissionMode,
         pid: process.pid,
       });
+      // The models list says which support `auto` mode (all do, unless the test says not).
+      if (config.autoMode === false) {
+        for (const entry of reply.models ?? []) entry.supportsAutoMode = false;
+      }
       respond(message.request_id, reply);
       break;
     }
@@ -820,6 +873,18 @@ function onControlRequest(message) {
       if (busy) interrupted = true;
       break;
     case "set_permission_mode":
+      // `refuseAutoMode` in the config: Claude Code refuses `auto` (the owner's settings can).
+      if (request.mode === "auto" && config.refuseAutoMode === true) {
+        send({
+          type: "control_response",
+          response: {
+            subtype: "error",
+            request_id: message.request_id,
+            error: "auto mode is not available",
+          },
+        });
+        break;
+      }
       permissionMode = request.mode;
       respond(message.request_id, {});
       break;

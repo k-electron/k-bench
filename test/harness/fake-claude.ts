@@ -120,6 +120,12 @@ export type FakeStep =
    * the turn waits for the SDK's answer, which `received()` then holds as a `control_response`.
    */
   | { elicit: { serverName?: string; message?: string; requestedSchema?: object } }
+  /**
+   * What a typed command prints (`/model`, `/plugin`, `/compact`), as a real Claude Code sends it
+   * (the live check, #161): an assistant message of model `<synthetic>` carrying the output as
+   * `local_command_source`, then the echo of the command as its own markup.
+   */
+  | { commandReply: string }
   /** `/clear`: the conversation resets and the next `init` carries a new session id. */
   | { reset: true }
   /** Changes fields of the turn's final `result` message (`is_error`, `subtype`, ...). */
@@ -145,6 +151,10 @@ export interface FakeClaudeConfig {
   contextUsage?: Record<string, unknown> | null;
   /** More fields for every `system/init`. */
   initFields?: Record<string, unknown>;
+  /** Whether the models it lists support `auto` mode (default true, as the recorded list says). */
+  autoMode?: boolean;
+  /** Whether it refuses a switch to `auto` (default false). */
+  refuseAutoMode?: boolean;
   /** Whether it sends `system/session_state_changed` (default true); false, as a Claude Code that does not. */
   sessionStateMessages?: boolean;
   /** How long it takes to notice it is being closed, before it records that and exits. */
@@ -263,6 +273,24 @@ export class FakeClaude {
         ? [{ uuid: entry.message.uuid, content: entry.message.message.content }]
         : [],
     );
+  }
+
+  /**
+   * Makes the terminal stand-in (`fake-claude.sh`) ask the folder-trust question before it is
+   * ready, as Claude Code does in a folder it has not seen: its default option is "No, exit",
+   * which quits it, so pressing Enter on the question as it first appears fails.
+   */
+  requireTrust(): void {
+    this.write(join(this.folder, "trust-required"), {});
+  }
+
+  /**
+   * Makes the terminal stand-in draw Claude Code's write-permission dialog for a prompt that
+   * starts "Use the Write tool to overwrite story.txt" (see `fake-claude.sh`), and write the
+   * file when it is allowed.
+   */
+  requireDialogs(): void {
+    this.write(join(this.folder, "permission-dialog"), {});
   }
 
   /** Waits for a received entry the check accepts, and returns it. */

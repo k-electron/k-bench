@@ -22,15 +22,24 @@ export function fileMention(text: string, caret: number): FileMention | undefine
 }
 
 /**
- * The text and caret once `path` is picked: the whole word becomes `@path` and a space, which
- * also closes the picker, and the caret goes after the space.
+ * How a mention spells `path`: `@path`, or `@"path"` when the path has whitespace in it. The live
+ * check (#161) found that Claude Code expands the quoted spelling and neither the verbatim
+ * `@my notes.md` (the mention ends at the space) nor the backslash-escaped one.
+ */
+export function mentionOf(path: string): string {
+  return /\s/.test(path) && !path.includes('"') ? `@"${path}"` : `@${path}`;
+}
+
+/**
+ * The text and caret once `path` is picked: the whole word becomes the mention and a space,
+ * which also closes the picker, and the caret goes after the space.
  */
 export function insertMention(
   text: string,
   mention: FileMention,
   path: string,
 ): { text: string; caret: number } {
-  const inserted = `@${path} `;
+  const inserted = `${mentionOf(path)} `;
   const after = text.slice(mention.end);
   // A space already follows the word: not another.
   const rest = after.startsWith(" ") ? after.slice(1) : after;

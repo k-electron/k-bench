@@ -73,9 +73,25 @@ export const assistantMessage = (content, extra = {}) => ({
   ...extra,
 });
 
-/** `/compact`: the chain starts again at a summary. */
+/**
+ * `/compact`, in the shape the live check found in a real terminal's saved chain (#161, kinds
+ * only): the chain starts again at a `compact_boundary` (a system message with no parent), then
+ * the summary (a user message marked `isCompactSummary` and `is_meta`), then the conversation's
+ * earlier messages, kept under the same IDs (so the prompts k-bench sent are still in it), then
+ * the command's own output (user messages marked `isCompletedLocalCommand`). Text is made up.
+ */
 export function compact(configDir, conversationId) {
-  const before = lastUuid(sessionFile(configDir, conversationId));
+  const file = sessionFile(configDir, conversationId);
+  const earlier = [];
+  try {
+    for (const line of readFileSync(file, "utf8").split("\n").filter(Boolean)) {
+      const entry = JSON.parse(line);
+      if (entry.type === "user" || entry.type === "assistant") earlier.push(entry);
+    }
+  } catch {
+    // Nothing saved yet.
+  }
+  const before = lastUuid(file);
   const boundary = appendMessage(
     configDir,
     conversationId,
@@ -89,17 +105,34 @@ export function compact(configDir, conversationId) {
     },
     { parent: null },
   );
-  appendMessage(
+  let previous = appendMessage(
     configDir,
     conversationId,
     userMessage(
       "This session is being continued from a previous conversation. Summary: fake.",
-      {
-        isCompactSummary: true,
-      },
+      { isCompactSummary: true, is_meta: true },
     ),
     { parent: boundary.uuid },
-  );
+  ).uuid;
+  for (const entry of earlier) {
+    previous = appendMessage(
+      configDir,
+      conversationId,
+      { type: entry.type, uuid: entry.uuid, message: entry.message },
+      { parent: previous },
+    ).uuid;
+  }
+  for (const text of [
+    "<local-command-caveat>Caveat: these messages were generated while running local commands.</local-command-caveat>",
+    "<local-command-stdout>Compacted</local-command-stdout>",
+  ]) {
+    previous = appendMessage(
+      configDir,
+      conversationId,
+      userMessage(text, { isCompletedLocalCommand: true }),
+      { parent: previous },
+    ).uuid;
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -113,5 +146,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
   } else if (command === "compact") {
     compact(configDir, conversationId);
+  } else if (command === "denied") {
+    // A permission denied with a reply, as Claude Code saves the tool's result (recorded by the
+    // live check, #161).
+    appendMessage(configDir, conversationId, {
+      type: "user",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu_stub",
+            is_error: true,
+            content: `The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\n${text}`,
+          },
+        ],
+      },
+    });
   }
 }

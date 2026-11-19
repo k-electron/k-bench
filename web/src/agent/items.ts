@@ -210,6 +210,18 @@ function commandOutputText(content: unknown): string {
   );
 }
 
+/**
+ * What was typed, for the echo of a prompt. Claude Code echoes a typed command as its own markup
+ * (`<command-name>/model</command-name>`, `<command-message>`, `<command-args>haiku</command-args>`),
+ * which reads as the command line `/model haiku`; any other text is as it is.
+ */
+function commandLineOf(text: string): string {
+  const name = /<command-name>\s*([^<]*?)\s*<\/command-name>/.exec(text)?.[1];
+  if (name === undefined) return text;
+  const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(text)?.[1]?.trim() ?? "";
+  return args === "" ? name : `${name} ${args}`;
+}
+
 /** A tool call as the builder holds it until its result arrives. */
 interface OpenTool {
   item: ToolItem;
@@ -402,6 +414,24 @@ function readSdkMessage(
       return;
     case "assistant": {
       const inner = isObject(message.message) ? message.message : {};
+      // A typed command's reply (`/model haiku`, `/plugin`) is, as the live check on a real
+      // Claude Code showed (#161), an assistant message of model `<synthetic>` that carries the
+      // command's own output, wrapped in `<local-command-stdout>`, as `local_command_source`.
+      // It is the command's output, not Claude's prose: a `⎿` line, or nothing when it says
+      // the command isn't available here (that is an Unsupported row already).
+      if (typeof message.local_command_source === "string") {
+        const text = commandOutputText(message.local_command_source);
+        const answeredUnsupported = unsupported.some((one) => one.what === "command");
+        if (text !== "" && !answeredUnsupported) {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
+        return;
+      }
       const seconds =
         typeof message.thinking_duration_ms === "number"
           ? Math.round(message.thinking_duration_ms / 1000)
@@ -474,10 +504,42 @@ function readSdkMessage(
             text,
           });
         }
+      } else if (/^<local-command-caveat>/.test(textOf(inner.content).trim())) {
+        // Claude Code's note to Claude about commands typed in a terminal: not anyone's words.
+      } else if (/^<local-command-std(?:out|err)>/.test(textOf(inner.content).trim())) {
+        // A command's output as a terminal's saved conversation holds it (a turn imported
+        // from the terminal, #156): a `⎿` line, unless it says the command isn't available here.
+        const text = commandOutputText(textOf(inner.content));
+        const answeredUnsupported = unsupported.some((one) => one.what === "command");
+        if (text !== "" && !answeredUnsupported) {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
+      } else if (
+        message.isCompletedLocalCommand === true &&
+        !textOf(inner.content).trimStart().startsWith("<command-name>")
+      ) {
+        // The output of a command run in the terminal, as its saved conversation holds it (a
+        // turn imported from the terminal, #156, such as `/compact`'s own): a `⎿` line.
+        const text = commandOutputText(textOf(inner.content));
+        if (text !== "") {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
+      } else if (message.is_meta === true) {
+        // Claude Code's own note, not anyone's words.
       } else if (message.isReplay === true) {
         // The echo of a prompt. k-bench's own was already shown from its `prompt` entry; one
         // that k-bench did not send (typed in the terminal, imported) is shown here.
-        const text = textOf(inner.content);
+        const text = commandLineOf(textOf(inner.content));
         const uuid = typeof message.uuid === "string" ? message.uuid : undefined;
         if (text.trim() !== "" && !(uuid && state.promptIds.has(uuid))) {
           state.items.push({
