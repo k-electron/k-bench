@@ -7,6 +7,7 @@ import {
   type LogEntry,
   nextPermissionMode,
   type PermissionMode,
+  type PermissionReply,
 } from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
 import { pageViewing } from "../pageViewing";
@@ -63,6 +64,8 @@ export interface AgentConversation {
    * the first prompt, and the folder then comes from the hello).
    */
   header: { version?: string; model?: string; folder?: string };
+  /** Whether Claude Code is in Focus view: the Transcript shows a tool call as one line. */
+  focusView: boolean;
   /**
    * The Allow/Deny asks open now, oldest first. Empty when the Session is over: nothing can
    * answer them then.
@@ -107,7 +110,7 @@ export interface AgentConversation {
    * applied: the ask ends, here and on every device, when its entry arrives, and an answer
    * that came second is ignored without a word.
    */
-  answer(requestId: string, decision: "allow" | "deny"): boolean;
+  answer(requestId: string, reply: PermissionReply): boolean;
   /**
    * Stops the turn that is running. False when nothing runs, when it could not be sent
    * (reconnecting: dropped, never queued), or when an interrupt is already on its way: a
@@ -235,8 +238,8 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   );
 
   const answer = useCallback(
-    (requestId: string, decision: "allow" | "deny") =>
-      connection.current?.send({ type: "answer", requestId, decision }) ?? false,
+    (requestId: string, reply: PermissionReply) =>
+      connection.current?.send({ type: "answer", requestId, ...reply }) ?? false,
     [],
   );
 
@@ -289,6 +292,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   const folder = info.cwd ?? hello?.folder;
   return {
     items,
+    focusView: info.focusView,
     header: {
       ...(hello ? { version: hello.claudeVersion } : {}),
       ...(info.model === undefined ? {} : { model: info.model }),

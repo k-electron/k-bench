@@ -154,6 +154,7 @@ const claude = new ClaudeSession(
       resume: args.mode === "resume" && log.hasPrompt(),
     },
     canUseTool: asks.canUseTool,
+    launch: args.launch,
   },
   {
     message(message) {
@@ -178,6 +179,9 @@ const claude = new ClaudeSession(
         void refreshContext();
       }
     },
+    elicitationDeclined(request) {
+      record({ kind: "declined", what: "elicitation", request: { ...request } });
+    },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";
       void finish(why.slice(0, 1000), 1);
@@ -201,7 +205,7 @@ async function command(message: AgentClientMessage): Promise<void> {
   } else if (message.type === "interrupt") {
     claude.interrupt();
   } else if (message.type === "answer") {
-    asks.answer(message.requestId, message.decision);
+    asks.answer(message.requestId, message);
   } else if (message.type === "set_permission_mode") {
     try {
       await claude.setPermissionMode(message.mode);

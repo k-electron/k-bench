@@ -22,7 +22,8 @@ test("a message's raw JSON is exactly what Claude Code sent, and the Raw switch 
 
   // `</>` on the reply shows the SDK message, not k-bench's log record around it.
   await conversation.getByText("all done").hover();
-  await conversation.getByRole("button", { name: "Show raw message" }).last().click();
+  // The prompt, the reply, then the Unsupported row the mystery message makes: the reply's.
+  await conversation.getByRole("button", { name: "Show raw message" }).nth(1).click();
   const raw = conversation.getByLabel("Raw message", { exact: true });
   await expect(raw).toBeVisible();
   const message = JSON.parse((await raw.textContent()) ?? "");

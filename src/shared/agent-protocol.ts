@@ -65,6 +65,19 @@ export type LogEntry =
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
   /**
+   * Something Claude Code asked of k-bench that the runtime declined, because a Claude Agent
+   * has no way to answer it (#153). The browser shows it as an Unsupported row where it
+   * happened. `request` is what Claude Code sent, as the SDK handed it over, so the log holds
+   * what was asked even for fields no row shows yet. A reader that does not know `what`
+   * shows nothing.
+   */
+  | (LogEntryBase & {
+      kind: "declined";
+      /** What was declined: `elicitation`, an MCP server asking the owner for input. */
+      what: "elicitation";
+      request: Record<string, unknown>;
+    })
+  /**
    * An Allow/Deny that Claude Code is waiting on: written when it asks, and open until a
    * `permission_answered` with the same `requestId` follows (see `openPermissionAsks`).
    * Every field of the SDK's `canUseTool` request that can be serialised is kept, because the
@@ -110,16 +123,27 @@ export type LogEntry =
     });
 
 /**
+ * The owner's reply to an ask, as a client sends it and as the log records it:
+ * - `allow`, with `alwaysAllow` for "Yes, don't ask again": Claude Code's own suggested rule
+ *   changes are saved with it. The log records it only when the runtime did apply them (the
+ *   ask had suggestions and did not suppress the choice), so the log says what happened.
+ * - `deny`, with `message` for "No, and tell Claude what to do differently": what the owner
+ *   wrote, which Claude reads as the reason.
+ */
+export type PermissionReply =
+  | { decision: "allow"; alwaysAllow?: true }
+  | { decision: "deny"; message?: string };
+
+/**
  * How an ask ended. `allow` and `deny` are the owner's answer, from whichever device came
  * first. The others were nobody's answer: `cancelled` is Claude Code withdrawing the ask (the
  * turn was interrupted, the tool call gone), and `interrupted` is the runtime ending, or
  * finding at its next start that the previous one ended, while the ask was open: it could
  * never be answered ("not answered, the Agent stopped"). Later tickets add fields to `allow`
- * and `deny` (#146, #147), never new meanings to a `decision`.
+ * and `deny` (#147), never new meanings to a `decision`.
  */
 export type PermissionAnswer =
-  | { decision: "allow" }
-  | { decision: "deny" }
+  | PermissionReply
   | { decision: "cancelled" }
   | { decision: "interrupted" };
 
@@ -409,13 +433,15 @@ export type AgentClientMessage =
    */
   | { type: "prompt"; id: string; text: string; images?: string[] }
   /**
-   * The owner's answer to an open ask. The runtime builds what Claude Code is sent from the
-   * ask it holds, so a client says only which: it can never change the tool's input or the
-   * rules to save. The first answer for a `requestId` wins; one for an ask that is no longer
-   * open (answered on another device, withdrawn, never asked) is ignored, with no error.
-   * What came of it arrives as the ask's `permission_answered` entry, to every device.
+   * The owner's answer to an open ask (see `PermissionReply`). The runtime builds what Claude
+   * Code is sent from the ask it holds, so a client says only which choice: it can never change
+   * the tool's input or the rules to save (`alwaysAllow` saves Claude Code's own suggestion,
+   * and only if the ask offered it). The first answer for a `requestId` wins; one for an ask
+   * that is no longer open (answered on another device, withdrawn, never asked) is ignored,
+   * with no error. What came of it arrives as the ask's `permission_answered` entry, to every
+   * device.
    */
-  | { type: "answer"; requestId: string; decision: "allow" | "deny" }
+  | ({ type: "answer"; requestId: string } & PermissionReply)
   /**
    * Switches Claude Code to this permission mode. A target, not a "next": two devices that
    * both tap at once ask for the same mode, and it is set once. Only the modes of
@@ -524,13 +550,39 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
           }
         : undefined;
     }
-    case "answer":
-      return typeof message.requestId === "string" &&
-        message.requestId !== "" &&
-        message.requestId.length <= MAX_REQUEST_ID_CHARACTERS &&
-        (message.decision === "allow" || message.decision === "deny")
-        ? { type: "answer", requestId: message.requestId, decision: message.decision }
-        : undefined;
+    case "answer": {
+      if (
+        typeof message.requestId !== "string" ||
+        message.requestId === "" ||
+        message.requestId.length > MAX_REQUEST_ID_CHARACTERS
+      ) {
+        return undefined;
+      }
+      const { requestId } = message;
+      if (message.decision === "allow") {
+        if (message.message !== undefined) return undefined;
+        if (message.alwaysAllow === undefined || message.alwaysAllow === false) {
+          return { type: "answer", requestId, decision: "allow" };
+        }
+        return message.alwaysAllow === true
+          ? { type: "answer", requestId, decision: "allow", alwaysAllow: true }
+          : undefined;
+      }
+      if (message.decision === "deny") {
+        if (message.alwaysAllow !== undefined) return undefined;
+        if (message.message === undefined) {
+          return { type: "answer", requestId, decision: "deny" };
+        }
+        if (typeof message.message !== "string") return undefined;
+        const reply = message.message.trim();
+        if (reply.length > MAX_PROMPT_CHARACTERS) return undefined;
+        // An empty reply is a plain "No".
+        return reply === ""
+          ? { type: "answer", requestId, decision: "deny" }
+          : { type: "answer", requestId, decision: "deny", message: reply };
+      }
+      return undefined;
+    }
     case "set_permission_mode":
       return isPermissionMode(message.mode) &&
         PERMISSION_MODE_CYCLE.includes(message.mode)

@@ -1,13 +1,17 @@
 import {
   type CanUseTool,
+  type EffortLevel,
+  type ElicitationRequest,
   type PermissionMode,
   type Query,
   query,
   type SDKMessage,
   type SDKUserMessage,
+  type Settings,
 } from "@anthropic-ai/claude-agent-sdk";
 
 import type { AgentContextUsage } from "../shared/agent-protocol.ts";
+import type { LaunchOptions } from "../shared/launch-options.ts";
 
 /** What a `ClaudeSession` tells the runtime about Claude Code. */
 export interface SessionHandlers {
@@ -15,6 +19,12 @@ export interface SessionHandlers {
   message(message: SDKMessage): void;
   /** Claude Code's output ended: it exited, or the SDK failed. `error` is why, if it failed. */
   ended(error: unknown): void;
+  /**
+   * An MCP server asked the owner for input (an elicitation) and the session declined for
+   * them: a Claude Agent has nowhere to show the question (#153). Called before the answer
+   * goes to Claude Code.
+   */
+  elicitationDeclined(request: ElicitationRequest): void;
 }
 
 /** What `ClaudeSession` needs to start Claude Code. */
@@ -32,6 +42,44 @@ export interface SessionOptions {
    * `defer`): see `PermissionAsks`.
    */
   canUseTool: CanUseTool;
+  /** The Session's Launch options: fixed for its life, and passed again at every start. */
+  launch: LaunchOptions;
+}
+
+/**
+ * Launch options as the SDK passes them to Claude Code. Default adds nothing, so the owner's
+ * own configuration applies. Everything here is for this launch only and leaves the owner's
+ * settings files alone (`settings` is a flag-tier overlay):
+ * - Advisor is `--advisor <model>`, **never** the `/advisor <model>` command, which would
+ *   overwrite the owner's saved default. Off is `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`, as for
+ *   Claude TUI: leaving the flag out is not enough when the owner's settings turn it on.
+ * - Focus view is `settings: {viewMode: "focus"}`; Claude Code reports it in each turn's
+ *   `system/init` (`view_mode`), which is what the Transcript reads.
+ */
+export function sdkLaunchOptions(launch: LaunchOptions): {
+  model?: string;
+  effort?: EffortLevel;
+  extraArgs: Record<string, string | null>;
+  env: Record<string, string | undefined>;
+  settings?: Settings;
+} {
+  const { model, effort, advisor, focusView } = launch;
+  return {
+    ...(model === "default" ? {} : { model }),
+    ...(effort === "default" ? {} : { effort }),
+    extraArgs: {
+      "replay-user-messages": null,
+      ...(advisor === "default" || advisor === "off" ? {} : { advisor }),
+    },
+    // The owner's own environment, plus a request that Claude Code report when a turn
+    // starts and ends (`session_state_changed`), which `Activity` believes when it comes.
+    env: {
+      ...process.env,
+      CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1",
+      ...(advisor === "off" ? { CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" } : {}),
+    },
+    ...(focusView ? { settings: { viewMode: "focus" } } : {}),
+  };
 }
 
 /** The messages for Claude Code, as the SDK's streaming input takes them. */
@@ -76,7 +124,7 @@ export class ClaudeSession {
   private readonly query: Query;
 
   constructor(options: SessionOptions, handlers: SessionHandlers) {
-    const { claude, folder, conversation, canUseTool } = options;
+    const { claude, folder, conversation, canUseTool, launch } = options;
     const claudeQuery = query({
       prompt: this.prompts,
       options: {
@@ -85,11 +133,14 @@ export class ClaudeSession {
         systemPrompt: { type: "preset", preset: "claude_code" },
         includePartialMessages: true,
         enableFileCheckpointing: true,
-        extraArgs: { "replay-user-messages": null },
         canUseTool,
-        // The owner's own environment, plus a request that Claude Code report when a turn
-        // starts and ends (`session_state_changed`), which `Activity` believes when it comes.
-        env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1" },
+        // Left unset, the SDK declines an elicitation by itself and the runtime never hears of
+        // it. Set, the same decline is recorded, so the Transcript can say what was asked.
+        onElicitation: async (request) => {
+          handlers.elicitationDeclined(request);
+          return { action: "decline" };
+        },
+        ...sdkLaunchOptions(launch),
         ...(conversation.resume
           ? { resume: conversation.id }
           : { sessionId: conversation.id }),

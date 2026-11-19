@@ -5,10 +5,14 @@ import { PermissionPrompt } from "./PermissionPrompt";
 
 /**
  * What takes the input's place under the conversation. Normally it is the input box; while
- * Claude is waiting on an ask, the ask's card takes over (ticket #135: a bare Allow/Deny;
- * #146 and #147 give it Claude Code's panels). The input stays mounted, only hidden, so what
- * was typed before the ask came is still there when it goes, and the box takes the keyboard
- * back.
+ * Claude is waiting on an ask, the ask's panel takes over. The input stays mounted, only
+ * hidden, so what was typed before the ask came is still there when it goes, and the box
+ * takes the keyboard back.
+ *
+ * The panel is chosen by the ask: today every ask is a permission ask (`PermissionPrompt`);
+ * #147 gives AskUserQuestion and plan approval their own panels here, chosen by `toolName`,
+ * built from the same `AskPanel` parts. Keyed by the ask, so a panel's own state (a reply
+ * half typed) is never carried over to the next ask.
  */
 export function PromptDock({
   sessionId,
@@ -24,7 +28,9 @@ export function PromptDock({
     <>
       {ask && (
         <PermissionPrompt
+          key={ask.requestId}
           ask={ask}
+          cwd={conversation.header.folder}
           more={rest.length}
           offline={conversation.reconnecting}
           onAnswer={conversation.answer}
