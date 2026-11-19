@@ -13,6 +13,17 @@ export interface DirectoryListing {
   directories: Array<{ name: string; path: string }>;
 }
 
+/** One kind on the running list of unsupported kinds. */
+export interface UnsupportedListEntry {
+  /** `what:name`, from `unsupportedKind` in `agent/unsupported.ts`. */
+  kind: string;
+  count: number;
+  /** When the latest happened, in ms since the epoch. */
+  lastAt: number;
+  /** The Session it last happened in; it may have been deleted since. */
+  sessionId: string;
+}
+
 export class ApiError extends Error {
   /** The HTTP status the server answered with. */
   readonly status: number;
@@ -110,6 +121,22 @@ export const api = {
   /** Stores an image (base64, inside JSON) for a Claude Agent's next prompt; answers its name. */
   uploadAgentImage: (sessionId: string, image: { mediaType: string; data: string }) =>
     send<{ name: string }>("POST", `/api/sessions/${sessionId}/agent/images`, image),
+  /** The running list of unsupported kinds (#154), latest first. */
+  unsupportedList: async () =>
+    (await get<{ entries: UnsupportedListEntry[] }>("/api/unsupported")).entries,
+  /**
+   * Reports one occurrence of an unsupported kind. `occurrenceId` is the same from every device
+   * that sees it, so the server counts it once; `at` is when it happened (ms since the epoch).
+   */
+  reportUnsupported: (report: {
+    kind: string;
+    sessionId: string;
+    occurrenceId: string;
+    at?: number;
+  }) => send<void>("POST", "/api/unsupported", report),
+  /** Removes a kind from the list; it returns if it happens again. */
+  clearUnsupported: (kind: string) =>
+    send<void>("DELETE", `/api/unsupported/${encodeURIComponent(kind)}`),
   restartSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
 };

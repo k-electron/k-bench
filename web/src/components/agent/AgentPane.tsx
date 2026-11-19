@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { contextLeftPercent, currentActivity } from "@/agent/activity";
+import { useReportUnsupported } from "@/agent/reportUnsupported";
 import { useAgentConversation } from "@/agent/useAgentConversation";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
 import { AgentHeader } from "./AgentHeader";
@@ -29,6 +30,7 @@ export function AgentPane({
   const atBottom = useRef(true);
   const { items, entries } = conversation;
   const rawView = useRawView();
+  useReportUnsupported(session.id, items, entries);
   const sentinel = useScrollBack({
     scroller,
     earliestSeq: conversation.earliestSeq,

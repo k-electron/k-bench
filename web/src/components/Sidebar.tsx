@@ -13,6 +13,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { TriangleAlertIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
@@ -23,6 +24,8 @@ import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { SessionRow } from "./SessionRow";
+import { UnsupportedListDialog } from "./UnsupportedListDialog";
+import { Button } from "./ui/button";
 import { WorkspaceRow } from "./WorkspaceRow";
 
 interface SidebarProps {
@@ -57,6 +60,7 @@ export function Sidebar({
 }: SidebarProps) {
   const actions = useActions();
   const [creating, setCreating] = useState<WorkspaceState>();
+  const [showUnsupported, setShowUnsupported] = useState(false);
   const [dialog, setDialog] = useState<{
     workspace: WorkspaceState;
     action: WorkspaceEdit | "delete";
@@ -144,6 +148,25 @@ export function Sidebar({
         <p role="alert" className="px-2 text-sm text-destructive">
           {error}
         </p>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mt-auto justify-start text-muted-foreground"
+        onClick={() => setShowUnsupported(true)}
+      >
+        <TriangleAlertIcon />
+        Unsupported
+      </Button>
+      {showUnsupported && (
+        <UnsupportedListDialog
+          state={state}
+          onOpenSession={(id) => {
+            setShowUnsupported(false);
+            onOpen(id);
+          }}
+          onClose={() => setShowUnsupported(false)}
+        />
       )}
     </nav>
   );

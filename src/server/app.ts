@@ -170,6 +170,24 @@ export function createApp(
     });
   });
 
+  // The running list of unsupported kinds (#154). A kind holds `:` and `/`, so it travels
+  // URL-encoded in the path.
+  app.get("/api/unsupported", (c) => c.json({ entries: service.listUnsupported() }));
+  app.post("/api/unsupported", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    service.reportUnsupported({
+      kind: body.kind,
+      sessionId: body.sessionId,
+      occurrenceId: body.occurrenceId,
+      at: body.at,
+    });
+    return c.body(null, 204);
+  });
+  app.delete("/api/unsupported/:kind", (c) => {
+    service.clearUnsupported(c.req.param("kind"));
+    return c.body(null, 204);
+  });
+
   app.get("/api/new-session/last", (c) => c.json(service.lastNewSession()));
 
   app.patch("/api/sessions/:id", async (c) => {
