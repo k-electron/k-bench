@@ -153,6 +153,16 @@ The browser (`web/src/agentState.ts`) turns that into the four things shown: the
 - **Restart** (`restartSession`, the same call from the row menu and the Stopped Pane): a new runtime on the same log, `mode: "resume"` with the stored conversation ID and Launch options (or `start` if no prompt was ever sent: `--resume` fails for a conversation Claude Code never saved). The runtime closes any ask a killed predecessor left open at its start.
 - **The folder reconciler**: `startServer` deletes every `agents/<id>` with no Session row, once, after killing orphan tmux sessions.
 
+## Open in terminal
+
+Ticket #155. `POST /api/sessions/:id/open-in-terminal` (`Service.openInTerminal`) switches **the same Session** from Claude Agent to Claude TUI; the web's conversation stays Claude's one conversation (ADR-0008).
+
+- **The server** shuts the runtime down as Stop does (`AgentRuntimes.shutdown`: clean, killed after four seconds; a Stopped Agent has none), **then** reads the Session again, sets `sessions.interface` to `tui` and calls `startStopped`, the code that restarts a Claude TUI: `claude --resume <conversation ID>` with every stored Launch option, falling back to `--session-id` only when the conversation was never saved. **Two orderings are load-bearing.** The conversation ID is read after the shutdown, because `/clear` (#151) changes it until the runtime has ended, so #151 must write the new ID to the store before the runtime exits. The interface flips only once the runtime's tmux session is gone: while it is `tui` and that session still exists, `hasRunningShell` would let a terminal attach to the hidden runtime (ADR-0007). If the terminal cannot start, the interface goes back to `agent` and the Session is a Stopped Agent. The same in-flight map as Restart means a double tap, or another device's Restart, shares one transition.
+- **What stays.** The Agent's folder (log, images) stays after the switch; it is what Open in web (#156) resumes from. Deleting the Session removes it for any Claude Session, not only a current Agent. The store's `interface` is "the interface last used", so Restart after a Host restart resumes in it with no further code: `startStopped` already branches on it.
+- **Every device follows** because the snapshot's `interface` changes: `Pane` renders `TerminalView` (so Extra keys and Smart typing come with it), and the agent WebSocket of a device still showing the Agent closes with 4410. Per-device drafts are in the browser's storage and are kept.
+- **The confirm is the browser's** (`web/src/useOpenInTerminal.tsx`, `agent/whatWouldStop.ts`, `OpenInTerminalDialog`), from the state it already has: Working, Waiting for you, and each of `agent.tasks` (listed). Idle with nothing running, Stopped, and an Agent not yet heard from go straight through. The one hook serves the row menu (`SessionRow`), the top bar (`PaneLabels`, a button beside the label's note, an icon on a phone) and Unsupported rows (a context from `AgentPane`).
+- **Rewind.** Nothing to build: file checkpointing is on from the first launch, so the terminal's `/rewind` can restore code the Agent edited (to be confirmed by the live check, #161).
+
 ## Long conversations
 
 A page opens on the latest turns, not the whole log, and the owner scrolls up for the rest (#141).
@@ -273,7 +283,7 @@ The conversation in Claude TUI's shape ([#136](https://github.com/k-electron/k-b
 
 ### Unsupported rows
 
-Whatever a Claude Agent meets that k-bench can't show or answer becomes an `unsupported` item where it happened (#153): `⚠ Unsupported.`, what Claude tried in plain words, and an `Open raw view` button (`UnsupportedRow`, calling `useShowRaw()(item.seq)`). It raises no Bell: only a turn's end and an ask do, in the runtime. Open in terminal joins the row in #155.
+Whatever a Claude Agent meets that k-bench can't show or answer becomes an `unsupported` item where it happened (#153): `⚠ Unsupported.`, what Claude tried in plain words, and an `Open raw view` button (`UnsupportedRow`, calling `useShowRaw()(item.seq)`). It raises no Bell: only a turn's end and an ask do, in the runtime. The row also has Open in terminal (`OpenInTerminalProvider`, [below](#open-in-terminal)).
 
 - **What counts, and where it is found** (`web/src/agent/unsupported.ts`, pure; `buildItems` makes the items). An item has `what`, `name` and `summary`, and **`unsupportedKind(item)` is `what:name`**, the string the running list (below) counts by (the same thing again is the same kind, in any Session):
   - `message:<type>`, `system:<subtype>` and `block:<type>`: a top-level message type, a `system` subtype or a content block type that is in none of the tables in that file. The tables are what the browser **recognises**: a kind a later ticket starts to show (#148, #149, #152) stays in its table, because recognised is not the same as shown. They hold every message of the SDK this was built against, so the news is a newer Claude Code growing something. A subagent's unknown message counts too.

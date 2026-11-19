@@ -1,4 +1,6 @@
+import { TerminalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOpenInTerminal } from "@/useOpenInTerminal";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
 import {
   AGENT_STATE_LABEL,
@@ -9,6 +11,7 @@ import {
 } from "../agentState";
 import { paneColumns } from "../layout";
 import type { PaneView } from "../usePaneView";
+import { Button } from "./ui/button";
 
 const STATE_GLYPH: Record<AgentDisplayState, string> = {
   idle: "●",
@@ -49,6 +52,26 @@ function AgentStateLabel({ session }: { session: SessionState }) {
   );
 }
 
+/** Open in terminal for the Claude Agent in a Pane: an icon on a phone, with its words beside it on a desktop. */
+function OpenInTerminalButton({ session }: { session: SessionState }) {
+  const { open, dialog } = useOpenInTerminal(session);
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="shrink-0"
+        aria-label="Open in terminal"
+        onClick={open}
+      >
+        <TerminalIcon />
+        <span className="hidden md:inline">Open in terminal</span>
+      </Button>
+      {dialog}
+    </>
+  );
+}
+
 interface PaneLabelsProps {
   panes: PaneView[];
   paneCount: 1 | 2;
@@ -67,15 +90,24 @@ export function PaneLabels({ panes, paneCount, ratio, className }: PaneLabelsPro
   const [first, second] = panes;
   const label = (index: number, { content, focused }: PaneView) => {
     if (content.kind !== "session") return <div />;
+    // The button is beside the note, not in it: the note is just the label's text.
     return (
-      <div
-        role="note"
-        aria-label={`Pane ${index + 1} label`}
-        className={cn("max-w-2/3 truncate px-2 text-sm", two && !focused && "opacity-50")}
-      >
-        <span className="text-muted-foreground">{content.workspace} ›</span>{" "}
-        <span>{content.session.name}</span>
-        <AgentStateLabel session={content.session} />
+      <div className="flex min-w-0 items-center">
+        <div
+          role="note"
+          aria-label={`Pane ${index + 1} label`}
+          className={cn(
+            "min-w-0 max-w-2/3 truncate px-2 text-sm",
+            two && !focused && "opacity-50",
+          )}
+        >
+          <span className="text-muted-foreground">{content.workspace} ›</span>{" "}
+          <span>{content.session.name}</span>
+          <AgentStateLabel session={content.session} />
+        </div>
+        {content.session.interface === "agent" && (
+          <OpenInTerminalButton session={content.session} />
+        )}
       </div>
     );
   };

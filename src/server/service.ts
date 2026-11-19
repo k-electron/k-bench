@@ -135,7 +135,8 @@ export class Service {
     if (failed) throw failed.reason;
     this.store.deleteWorkspace(id);
     for (const session of sessions) {
-      if (session.interface === "agent") this.agents.removeFolder(session.id);
+      // A Claude Session that was an Agent once keeps its folder in the terminal too.
+      if (session.kind === "claude") this.agents.removeFolder(session.id);
     }
   }
 
@@ -360,6 +361,51 @@ export class Service {
     return { id: session.id, name: session.name };
   }
 
+  /**
+   * Switches a Claude Agent to a Claude TUI, in the same Session: the runtime is shut down
+   * cleanly (a Stopped Agent has none), then Claude Code starts in the terminal on the same
+   * conversation with the same Launch options, exactly as a Claude TUI restarts. Every
+   * device follows, because the state says the Session is in the terminal now. The Agent's
+   * folder stays: its log is what Open in web resumes from.
+   */
+  async openInTerminal(sessionId: string): Promise<{ id: string; name: string }> {
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    if (session.interface !== "agent") {
+      throw new ServiceError(
+        "invalid",
+        "Only a Claude Agent can be opened in the terminal",
+      );
+    }
+    // A double tap, or another device doing the same, shares one switch.
+    let switching = this.restarts.get(sessionId);
+    if (!switching) {
+      switching = this.switchToTerminal(sessionId).finally(() =>
+        this.restarts.delete(sessionId),
+      );
+      this.restarts.set(sessionId, switching);
+    }
+    await switching;
+    return { id: session.id, name: session.name };
+  }
+
+  private async switchToTerminal(sessionId: string): Promise<void> {
+    await this.agents.shutdown(sessionId);
+    // Read after the shutdown: the conversation may have changed (`/clear`) until the runtime ended.
+    const session = this.store.getSession(sessionId);
+    if (session?.interface !== "agent") return;
+    // The terminal must not attach to the runtime's hidden tmux session, so the interface
+    // changes only once that session is gone.
+    this.store.setInterface(sessionId, "tui");
+    try {
+      await this.startStopped({ ...session, interface: "tui" });
+    } catch (error) {
+      // Still an Agent, Stopped, with its Transcript and Restart.
+      this.store.setInterface(sessionId, "agent");
+      throw error;
+    }
+  }
+
   /** Ends the Session's shell and everything in it, then forgets the Session. */
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.store.getSession(sessionId);
@@ -367,7 +413,7 @@ export class Service {
     await this.endSession(session);
     this.store.deleteSession(sessionId);
     // Last: the runtime has gone and the row with it, so nothing can write here again.
-    if (session.interface === "agent") this.agents.removeFolder(sessionId);
+    if (session.kind === "claude") this.agents.removeFolder(sessionId);
   }
 
   async getState(): Promise<State> {

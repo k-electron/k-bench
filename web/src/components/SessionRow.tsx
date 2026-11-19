@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
+import { useOpenInTerminal } from "@/useOpenInTerminal";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
 import { AGENT_STATE_LABEL, agentDisplayState } from "../agentState";
 import { ClaudeGlyph } from "./ClaudeGlyph";
@@ -52,6 +53,7 @@ export function SessionRow({
   const waiting = agentState === "waiting";
   const midTurn = agentState === "working" || waiting;
   const [stopping, setStopping] = useState(false);
+  const openInTerminal = useOpenInTerminal(session);
 
   return (
     <div
@@ -132,6 +134,12 @@ export function SessionRow({
               Stop
             </DropdownMenuItem>
           )}
+          {session.interface === "agent" && (
+            <DropdownMenuItem onSelect={openInTerminal.open}>
+              <TerminalIcon />
+              Open in terminal
+            </DropdownMenuItem>
+          )}
           {session.status === "stopped" && (
             <DropdownMenuItem onSelect={() => void actions.restartSession(session.id)}>
               <RotateCcwIcon />
@@ -159,6 +167,7 @@ export function SessionRow({
         onOpenChange={setStopping}
         onStop={() => void actions.stopSession(session.id)}
       />
+      {openInTerminal.dialog}
       <DeleteSessionDialog
         open={deleting}
         onOpenChange={setDeleting}

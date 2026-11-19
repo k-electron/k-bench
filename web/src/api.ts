@@ -134,6 +134,13 @@ export const api = {
   /** Stops a Claude Agent: the Session stays, Stopped. */
   stopSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/stop`, {}),
+  /** Switches a Claude Agent to a Claude TUI on the same conversation (#155). */
+  openInTerminal: (sessionId: string) =>
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/sessions/${sessionId}/open-in-terminal`,
+      {},
+    ),
   /** The running list of unsupported kinds (#154), latest first. */
   unsupportedList: async () =>
     (await get<{ entries: UnsupportedListEntry[] }>("/api/unsupported")).entries,

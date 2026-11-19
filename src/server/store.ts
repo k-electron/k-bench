@@ -268,6 +268,13 @@ export class Store {
     this.db.prepare("UPDATE sessions SET name = ? WHERE id = ?").run(name, id);
   }
 
+  /** Which interface a Claude Session was last in; Restart resumes in it. */
+  setInterface(id: string, claudeInterface: ClaudeInterface): void {
+    this.db
+      .prepare("UPDATE sessions SET interface = ? WHERE id = ?")
+      .run(claudeInterface, id);
+  }
+
   deleteSession(id: string): void {
     this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
   }

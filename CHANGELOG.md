@@ -8,6 +8,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Added
 
+- **Claude Agent (WIP)** has **Open in terminal**, in the row menu, the Pane's top bar and on an Unsupported row: it switches the same Session to a Claude TUI on the same conversation, with the same Launch options, on every device. It asks first when Claude is working, waiting for you or has tasks running, and Restart resumes in the interface you were last in.
 - **Claude Agent (WIP)** in the New Session dialog: a Claude Session whose Pane is a conversation instead of a terminal. Type a prompt and Claude's reply streams in, as plain text for now. It runs in its own runtime, so closing the browser or restarting k-bench leaves it alone, and k-bench's package still ships no copy of Claude Code.
 - **Claude Agent (WIP)** carries on when you reload the page or restart k-bench mid-reply: the conversation comes back whole, with the text so far and the rest streaming in. The Pane says "Reconnecting…" while it is away, and Send waits.
 - **Claude Agent (WIP)** asks Allow or Deny when Claude Code would, by your own permission rules and mode. The ask takes over the input on every device and waits however long you take, and the first answer from any device wins; a page opened or reloaded while it waits shows it too.
