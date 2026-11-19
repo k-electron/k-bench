@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import {
   type AgentClientMessage,
+  type AgentCommands,
   type AgentHello,
   type AgentPage,
   type AgentServerMessage,
@@ -99,6 +100,14 @@ export class AgentClient {
       if (message.type === "status" && message.mode !== undefined) return message.mode;
     }
     return undefined;
+  }
+
+  /** The names the `/` menu offers, from the newest `commands` message (none before a `sync`). */
+  get commandNames(): string[] | undefined {
+    const message = this.messages.findLast(
+      (m): m is AgentCommands => m.type === "commands",
+    );
+    return message?.commands.map((command) => command.name);
   }
 
   /** The `seq` of the newest entry received: what a reconnecting client syncs from. */

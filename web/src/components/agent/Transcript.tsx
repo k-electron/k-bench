@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
+import { CommandOutput } from "./CommandOutput";
 import { Markdown } from "./Markdown";
 import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
@@ -125,6 +126,8 @@ export const TranscriptItemView = memo(function TranscriptItemView({
     case "todos":
       // The less common lines (#148), in one component.
       return <UncommonLine item={item} />;
+    case "command_output":
+      return <CommandOutput text={item.text} />;
     case "permission":
       return (
         <div className="my-0.5 flex gap-2 pl-5 text-xs text-muted-foreground">

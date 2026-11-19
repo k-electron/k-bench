@@ -154,6 +154,8 @@ let interrupted = false;
 let firstTurn = true;
 let permissionMode = flag("permission-mode") ?? "default";
 let model = flag("model");
+/** What a typed `/model <name>` switched to: it wins over what the test configured. */
+let modelSwitched;
 /** What the SDK answered to the permission asks, by request id. */
 const answers = new Map();
 const mark = () => {
@@ -198,7 +200,7 @@ function sendInit(config) {
       cwd: process.cwd(),
       original_cwd: process.cwd(),
       claude_code_version: config.version ?? fixture.init.claude_code_version,
-      model: config.model ?? model ?? fixture.init.model,
+      model: modelSwitched ?? config.model ?? model ?? fixture.init.model,
       permissionMode,
       plugins: config.plugins ?? [],
       slash_commands: (
@@ -503,6 +505,11 @@ async function runTurn(prompt, scripted) {
     );
   }
   const clearing = isClear(prompt);
+  // `/model <name>` is Claude Code's own: it takes effect at once, so this turn's `init` (and
+  // every later one) names the new model. It has not been recorded against the real Claude
+  // Code whether its `init` follows the change that early; docs/internals/agent.md says so.
+  const switchedTo = /^\/model\s+(\S+)/.exec(text)?.[1];
+  if (switchedTo) modelSwitched = switchedTo;
   if (!clearing) {
     sendInit(config);
     startOfTurn();
@@ -518,7 +525,18 @@ async function runTurn(prompt, scripted) {
       send(make(fixture.clearEcho, { uuid: prompt.uuid }));
       result = { ...fixture.resultClear };
     } else {
-      const steps = scripted?.steps ?? [{ text: `fake claude heard: ${text}` }];
+      const steps =
+        scripted?.steps ??
+        (switchedTo
+          ? [
+              {
+                system: {
+                  subtype: "local_command_output",
+                  content: `Set model to ${switchedTo}`,
+                },
+              },
+            ]
+          : [{ text: `fake claude heard: ${text}` }]);
       for (const step of steps) await runStep(turn, step);
       mark();
       closeMessage(turn, "end_turn");
