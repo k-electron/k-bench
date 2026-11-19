@@ -519,6 +519,23 @@ function readSdkMessage(
             text,
           });
         }
+      } else if (
+        message.isCompletedLocalCommand === true &&
+        !textOf(inner.content).trimStart().startsWith("<command-name>")
+      ) {
+        // The output of a command run in the terminal, as its saved conversation holds it (a
+        // turn imported from the terminal, #156, such as `/compact`'s own): a `⎿` line.
+        const text = commandOutputText(textOf(inner.content));
+        if (text !== "") {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
+      } else if (message.is_meta === true) {
+        // Claude Code's own note, not anyone's words.
       } else if (message.isReplay === true) {
         // The echo of a prompt. k-bench's own was already shown from its `prompt` entry; one
         // that k-bench did not send (typed in the terminal, imported) is shown here.

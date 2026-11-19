@@ -73,9 +73,25 @@ export const assistantMessage = (content, extra = {}) => ({
   ...extra,
 });
 
-/** `/compact`: the chain starts again at a summary. */
+/**
+ * `/compact`, in the shape the live check found in a real terminal's saved chain (#161, kinds
+ * only): the chain starts again at a `compact_boundary` (a system message with no parent), then
+ * the summary (a user message marked `isCompactSummary` and `is_meta`), then the conversation's
+ * earlier messages, kept under the same IDs (so the prompts k-bench sent are still in it), then
+ * the command's own output (user messages marked `isCompletedLocalCommand`). Text is made up.
+ */
 export function compact(configDir, conversationId) {
-  const before = lastUuid(sessionFile(configDir, conversationId));
+  const file = sessionFile(configDir, conversationId);
+  const earlier = [];
+  try {
+    for (const line of readFileSync(file, "utf8").split("\n").filter(Boolean)) {
+      const entry = JSON.parse(line);
+      if (entry.type === "user" || entry.type === "assistant") earlier.push(entry);
+    }
+  } catch {
+    // Nothing saved yet.
+  }
+  const before = lastUuid(file);
   const boundary = appendMessage(
     configDir,
     conversationId,
@@ -89,17 +105,34 @@ export function compact(configDir, conversationId) {
     },
     { parent: null },
   );
-  appendMessage(
+  let previous = appendMessage(
     configDir,
     conversationId,
     userMessage(
       "This session is being continued from a previous conversation. Summary: fake.",
-      {
-        isCompactSummary: true,
-      },
+      { isCompactSummary: true, is_meta: true },
     ),
     { parent: boundary.uuid },
-  );
+  ).uuid;
+  for (const entry of earlier) {
+    previous = appendMessage(
+      configDir,
+      conversationId,
+      { type: entry.type, uuid: entry.uuid, message: entry.message },
+      { parent: previous },
+    ).uuid;
+  }
+  for (const text of [
+    "<local-command-caveat>Caveat: these messages were generated while running local commands.</local-command-caveat>",
+    "<local-command-stdout>Compacted</local-command-stdout>",
+  ]) {
+    previous = appendMessage(
+      configDir,
+      conversationId,
+      userMessage(text, { isCompletedLocalCommand: true }),
+      { parent: previous },
+    ).uuid;
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

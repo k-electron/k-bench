@@ -1039,7 +1039,7 @@ const openInWebAnchors: Check = {
   name: "open-in-web-anchors",
   row: "A3",
   title:
-    "The saved transcript keeps the client-set uuids, and a terminal /compact is a chain starting with a system message",
+    "The saved transcript keeps the client-set uuids, a terminal /compact is said, and its summary is not shown as a prompt",
   scenario: "terminal",
   assumption:
     "src/agent-runtime/terminal-import.ts planTerminalImport (anchors on prompt ids; the compaction heuristic)",
@@ -1115,18 +1115,51 @@ const openInWebAnchors: Check = {
     const compacted = planTerminalImport(entries, saved2);
     const first =
       compacted[0]?.kind === "divider" ? (compacted[0] as { label: string }).label : "";
+    const after = compacted.flatMap((entry) =>
+      entry.kind === "sdk" ? [entry.message] : [],
+    );
+    const knownUuids = new Set(
+      entries.flatMap((entry) =>
+        entry.kind === "sdk" && typeof entry.message.uuid === "string"
+          ? [entry.message.uuid]
+          : [],
+      ),
+    );
+    const summaries = after.filter((m) => m.isCompactSummary === true);
+    const summaryAsPrompt = summaries.some((m) => m.isReplay === true);
+    const localAsPrompt = after.some(
+      (m) => m.isCompletedLocalCommand === true && m.isReplay === true,
+    );
+    const again = after.filter((m) => knownUuids.has(String(m.uuid))).length;
     facts.push(
       `the chain after the terminal's /compact starts with a system message: ${yesNo(startsWithSystem)}`,
+      `the import after the compaction says: ${first || "nothing"}`,
+      `it imports ${after.length} message(s): ${summaries.length} compaction summary(ies), ${after.filter((m) => m.isCompletedLocalCommand === true).length} local-command output(s)`,
+      `a summary is shown as something the owner typed: ${yesNo(summaryAsPrompt)}; a local command's output is: ${yesNo(localAsPrompt)}`,
+      `messages imported that the log already holds: ${again}`,
     );
-    facts.push(`the import then says: ${first || "nothing"}`);
     if (!startsWithSystem)
       return fail(
-        "a terminal /compact does not start the chain with a system message: the compaction heuristic fails",
+        "a terminal /compact does not start the saved chain with a system message",
         facts,
       );
-    return /Compacted in the terminal/.test(first)
-      ? pass("the uuids anchor the import, and a compacted chain is recognised", facts)
-      : fail("planTerminalImport did not read the compacted chain as compacted", facts);
+    if (!/Compacted in the terminal/.test(first))
+      return fail(
+        "planTerminalImport did not say the terminal compacted (src/agent-runtime/terminal-import.ts)",
+        facts,
+      );
+    if (summaries.length === 0)
+      return fail("the compaction summary was not imported as a summary", facts);
+    if (summaryAsPrompt || localAsPrompt)
+      return fail(
+        "Claude Code's own summary or command output would show as something the owner typed",
+        facts,
+      );
+    if (again > 0) return fail("the import repeats messages the log holds", facts);
+    return pass(
+      "the uuids anchor the import, and a compaction in the terminal is said, with its summary kept as Claude's own",
+      facts,
+    );
   },
 };
 
