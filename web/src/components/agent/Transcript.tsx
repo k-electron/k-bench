@@ -5,6 +5,7 @@ import { Markdown } from "./Markdown";
 import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
 import { ToolCall } from "./ToolCall";
+import { UnsupportedRow } from "./UnsupportedRow";
 
 /**
  * The conversation in Claude TUI's shape. The scaffolding (`>`, `⏺`, `⎿`, tool names, output)
@@ -114,6 +115,8 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           <span>Interrupted</span>
         </div>
       );
+    case "unsupported":
+      return <UnsupportedRow item={item} />;
     default: {
       // Every kind of item has a case above: a new kind fails to compile here until it has one.
       const missing: never = item;

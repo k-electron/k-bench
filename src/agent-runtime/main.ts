@@ -167,6 +167,9 @@ const claude = new ClaudeSession(
         void refreshContext();
       }
     },
+    elicitationDeclined(request) {
+      record({ kind: "declined", what: "elicitation", request: { ...request } });
+    },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";
       void finish(why.slice(0, 1000), 1);
