@@ -554,3 +554,49 @@ test("a Claude Agent on the phone has an Interrupt button by the input while Cla
   await expect(region.getByRole("log").getByText("Interrupted")).toBeVisible();
   await expect(interrupt).toHaveCount(0);
 });
+
+test("a Claude Agent's Transcript fits the phone: long lines wrap or scroll inside their block, and tapping opens collapsed output", async ({
+  app,
+  kbench,
+}) => {
+  const long = "x".repeat(200);
+  const folder = kbench.instance.makeFolder("project");
+  kbench.instance.fakeClaude.script([
+    { text: `A reading-width paragraph with a long word ${long} in it.` },
+    {
+      tool: { name: "Bash", input: { command: `echo ${long}` } },
+      result: Array.from({ length: 8 }, (_, i) => `${i + 1} ${long}`).join("\n"),
+    },
+    {
+      tool: {
+        name: "Edit",
+        input: { file_path: `${folder}/${long}.txt`, old_string: long, new_string: "y" },
+      },
+    },
+  ]);
+  await app.openDrawer();
+  await app.createWorkspace(folder);
+  await app.createClaudeAgent("project");
+  const region = app.agentRegion("session 1");
+  await app.agentInput("session 1").tap();
+  await app.page.keyboard.type("go");
+  await region.getByRole("button", { name: "Send", exact: true }).tap();
+
+  await expect(region.getByRole("article", { name: /^Edit\(/ })).toBeVisible();
+  // The header and the conversation stay inside the screen: nothing makes the page scroll sideways.
+  const overflow = () =>
+    app.page.evaluate<{ page: number; log: number }>(`(() => {
+      const log = document.querySelector('[role="log"]');
+      return {
+        page: document.documentElement.scrollWidth - window.innerWidth,
+        log: (log?.scrollWidth ?? 0) - (log?.clientWidth ?? 0),
+      };
+    })()`);
+  expect(await overflow()).toEqual({ page: 0, log: 0 });
+
+  const bash = region.getByRole("article", { name: /^Bash\(/ });
+  await bash.getByRole("button", { name: "+3 lines, tap to expand" }).tap();
+  await expect(bash.getByText(/^8 x+$/)).toBeVisible();
+  expect(await overflow()).toEqual({ page: 0, log: 0 });
+  await expect(region.getByRole("log")).toContainText("A reading-width paragraph");
+});

@@ -6,6 +6,7 @@ import {
   type AgentPage,
   type AgentServerMessage,
   type AgentSnapshot,
+  type AgentStatus,
   agentPath,
   decodeAgentServerMessage,
   encodeAgentClientMessage,
@@ -61,6 +62,11 @@ export class AgentClient {
   /** The runtime's hello, once it has come. */
   get hello(): AgentHello | undefined {
     return this.messages.find((m): m is AgentHello => m.type === "hello");
+  }
+
+  /** The newest status received: what the Agent is doing, and what it has reported. */
+  get status(): AgentStatus | undefined {
+    return this.messages.findLast((m): m is AgentStatus => m.type === "status");
   }
 
   /** Every log entry received, whether in a replay or live, in the order received. */

@@ -1,23 +1,20 @@
 import { useLayoutEffect, useRef } from "react";
+import { contextLeftPercent, currentActivity } from "@/agent/activity";
 import { useAgentConversation } from "@/agent/useAgentConversation";
-import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
+import { AgentHeader } from "./AgentHeader";
 import { PromptDock } from "./PromptDock";
-import {
-  RawMessage,
-  RawSwitch,
-  RawTranscript,
-  ShowRawProvider,
-  useRawView,
-} from "./RawView";
+import { RawSwitch, RawTranscript, useRawView } from "./RawView";
+import { StatusLine } from "./StatusLine";
+import { Transcript } from "./Transcript";
 import { useScrollBack } from "./useScrollBack";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
 const STICK_TO_BOTTOM_PX = 80;
 
 /**
- * A Claude Agent's Pane: the conversation, as plain text for now (ticket #136 gives it Claude
- * Code's shape), and the input under it. The conversation comes from the Agent Runtime over
+ * A Claude Agent's Pane: the header line, the conversation in Claude TUI's shape (`Transcript`),
+ * the status line and the input under it. The conversation comes from the Agent Runtime over
  * the agent WebSocket; this holds none of it that a reload would lose.
  */
 export function AgentPane({
@@ -53,14 +50,15 @@ export function AgentPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 justify-end border-b px-3 py-1">
-        <RawSwitch on={rawView.all} onChange={rawView.setAll} />
-      </div>
+      <AgentHeader
+        {...conversation.header}
+        trailing={<RawSwitch on={rawView.all} onChange={rawView.setAll} />}
+      />
       <div
         ref={scroller}
         role="log"
         aria-label="Conversation"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 text-sm [overflow-anchor:none]"
+        className="min-h-0 flex-1 overflow-y-auto p-3 [overflow-anchor:none]"
         onScroll={(event) => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
           atBottom.current =
@@ -71,32 +69,7 @@ export function AgentPane({
         {rawView.all ? (
           <RawTranscript entries={entries} />
         ) : (
-          <ShowRawProvider value={rawView.show}>
-            {items.map((item) => (
-              <RawMessage
-                key={item.key}
-                seq={item.seq}
-                entries={entries}
-                rawView={rawView}
-              >
-                {item.kind === "interrupted" ? (
-                  <p className="text-xs text-muted-foreground">Interrupted</p>
-                ) : (
-                  <p
-                    className={cn(
-                      "break-words whitespace-pre-wrap",
-                      item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-                    )}
-                  >
-                    {item.text}
-                    {item.kind === "prompt" && item.queued && (
-                      <span className="text-muted-foreground"> (queued)</span>
-                    )}
-                  </p>
-                )}
-              </RawMessage>
-            ))}
-          </ShowRawProvider>
+          <Transcript items={items} entries={entries} rawView={rawView} />
         )}
       </div>
       {conversation.loadingEarlier && (
@@ -104,11 +77,13 @@ export function AgentPane({
           Loading earlier messages…
         </p>
       )}
-      {conversation.state === "working" && (
-        <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
-          Claude is working…
-        </p>
-      )}
+      <StatusLine
+        working={conversation.state !== "idle" && conversation.state !== undefined}
+        waiting={conversation.state === "waiting"}
+        activity={currentActivity(items)}
+        turnStartedAt={conversation.turnStartedAt}
+        contextLeft={contextLeftPercent(conversation.context)}
+      />
       {conversation.reconnecting && !conversation.ended && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
           Reconnecting…

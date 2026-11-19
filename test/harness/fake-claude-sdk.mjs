@@ -603,6 +603,18 @@ function onControlRequest(message) {
       respond(message.request_id, {});
       break;
     case "get_context_usage":
+      // `contextUsage: null` is a Claude Code too old to know the request.
+      if (config.contextUsage === null) {
+        send({
+          type: "control_response",
+          response: {
+            subtype: "error",
+            request_id: message.request_id,
+            error: "Unsupported control request subtype: get_context_usage",
+          },
+        });
+        break;
+      }
       respond(
         message.request_id,
         config.contextUsage ?? {

@@ -17,6 +17,7 @@ import { agentLogFile, agentSocketFile, runtimeBuildId } from "../agent/paths.ts
 import {
   AGENT_PROTOCOL_VERSION,
   type AgentClientMessage,
+  type AgentContextUsage,
   type AgentHello,
   openPermissionAsks,
 } from "../shared/agent-protocol.ts";
@@ -40,6 +41,8 @@ const log = new AgentLog(agentLogFile(args.agentDir));
 
 let claudeVersion = "unknown";
 let finishing = false;
+/** How full Claude Code's context was when last asked (at the start and after each turn). */
+let context: AgentContextUsage | undefined;
 
 const hello = (): AgentHello => ({
   type: "hello",
@@ -48,6 +51,7 @@ const hello = (): AgentHello => ({
   claudeVersion,
   sdkVersion: __SDK_VERSION__,
   sdkClaudeCodeVersion: __SDK_CLAUDE_CODE_VERSION__,
+  folder: args.folder,
 });
 
 const live = new LiveText();
@@ -94,7 +98,26 @@ function publishStatus(): void {
     ...activity.status,
     ...(permissionMode.current && { mode: permissionMode.current }),
     ...(bell.isRaised && { bell: true }),
+    ...(context && { context }),
   });
+}
+
+/**
+ * Asks Claude Code how full its context is and publishes it. Claude Code does not push this
+ * (the terminal reads the same). It may not be able to answer (an older one, or one that is
+ * going), which only means there is nothing to show: never let that reach the runtime's own
+ * handlers, which would end the Agent.
+ */
+async function refreshContext(): Promise<void> {
+  if (finishing) return;
+  try {
+    const usage = await claude.contextUsage();
+    if (finishing) return;
+    context = usage;
+    publishStatus();
+  } catch {
+    // Nothing to show.
+  }
 }
 
 record({ kind: "runtime", event: "started" });
@@ -137,7 +160,10 @@ const claude = new ClaudeSession(
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
       if (permissionMode.observe(message)) publishStatus();
-      if (message.type === "result") live.turnEnded();
+      if (message.type === "result") {
+        live.turnEnded();
+        void refreshContext();
+      }
     },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";
@@ -208,6 +234,7 @@ try {
   permissionMode.set(await claude.permissionMode());
   publishStatus();
   await hub.listen();
+  void refreshContext();
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);
 }

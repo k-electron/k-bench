@@ -7,6 +7,8 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 
+import type { AgentContextUsage } from "../shared/agent-protocol.ts";
+
 /** What a `ClaudeSession` tells the runtime about Claude Code. */
 export interface SessionHandlers {
   /** Every message Claude Code sent, as the SDK yielded it, in order. */
@@ -120,6 +122,24 @@ export class ClaudeSession {
   /** Switches Claude Code's permission mode. Rejects if Claude Code refuses. */
   setPermissionMode(mode: PermissionMode): Promise<void> {
     return this.query.setPermissionMode(mode);
+  }
+
+  /**
+   * How full the context is. Claude Code does not push it, so the runtime asks. Rejects when
+   * Claude Code cannot say (an older one answers "unsupported") or has gone: the caller treats
+   * that as "nothing to show".
+   */
+  async contextUsage(): Promise<AgentContextUsage> {
+    const usage = await this.query.getContextUsage();
+    return {
+      totalTokens: usage.totalTokens,
+      maxTokens: usage.maxTokens,
+      percentage: usage.percentage,
+      isAutoCompactEnabled: usage.isAutoCompactEnabled,
+      ...(typeof usage.autoCompactThreshold === "number"
+        ? { autoCompactThreshold: usage.autoCompactThreshold }
+        : {}),
+    };
   }
 
   /**

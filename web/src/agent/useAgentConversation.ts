@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
+  type AgentContextUsage,
   type AgentHello,
   type AgentStatus,
   type LogEntry,
@@ -17,6 +18,7 @@ import {
   type PermissionAsk,
   permissionAsks,
   type TranscriptItem,
+  transcriptInfo,
   transcriptItems,
 } from "./transcript";
 
@@ -50,6 +52,16 @@ export interface AgentConversation {
   hello: AgentHello | undefined;
   /** What the Agent is doing, once the runtime has said. */
   state: AgentStatus["state"] | undefined;
+  /** While working: when the turn began (the runtime's clock, ms since the epoch). */
+  turnStartedAt: number | undefined;
+  /** How full Claude Code's context is, once it has reported. */
+  context: AgentContextUsage | undefined;
+  /**
+   * What the header line shows: Claude Code's version (from the runtime's hello), and the
+   * model and folder of the latest turn (from its `system/init`, so the model is absent before
+   * the first prompt, and the folder then comes from the hello).
+   */
+  header: { version?: string; model?: string; folder?: string };
   /**
    * The Allow/Deny asks open now, oldest first. Empty when the Session is over: nothing can
    * answer them then.
@@ -110,6 +122,8 @@ interface Model {
   hello: AgentHello | undefined;
   state: AgentStatus["state"] | undefined;
   mode: PermissionMode | undefined;
+  turnStartedAt: number | undefined;
+  context: AgentContextUsage | undefined;
   ended: boolean;
   reconnecting: boolean;
   /** The `beforeSeq` of the page request waiting for its answer, if one is. */
@@ -146,7 +160,13 @@ function reduce(model: Model, event: Event): Model {
   const { message } = event;
   if (message.type === "hello") return { ...model, hello: message };
   if (message.type === "status") {
-    return { ...model, state: message.state, mode: message.mode ?? model.mode };
+    return {
+      ...model,
+      state: message.state,
+      mode: message.mode ?? model.mode,
+      turnStartedAt: message.turnStartedAt,
+      context: message.context,
+    };
   }
   return { ...model, transcript: applyServerMessage(model.transcript, message) };
 }
@@ -158,6 +178,8 @@ const initial: Model = {
   hello: undefined,
   state: undefined,
   mode: undefined,
+  turnStartedAt: undefined,
+  context: undefined,
   ended: false,
   reconnecting: false,
   requestedBefore: undefined,
@@ -247,11 +269,21 @@ export function useAgentConversation(sessionId: string): AgentConversation {
 
   const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
   const allAsks = useMemo(() => permissionAsks(model.transcript), [model.transcript]);
+  const info = useMemo(() => transcriptInfo(model.transcript), [model.transcript]);
+  const { hello } = model;
+  const folder = info.cwd ?? hello?.folder;
   return {
     items,
+    header: {
+      ...(hello ? { version: hello.claudeVersion } : {}),
+      ...(info.model === undefined ? {} : { model: info.model }),
+      ...(folder === undefined ? {} : { folder }),
+    },
+    turnStartedAt: model.turnStartedAt,
+    context: model.context,
     entries: model.transcript.entries,
     asks: model.ended ? NO_ASKS : allAsks,
-    hello: model.hello,
+    hello,
     state: model.state,
     mode,
     cycleMode,
