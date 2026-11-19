@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { nextPermissionMode } from "../src/shared/agent-protocol.ts";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
 import type { FakeClaude } from "./harness/fake-claude.ts";
 import { pollUntil } from "./harness/poll.ts";
@@ -72,5 +73,44 @@ describe("a Claude Agent's permission mode", () => {
     });
     expect(modesRequested(instance.fakeClaude)).toEqual([]);
     expect(client.mode).toBe("default");
+  });
+
+  it("offers auto in the cycle only where the model supports it, and a refused auto cannot trap the cycle", async () => {
+    // Supported (as the recorded model list says): the status offers it.
+    const { instance, server, workspace } = await boot();
+    const session = await server.createClaudeAgent(workspace.id);
+    const client = await server.openAgent(session.id);
+    await pollUntil(() => client.status?.autoMode === true, {
+      description: "a status that offers auto",
+    });
+    client.setPermissionMode("auto");
+    await pollUntil(() => client.mode === "auto", { description: "auto mode" });
+    // The cycle a client follows from there wraps round to the default.
+    expect(nextPermissionMode("plan", true)).toBe("auto");
+    expect(nextPermissionMode("auto", true)).toBe("default");
+
+    // Claude Code refuses auto: nothing changes, and auto leaves the cycle, so the next tap
+    // (plan to the default, not plan to auto again) moves on.
+    instance.fakeClaude.configure({ refuseAutoMode: true });
+    client.setPermissionMode("plan");
+    await pollUntil(() => client.mode === "plan", { description: "plan mode" });
+    client.setPermissionMode("auto");
+    await pollUntil(() => client.status?.autoMode === undefined, {
+      description: "a status that no longer offers auto",
+    });
+    expect(client.mode).toBe("plan");
+    expect(nextPermissionMode("plan", false)).toBe("default");
+  });
+
+  it("does not offer auto when the model does not support it", async () => {
+    const { instance, server, workspace } = await boot();
+    instance.fakeClaude.configure({ autoMode: false });
+    const session = await server.createClaudeAgent(workspace.id);
+    const client = await server.openAgent(session.id);
+    await pollUntil(() => client.mode === "default", { description: "the mode" });
+    expect(client.status?.autoMode).toBeUndefined();
+    // A mode the TUI would not offer, such as auto after the owner started in it, goes to the default.
+    expect(nextPermissionMode("plan", false)).toBe("default");
+    expect(nextPermissionMode("auto", false)).toBe("default");
   });
 });

@@ -190,6 +190,12 @@ export class ClaudeSession {
     return (init as { current_permission_mode?: unknown }).current_permission_mode;
   }
 
+  /** The models Claude Code lists, from the same first reply (`autoModeSupported` reads them). */
+  async models(): Promise<unknown> {
+    const init = await this.query.initializationResult();
+    return (init as { models?: unknown }).models;
+  }
+
   /** Switches Claude Code's permission mode. Rejects if Claude Code refuses. */
   setPermissionMode(mode: PermissionMode): Promise<void> {
     return this.query.setPermissionMode(mode);

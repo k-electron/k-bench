@@ -247,24 +247,41 @@ export type PermissionMode =
   | "bypassPermissions";
 
 /**
- * The modes Shift+Tab, and a tap on the mode line, step through, in the order Claude TUI
- * offers them. `bypassPermissions` is not here: it needs an explicit opt-in the owner makes
- * outside k-bench, and no client may switch it on. Nor is `auto`, which the TUI offers only
- * where it is enabled and which nothing tells k-bench about: adding it later is one line here.
+ * The modes Shift+Tab, and a tap on the mode line, step through, in the order Claude TUI offers
+ * them (the live check on a real Claude Code, #161, read the footer: `manual mode on` →
+ * `accept edits on` → `plan mode on` → `auto mode on` → back to manual). `bypassPermissions` is
+ * not here: it needs an explicit opt-in the owner makes outside k-bench, and no client may
+ * switch it on.
  */
 export const PERMISSION_MODE_CYCLE: readonly PermissionMode[] = [
   "default",
   "acceptEdits",
   "plan",
+  "auto",
 ];
 
 /**
- * The mode after `current` in the cycle, wrapping round. A mode outside the cycle (the owner
- * started Claude Code in `auto`, say) goes to `default`, as the TUI's Shift+Tab does.
+ * The cycle for a model: `auto` is in it only where the runtime says the model supports it
+ * (`AgentStatus.autoMode`, from the models Claude Code lists), as the TUI offers it only there.
  */
-export function nextPermissionMode(current: PermissionMode): PermissionMode {
-  const index = PERMISSION_MODE_CYCLE.indexOf(current);
-  return PERMISSION_MODE_CYCLE[index + 1] ?? PERMISSION_MODE_CYCLE[0] ?? "default";
+export function permissionModeCycle(autoMode: boolean): readonly PermissionMode[] {
+  return autoMode
+    ? PERMISSION_MODE_CYCLE
+    : PERMISSION_MODE_CYCLE.filter((m) => m !== "auto");
+}
+
+/**
+ * The mode after `current` in the cycle, wrapping round. A mode outside the cycle (the owner
+ * started Claude Code in `bypassPermissions`, or in `auto` on a model that does not offer it)
+ * goes to `default`, as the TUI's Shift+Tab does.
+ */
+export function nextPermissionMode(
+  current: PermissionMode,
+  autoMode = false,
+): PermissionMode {
+  const cycle = permissionModeCycle(autoMode);
+  const index = cycle.indexOf(current);
+  return cycle[index + 1] ?? cycle[0] ?? "default";
 }
 
 /** What the mode line says for each mode. */
@@ -317,6 +334,13 @@ export interface AgentStatus {
    * from a runtime older than this field.
    */
   mode?: PermissionMode;
+  /**
+   * `auto` is in the permission-mode cycle: the model Claude Code is on supports it (its
+   * `models[].supportsAutoMode`), and Claude Code has not refused it. Absent means no: a runtime
+   * older than this field, a model that does not say, or a refusal. Whoever cycles the mode
+   * (`nextPermissionMode`) leaves `auto` out of the cycle then, so a refused `auto` cannot trap it.
+   */
+  autoMode?: boolean;
   /**
    * The Agent's Bell is raised: a turn ended, or an ask opened, while no device showed the
    * Agent on a visible page, and no device has shown it since (`view`). Absent when it is

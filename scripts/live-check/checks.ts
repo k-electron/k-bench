@@ -7,7 +7,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DENIED_WITH_REPLY } from "../../src/agent-runtime/asks.ts";
-import { PERMISSION_MODE_CYCLE } from "../../src/shared/agent-protocol.ts";
+import { autoModeSupported } from "../../src/agent-runtime/mode.ts";
+import { permissionModeCycle } from "../../src/shared/agent-protocol.ts";
 import { SPACE_FORMS } from "./scenarios.ts";
 import {
   assistantText,
@@ -944,43 +945,47 @@ const denyReply: Check = {
   },
 };
 
+/** What the TUI's footer says for each mode (`manual mode on` is the default one). */
+const FOOTER_LABEL: Record<string, string> = {
+  default: "manual mode on",
+  acceptEdits: "accept edits on",
+  plan: "plan mode on",
+  auto: "auto mode on",
+};
+
 const modeCycle: Check = {
   name: "mode-cycle",
   row: "A3",
-  title: "Whether auto belongs in the permission-mode cycle the TUI offers",
+  title:
+    "k-bench's permission-mode cycle equals the one the TUI offers (auto where the model supports it)",
   scenario: "terminal",
   fakeCannot: "the stub has no mode cycle",
-  assumption: "src/shared/agent-protocol.ts PERMISSION_MODE_CYCLE",
+  assumption:
+    "src/shared/agent-protocol.ts PERMISSION_MODE_CYCLE, permissionModeCycle; src/agent-runtime/mode.ts autoModeSupported",
   evaluate({ cap, all }) {
     const visit = noteOf<{ cycle: string[]; reached: Record<string, boolean> }>(
       cap,
       "visitTwo",
     );
     const base = all.get("baseline");
-    const models = isObject(noteOf(base ?? cap, "initReply"))
-      ? (noteOf<Record<string, unknown>>(base ?? cap, "initReply")?.models as unknown)
-      : undefined;
-    const haiku = Array.isArray(models)
-      ? models
-          .filter(isObject)
-          .find((m) => /haiku/i.test(String(m.value ?? m.resolvedModel ?? "")))
-      : undefined;
+    const models = noteOf<Record<string, unknown>>(base ?? cap, "initReply")?.models;
+    // The model the Session runs on is Haiku: the same lookup the runtime makes.
+    const supportsAuto = autoModeSupported(models, undefined, "haiku");
+    const ours = permissionModeCycle(supportsAuto).map(
+      (mode) => FOOTER_LABEL[mode] ?? mode,
+    );
     const facts = [
-      `the model list says Haiku supports auto mode: ${haiku ? yesNo(haiku.supportsAutoMode === true) : "unknown"}`,
+      `the model list says Haiku supports auto mode: ${yesNo(supportsAuto)}`,
       `the SDK accepted setPermissionMode("auto"): ${base ? yesNo(noteOf<boolean>(base, "autoAccepted") === true) : "unknown"}`,
-      `k-bench cycles: ${PERMISSION_MODE_CYCLE.join(", ")}`,
+      `k-bench's cycle for this model, as footer labels: ${ours.join(" > ")}`,
     ];
     if (!visit?.reached.cycle)
       return notProvoked("the terminal's Shift+Tab cycle was not read", facts);
-    const hasAuto = visit.cycle.some((label) => /^auto mode/.test(label));
-    facts.push(`the TUI's cycle (as footer labels): ${visit.cycle.join(", ")}`);
-    return hasAuto
-      ? fail(
-          "the TUI's cycle includes auto, k-bench's does not: add auto where the TUI offers it",
-          facts,
-        )
-      : pass(
-          "the TUI's cycle does not include auto here; k-bench's cycle matches",
+    facts.push(`the TUI's cycle (footer labels): ${visit.cycle.join(" > ")}`);
+    return visit.cycle.join(" > ") === ours.join(" > ")
+      ? pass("k-bench's cycle is the TUI's, in the same order", facts)
+      : fail(
+          "k-bench's cycle differs from the TUI's: fix permissionModeCycle (src/shared/agent-protocol.ts)",
           facts,
         );
   },

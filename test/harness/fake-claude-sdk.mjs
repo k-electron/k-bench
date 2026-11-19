@@ -844,6 +844,10 @@ function onControlRequest(message) {
         current_permission_mode: permissionMode,
         pid: process.pid,
       });
+      // The models list says which support `auto` mode (all do, unless the test says not).
+      if (config.autoMode === false) {
+        for (const entry of reply.models ?? []) entry.supportsAutoMode = false;
+      }
       respond(message.request_id, reply);
       break;
     }
@@ -869,6 +873,18 @@ function onControlRequest(message) {
       if (busy) interrupted = true;
       break;
     case "set_permission_mode":
+      // `refuseAutoMode` in the config: Claude Code refuses `auto` (the owner's settings can).
+      if (request.mode === "auto" && config.refuseAutoMode === true) {
+        send({
+          type: "control_response",
+          response: {
+            subtype: "error",
+            request_id: message.request_id,
+            error: "auto mode is not available",
+          },
+        });
+        break;
+      }
       permissionMode = request.mode;
       respond(message.request_id, {});
       break;

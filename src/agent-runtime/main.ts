@@ -33,7 +33,7 @@ import { CommandList, terminalOnlyFrom } from "./commands.ts";
 import { ClientHub } from "./hub.ts";
 import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
-import { PermissionModeTracker } from "./mode.ts";
+import { autoModeSupported, PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
 import { TaskTracker } from "./tasks.ts";
 import { planTerminalImport, type SavedMessage } from "./terminal-import.ts";
@@ -110,6 +110,13 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
 }
 
 const permissionMode = new PermissionModeTracker();
+// Whether `auto` belongs in the mode cycle: the model supports it, and Claude Code has not
+// refused it (a refusal takes it out until the model changes, so that it cannot trap the cycle).
+let modelsListed: unknown;
+let currentModel: string | undefined;
+let autoRefused = false;
+const autoMode = () =>
+  !autoRefused && autoModeSupported(modelsListed, currentModel, args.launch.model);
 
 const asks = new PermissionAsks(record, (toolUseId) =>
   permissionMode.planApproved(toolUseId),
@@ -134,6 +141,7 @@ function publishStatus(): void {
     conversationId: conversation.id,
     ...(running.length > 0 && { tasks: running }),
     ...(permissionMode.current && { mode: permissionMode.current }),
+    ...(autoMode() && { autoMode: true }),
     ...(bell.isRaised && { bell: true }),
     ...(context && { context }),
   });
@@ -233,7 +241,17 @@ const claude = new ClaudeSession(
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
       // Either may change the status; once, not twice, when both do.
       const modeChanged = permissionMode.observe(message);
-      if (tasksChanged || modeChanged) publishStatus();
+      // The model of the latest turn decides whether `auto` is offered.
+      let modelChanged = false;
+      if (message.type === "system" && message.subtype === "init") {
+        const named = (message as unknown as { model?: unknown }).model;
+        if (typeof named === "string" && named !== currentModel) {
+          currentModel = named;
+          autoRefused = false;
+          modelChanged = true;
+        }
+      }
+      if (tasksChanged || modeChanged || modelChanged) publishStatus();
       const afterPlan = permissionMode.afterPlan(message);
       if (afterPlan) void leavePlanMode(afterPlan);
       if (commandList.observe(message as unknown as Record<string, unknown>)) {
@@ -293,7 +311,12 @@ async function command(message: AgentClientMessage): Promise<void> {
       if (permissionMode.set(message.mode)) publishStatus();
     } catch {
       // Claude Code refused (the owner's settings can forbid a mode): nothing changes, and
-      // every Pane keeps showing the mode that is in force.
+      // every Pane keeps showing the mode that is in force. A refused `auto` leaves the
+      // cycle, so that the next tap moves on instead of asking for it again.
+      if (message.mode === "auto" && !autoRefused) {
+        autoRefused = true;
+        publishStatus();
+      }
     }
   } else if (message.type === "shutdown") {
     // The reason is shown after "Stopped:" in the Pane.
@@ -376,6 +399,7 @@ try {
     await finish(notSubscription, 1);
   } else {
     permissionMode.set(await claude.permissionMode());
+    modelsListed = await claude.models();
     commandList.set(await claude.commands());
     hub.setCommands(commandList.commands);
     publishStatus();

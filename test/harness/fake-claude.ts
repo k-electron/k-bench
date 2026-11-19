@@ -151,6 +151,10 @@ export interface FakeClaudeConfig {
   contextUsage?: Record<string, unknown> | null;
   /** More fields for every `system/init`. */
   initFields?: Record<string, unknown>;
+  /** Whether the models it lists support `auto` mode (default true, as the recorded list says). */
+  autoMode?: boolean;
+  /** Whether it refuses a switch to `auto` (default false). */
+  refuseAutoMode?: boolean;
   /** Whether it sends `system/session_state_changed` (default true); false, as a Claude Code that does not. */
   sessionStateMessages?: boolean;
   /** How long it takes to notice it is being closed, before it records that and exits. */

@@ -62,3 +62,28 @@ export class PermissionModeTracker {
     return false;
   }
 }
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/**
+ * Whether the model Claude Code is on supports `auto` mode, from the `models` of its first
+ * reply (`supportsAutoMode` per model). The model is found by what the latest `system/init`
+ * named (a resolved name such as `claude-haiku-5-5`) or, before any turn, by the alias the
+ * Session was launched with (`default` when none). A model that is not listed, or a list that
+ * is not there, says no: `auto` is only offered where it is known to work.
+ */
+export function autoModeSupported(
+  models: unknown,
+  model: string | undefined,
+  launchModel: string,
+): boolean {
+  if (!Array.isArray(models)) return false;
+  const wanted = model ?? launchModel;
+  const entry = models.find(
+    (candidate) =>
+      isObject(candidate) &&
+      (candidate.resolvedModel === wanted || candidate.value === wanted),
+  );
+  return isObject(entry) && entry.supportsAutoMode === true;
+}

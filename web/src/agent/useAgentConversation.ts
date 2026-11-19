@@ -158,6 +158,8 @@ interface Model {
   hello: AgentHello | undefined;
   state: AgentStatus["state"] | undefined;
   mode: PermissionMode | undefined;
+  /** `auto` is in the mode cycle (the model supports it): the runtime's say, in each `status`. */
+  autoMode: boolean;
   turnStartedAt: number | undefined;
   context: AgentContextUsage | undefined;
   commands: readonly AgentCommand[];
@@ -202,6 +204,7 @@ function reduce(model: Model, event: Event): Model {
       ...model,
       state: message.state,
       mode: message.mode ?? model.mode,
+      autoMode: message.autoMode === true,
       turnStartedAt: message.turnStartedAt,
       context: message.context,
     };
@@ -217,6 +220,7 @@ const initial: Model = {
   hello: undefined,
   state: undefined,
   mode: undefined,
+  autoMode: false,
   turnStartedAt: undefined,
   context: undefined,
   commands: NO_COMMANDS,
@@ -290,15 +294,16 @@ export function useAgentConversation(sessionId: string): AgentConversation {
 
   // Asks for the mode after the one shown: a target, so two devices tapping at once agree.
   const mode = model.mode;
+  const { autoMode } = model;
   const cycleMode = useCallback(
     () =>
       mode !== undefined &&
       (connection.current?.send({
         type: "set_permission_mode",
-        mode: nextPermissionMode(mode),
+        mode: nextPermissionMode(mode, autoMode),
       }) ??
         false),
-    [mode],
+    [mode, autoMode],
   );
 
   const { stoppedReason } = model.transcript;
