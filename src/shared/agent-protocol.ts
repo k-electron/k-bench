@@ -160,12 +160,39 @@ export interface AgentHello {
   sdkVersion: string;
   /** The Claude Code version that SDK release was made for. */
   sdkClaudeCodeVersion: string;
+  /**
+   * The folder Claude Code runs in, for the Transcript's header before the first turn: Claude
+   * Code reports `cwd` only in each turn's `system/init`. Absent from a runtime that predates it.
+   */
+  folder?: string;
+}
+
+/**
+ * How full Claude Code's context is, as it reported (`getContextUsage()`), reduced to the
+ * few numbers the Transcript shows. Claude Code does not push this, so the runtime asks after
+ * each turn. The browser works out "context left until auto-compact" from it, so a wrong
+ * formula is a display fix.
+ */
+export interface AgentContextUsage {
+  /** Tokens in the context now. */
+  totalTokens: number;
+  /** The context window. */
+  maxTokens: number;
+  /** Share of the window used, 0 to 100. */
+  percentage: number;
+  /** The size, in tokens, at which Claude Code compacts by itself; absent when it did not say. */
+  autoCompactThreshold?: number;
+  isAutoCompactEnabled: boolean;
 }
 
 /** What the Agent is doing, pushed to every connection whenever it changes (and on connect). */
 export interface AgentStatus {
   type: "status";
   state: "idle" | "working";
+  /** While working: when the turn began, in milliseconds since the epoch (the runtime's clock). */
+  turnStartedAt?: number;
+  /** Absent until Claude Code has reported it (or when it cannot: an older Claude Code). */
+  context?: AgentContextUsage;
 }
 
 /** Entries the client asked for with `sync`, in order. */

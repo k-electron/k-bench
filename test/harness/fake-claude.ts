@@ -83,8 +83,8 @@ export interface FakeClaudeConfig {
   }>;
   terminalSlashCommands?: string[];
   model?: string;
-  /** The answer to `get_context_usage`. */
-  contextUsage?: Record<string, unknown>;
+  /** The answer to `get_context_usage`; null is a Claude Code too old to know the request. */
+  contextUsage?: Record<string, unknown> | null;
   /** More fields for every `system/init`. */
   initFields?: Record<string, unknown>;
 }

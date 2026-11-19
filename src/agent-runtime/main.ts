@@ -17,6 +17,7 @@ import { agentLogFile, agentSocketFile, runtimeBuildId } from "../agent/paths.ts
 import {
   AGENT_PROTOCOL_VERSION,
   type AgentClientMessage,
+  type AgentContextUsage,
   type AgentHello,
   openPermissionAsks,
 } from "../shared/agent-protocol.ts";
@@ -39,6 +40,10 @@ let claudeVersion = "unknown";
 let finishing = false;
 /** Prompts sent whose turn has not ended yet. */
 let pendingTurns = 0;
+/** When the oldest prompt in flight was sent (the Transcript's elapsed time counts from it). */
+let turnStartedAt: number | undefined;
+/** How full Claude Code's context was when last asked (after each turn). */
+let context: AgentContextUsage | undefined;
 
 const hello = (): AgentHello => ({
   type: "hello",
@@ -47,6 +52,7 @@ const hello = (): AgentHello => ({
   claudeVersion,
   sdkVersion: __SDK_VERSION__,
   sdkClaudeCodeVersion: __SDK_CLAUDE_CODE_VERSION__,
+  folder: args.folder,
 });
 
 const live = new LiveText();
@@ -65,7 +71,30 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
 }
 
 function publishStatus(): void {
-  hub.setStatus({ type: "status", state: pendingTurns > 0 ? "working" : "idle" });
+  hub.setStatus({
+    type: "status",
+    state: pendingTurns > 0 ? "working" : "idle",
+    ...(pendingTurns > 0 && turnStartedAt !== undefined ? { turnStartedAt } : {}),
+    ...(context ? { context } : {}),
+  });
+}
+
+/**
+ * Asks Claude Code how full its context is and publishes it. Claude Code does not push this
+ * (the terminal reads the same). It may not be able to answer (an older one, or one that is
+ * going), which only means there is nothing to show: never let that reach the runtime's own
+ * handlers, which would end the Agent.
+ */
+async function refreshContext(): Promise<void> {
+  if (finishing) return;
+  try {
+    const usage = await claude.contextUsage();
+    if (finishing) return;
+    context = usage;
+    publishStatus();
+  } catch {
+    // Nothing to show.
+  }
 }
 
 record({ kind: "runtime", event: "started" });
@@ -108,7 +137,9 @@ const claude = new ClaudeSession(
       if (message.type === "result") {
         live.turnEnded();
         pendingTurns = Math.max(0, pendingTurns - 1);
+        if (pendingTurns === 0) turnStartedAt = undefined;
         publishStatus();
+        void refreshContext();
       }
     },
     ended(error) {
@@ -121,6 +152,7 @@ const claude = new ClaudeSession(
 async function command(message: AgentClientMessage): Promise<void> {
   if (message.type === "prompt") {
     record({ kind: "prompt", id: message.id, text: message.text });
+    if (pendingTurns === 0) turnStartedAt = Date.now();
     pendingTurns += 1;
     publishStatus();
     claude.prompt(message.id, message.text);
@@ -169,6 +201,7 @@ process.on("unhandledRejection", (error) => {
 try {
   claudeVersion = await claude.claudeVersion();
   await hub.listen();
+  void refreshContext();
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);
 }

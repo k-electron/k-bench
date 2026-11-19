@@ -1,15 +1,18 @@
 import { useEffect, useRef } from "react";
+import { contextLeftPercent, currentActivity } from "@/agent/activity";
 import { useAgentConversation } from "@/agent/useAgentConversation";
-import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
+import { AgentHeader } from "./AgentHeader";
 import { PromptDock } from "./PromptDock";
+import { StatusLine } from "./StatusLine";
+import { Transcript } from "./Transcript";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
 const STICK_TO_BOTTOM_PX = 80;
 
 /**
- * A Claude Agent's Pane: the conversation, as plain text for now (ticket #136 gives it Claude
- * Code's shape), and the input under it. The conversation comes from the Agent Runtime over
+ * A Claude Agent's Pane: the header line, the conversation in Claude TUI's shape (`Transcript`),
+ * the status line and the input under it. The conversation comes from the Agent Runtime over
  * the agent WebSocket; this holds none of it that a reload would lose.
  */
 export function AgentPane({
@@ -34,34 +37,26 @@ export function AgentPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <AgentHeader {...conversation.header} />
       <div
         ref={scroller}
         role="log"
         aria-label="Conversation"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 text-sm"
+        className="min-h-0 flex-1 overflow-y-auto p-3"
         onScroll={(event) => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
           atBottom.current =
             scrollHeight - scrollTop - clientHeight <= STICK_TO_BOTTOM_PX;
         }}
       >
-        {items.map((item) => (
-          <p
-            key={item.key}
-            className={cn(
-              "break-words whitespace-pre-wrap",
-              item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-            )}
-          >
-            {item.text}
-          </p>
-        ))}
+        <Transcript items={items} />
       </div>
-      {conversation.state === "working" && (
-        <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
-          Claude is working…
-        </p>
-      )}
+      <StatusLine
+        working={conversation.state === "working" && !conversation.ended}
+        activity={currentActivity(items)}
+        turnStartedAt={conversation.turnStartedAt}
+        contextLeft={contextLeftPercent(conversation.context)}
+      />
       {conversation.reconnecting && !conversation.ended && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
           Reconnecting…

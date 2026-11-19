@@ -4,21 +4,18 @@ import {
   type LogEntry,
   openPermissionAsks,
 } from "../../../src/shared/agent-protocol.ts";
+import { type BuiltTranscript, buildItems, type TranscriptItem } from "./items";
+
+export type { TranscriptItem } from "./items";
 
 /**
- * What the conversation shows, built from the Agent's log entries and live fragments. This
- * is the one place SDK messages become something to display, so a display fix lands with the
- * next page load (ADR-0008). Pure: no React, no DOM. Ticket #136 gives it Claude Code's
- * real shape; for now it is plain text, the prompts typed and Claude's text replies.
- *
- * Every later kind of thing the conversation shows is a new `TranscriptItem` kind, built by
- * `transcriptItems` from entries the state already holds.
+ * What the conversation holds: the Agent's log entries and the live fragments, and the
+ * functions that take messages in. This is where SDK messages are kept; `items.ts` is where
+ * they become something to display (`buildItems`), so a display fix lands with the next page
+ * load (ADR-0008). Pure: no React, no DOM. `transcriptItems(state)` is the conversation to
+ * show: what the log makes, then what is still streaming in. How to add a new kind of item is
+ * at the top of `items.ts`.
  */
-export type TranscriptItem =
-  /** A prompt the owner sent (from any device). */
-  | { kind: "prompt"; key: string; text: string }
-  /** Text from Claude: complete, or still streaming in. */
-  | { kind: "assistant"; key: string; text: string; streaming: boolean };
 
 /** Text streaming in for the SDK message now being written. */
 interface LiveMessage {
@@ -178,46 +175,50 @@ export function applyServerMessage(
   }
 }
 
-/** The conversation to show, in order: what the log holds, then what is still streaming in. */
-export function transcriptItems(state: TranscriptState): TranscriptItem[] {
-  const items: TranscriptItem[] = [];
-  for (const entry of state.entries) {
-    if (entry.kind === "prompt") {
-      items.push({ kind: "prompt", key: `entry-${entry.seq}`, text: entry.text });
-    } else if (
-      entry.kind === "sdk" &&
-      entry.message.type === "assistant" &&
-      entry.message.parent_tool_use_id == null
-    ) {
-      const content = isObject(entry.message.message)
-        ? entry.message.message.content
-        : [];
-      (Array.isArray(content) ? content : []).forEach((block: unknown, index) => {
-        if (isObject(block) && block.type === "text" && typeof block.text === "string") {
-          items.push({
-            kind: "assistant",
-            key: `entry-${entry.seq}-${index}`,
-            text: block.text,
-            streaming: false,
-          });
-        }
-      });
-    }
+/**
+ * What the entries make, kept for as long as the entries array is the same one: the array is
+ * replaced only when entries arrive, so a stream of fragments does not rebuild the whole
+ * history (nor re-render it: the items keep their identity).
+ */
+const built = new WeakMap<readonly LogEntry[], BuiltTranscript>();
+
+function builtTranscript(state: TranscriptState): BuiltTranscript {
+  let result = built.get(state.entries);
+  if (!result) {
+    result = buildItems(state.entries);
+    built.set(state.entries, result);
   }
-  const { live } = state;
-  if (live) {
-    for (const [index, block] of [...live.blocks].sort(([a], [b]) => a - b)) {
-      if (index >= live.completeBlocks && block.type === "text" && block.text !== "") {
-        items.push({
-          kind: "assistant",
-          key: `live-${live.id}-${index}`,
-          text: block.text,
-          streaming: true,
-        });
-      }
+  return result;
+}
+
+/** The text still streaming in, as the items it will become when its complete message arrives. */
+function liveItems(live: LiveMessage): TranscriptItem[] {
+  const items: TranscriptItem[] = [];
+  for (const [index, block] of [...live.blocks].sort(([a], [b]) => a - b)) {
+    if (index < live.completeBlocks) continue;
+    const key = `live-${live.id}-${index}`;
+    if (block.type === "text" && block.text !== "") {
+      items.push({ kind: "assistant", key, text: block.text, streaming: true });
+    } else if (block.type === "thinking" || block.type === "redacted_thinking") {
+      items.push({ kind: "thinking", key, streaming: true });
     }
   }
   return items;
+}
+
+/** The conversation to show, in order: what the log makes, then what is still streaming in. */
+export function transcriptItems(state: TranscriptState): TranscriptItem[] {
+  const { items } = builtTranscript(state);
+  return state.live ? [...items, ...liveItems(state.live)] : items;
+}
+
+/** What the header knows from the log: the model and folder of the latest turn. */
+export function transcriptInfo(state: TranscriptState): { model?: string; cwd?: string } {
+  const { model, cwd } = builtTranscript(state);
+  return {
+    ...(model === undefined ? {} : { model }),
+    ...(cwd === undefined ? {} : { cwd }),
+  };
 }
 
 /**
