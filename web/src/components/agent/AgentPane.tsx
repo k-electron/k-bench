@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useAgentConversation } from "@/agent/useAgentConversation";
 import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
-import { Composer } from "./Composer";
+import { PromptDock } from "./PromptDock";
 
 /** How near the bottom the conversation must be scrolled for new text to keep it there. */
 const STICK_TO_BOTTOM_PX = 80;
@@ -72,12 +72,7 @@ export function AgentPane({
           This Session has ended.
         </p>
       )}
-      <Composer
-        onSend={conversation.send}
-        disabled={conversation.ended}
-        offline={conversation.reconnecting}
-        autoFocus={focused}
-      />
+      <PromptDock conversation={conversation} focused={focused} />
     </div>
   );
 }

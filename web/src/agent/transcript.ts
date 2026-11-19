@@ -1,7 +1,8 @@
-import type {
-  AgentServerMessage,
-  AgentSnapshot,
-  LogEntry,
+import {
+  type AgentServerMessage,
+  type AgentSnapshot,
+  type LogEntry,
+  openPermissionAsks,
 } from "../../../src/shared/agent-protocol.ts";
 
 /**
@@ -217,4 +218,47 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
     }
   }
   return items;
+}
+
+/**
+ * An Allow/Deny Claude Code is waiting on, as the Pane shows it: what the log's
+ * `permission_asked` entry says, without its numbering. It is open from the moment its entry
+ * arrives until the ask's `permission_answered` does, on every device alike: **the card never
+ * goes by a local decision**, only when that entry arrives, so the device whose answer came
+ * second sees it go exactly as the others do. Ticket #146 shows more of it (the diff, "don't
+ * ask again" from `suggestions`); #147 renders the questions and the plan.
+ */
+export interface PermissionAsk {
+  /** What an `answer` names. */
+  requestId: string;
+  toolName: string;
+  /** The tool's input as Claude Code sent it. */
+  input: Record<string, unknown>;
+  /** Claude Code's sentence for the ask ("Claude wants to read foo.txt"), if it gave one. */
+  title?: string;
+  description?: string;
+  blockedPath?: string;
+  /** The rule changes "don't ask again" would apply; the runtime holds the same ones. */
+  suggestions: readonly unknown[];
+  suppressAlwaysAllowRule: boolean;
+  defaultToNo: boolean;
+}
+
+/**
+ * The asks open now, oldest first (a subagent can ask while another ask is open, so there
+ * may be several; the Pane shows the first). They come from the log alone, so a device that
+ * connects, reloads or reconnects while one is open shows it, from its replay.
+ */
+export function permissionAsks(state: TranscriptState): PermissionAsk[] {
+  return openPermissionAsks(state.entries).map((entry) => ({
+    requestId: entry.requestId,
+    toolName: entry.toolName,
+    input: entry.input,
+    ...(entry.title === undefined ? {} : { title: entry.title }),
+    ...(entry.description === undefined ? {} : { description: entry.description }),
+    ...(entry.blockedPath === undefined ? {} : { blockedPath: entry.blockedPath }),
+    suggestions: entry.suggestions ?? [],
+    suppressAlwaysAllowRule: entry.suppressAlwaysAllowRule ?? false,
+    defaultToNo: entry.defaultToNo ?? false,
+  }));
 }

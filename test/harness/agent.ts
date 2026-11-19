@@ -9,6 +9,8 @@ import {
   decodeAgentServerMessage,
   encodeAgentClientMessage,
   type LogEntry,
+  openPermissionAsks,
+  type PermissionAskEntry,
 } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
@@ -119,6 +121,21 @@ export class AgentClient {
       () => this.messages.filter((m) => m.type === "replay").length > before,
       { description: "the replay" },
     );
+  }
+
+  /** The asks open as far as this client knows: asked, and not yet answered. */
+  get openAsks(): PermissionAskEntry[] {
+    return openPermissionAsks(this.entries);
+  }
+
+  /** Resolves with the oldest open ask, once there is one. */
+  waitForAsk(): Promise<PermissionAskEntry> {
+    return pollUntil(() => this.openAsks[0], { description: "a permission ask" });
+  }
+
+  /** Answers an ask as a Pane's Allow or Deny button does. */
+  answer(requestId: string, decision: "allow" | "deny"): void {
+    this.send({ type: "answer", requestId, decision });
   }
 
   /** Sends a prompt and returns the ID it was sent with. */
