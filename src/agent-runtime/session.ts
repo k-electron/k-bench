@@ -1,4 +1,5 @@
 import {
+  type AccountInfo,
   type CanUseTool,
   type EffortLevel,
   type ElicitationRequest,
@@ -165,6 +166,11 @@ export class ClaudeSession {
   async claudeVersion(): Promise<string> {
     const init = await this.query.initializationResult();
     return init.claude_code_version ?? "unknown";
+  }
+
+  /** The login Claude Code says it has, from the same first reply. */
+  accountInfo(): Promise<AccountInfo> {
+    return this.query.accountInfo();
   }
 
   /**
