@@ -19,7 +19,7 @@ import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
 import { AgentClient } from "./agent.ts";
 import { HARNESS_RUNTIME_FILE, writeRuntimeVariant } from "./agent-runtime.ts";
 import { EventsClient } from "./events.ts";
-import { FakeClaude, installFakeClaude } from "./fake-claude.ts";
+import { FakeClaude, fakeClaudeConfigDir, installFakeClaude } from "./fake-claude.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
 import { TerminalConnectionProbe } from "./terminal-connection.ts";
@@ -288,6 +288,7 @@ export class TestInstance {
     mkdirSync(zdotdir);
     writeFileSync(join(zdotdir, ".zshrc"), "unset HISTFILE\n");
     process.env.ZDOTDIR = zdotdir;
+    const claudeProgram = installFakeClaude(this.root);
     this.config = {
       dataDir: join(this.root, "data"),
       tmuxSocket: testSocketName(),
@@ -295,7 +296,10 @@ export class TestInstance {
       allowedLogin: "owner@example.com",
       pickerRoot: this.root,
       // Never the real `claude`: the Claude Code boundary is a stub (test/harness/fake-claude.sh).
-      claudeProgram: installFakeClaude(this.root),
+      claudeProgram,
+      // Never the owner's Claude Code folder either: the Agent Runtime's import of a
+      // conversation taken in the terminal reads the fake's own.
+      claudeConfigDir: fakeClaudeConfigDir(claudeProgram),
       ...overrides,
     };
   }

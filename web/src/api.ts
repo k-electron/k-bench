@@ -141,6 +141,13 @@ export const api = {
       `/api/sessions/${sessionId}/open-in-terminal`,
       {},
     ),
+  /** Switches a Claude TUI back to a Claude Agent, with the terminal's turns imported (#156). */
+  openInWeb: (sessionId: string) =>
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/sessions/${sessionId}/open-in-web`,
+      {},
+    ),
   /** The running list of unsupported kinds (#154), latest first. */
   unsupportedList: async () =>
     (await get<{ entries: UnsupportedListEntry[] }>("/api/unsupported")).entries,

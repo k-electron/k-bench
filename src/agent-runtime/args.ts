@@ -27,6 +27,18 @@ export interface RuntimeArgs {
   mode: "start" | "resume";
   /** The Session's Launch options; a flag left out is Default (`agentLaunchArguments`). */
   launch: LaunchOptions;
+  /**
+   * The Session comes back from the terminal (Open in web, #156): before Claude Code starts,
+   * the runtime reads what the terminal did in the conversation and adds it to the log.
+   */
+  importTerminal: boolean;
+  /**
+   * Where Claude Code keeps its files, if not in its default place. Only tests set it (the
+   * server passes it from `InstanceConfig.claudeConfigDir`), so that no test reads the
+   * owner's `~/.claude`; the owner's own `CLAUDE_CONFIG_DIR` reaches the runtime in its
+   * environment, as it reaches Claude Code.
+   */
+  claudeConfigDir?: string;
 }
 
 /** Reads the runtime's command line; throws a plain message for one that is not valid. */
@@ -43,6 +55,8 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
       effort: { type: "string" },
       advisor: { type: "string" },
       "focus-view": { type: "boolean" },
+      "import-terminal": { type: "boolean" },
+      "claude-config-dir": { type: "string" },
     },
     strict: true,
   });
@@ -53,7 +67,7 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
   const mode = values.mode;
   if (!agentDir || !folder || !claude || !conversation) {
     throw new Error(
-      "Usage: --agent-dir --folder --claude --conversation --mode [--model --effort --advisor --focus-view]",
+      "Usage: --agent-dir --folder --claude --conversation --mode [--model --effort --advisor --focus-view --import-terminal --claude-config-dir]",
     );
   }
   if (mode !== "start" && mode !== "resume") {
@@ -72,5 +86,15 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
     }
     (launch as unknown as Record<string, string>)[field] = choice;
   }
-  return { agentDir, folder, claude, conversation, mode, launch };
+  const claudeConfigDir = values["claude-config-dir"];
+  return {
+    agentDir,
+    folder,
+    claude,
+    conversation,
+    mode,
+    launch,
+    importTerminal: values["import-terminal"] === true,
+    ...(claudeConfigDir ? { claudeConfigDir } : {}),
+  };
 }

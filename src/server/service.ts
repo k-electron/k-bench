@@ -427,6 +427,67 @@ export class Service {
     }
   }
 
+  /**
+   * Switches a Claude TUI back to a Claude Agent, in the same Session (#156): the terminal's
+   * tmux session is stopped, then the Agent Runtime starts on the same conversation and, before
+   * Claude Code does, imports what the terminal did (ADR-0008). The terminal may be mid-turn:
+   * k-bench cannot tell, so the browser always asks first, unless the Claude TUI is Stopped,
+   * which has nothing to end. Every device follows, because the state says it is an Agent now.
+   */
+  async openInWeb(sessionId: string): Promise<{ id: string; name: string }> {
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    if (session.kind !== "claude" || session.interface !== "tui") {
+      throw new ServiceError("invalid", "Only a Claude TUI can be opened in web");
+    }
+    // A double tap, or another device doing the same, shares one switch.
+    let switching = this.restarts.get(sessionId);
+    if (!switching) {
+      this.replacing.add(sessionId);
+      switching = this.switchToWeb(sessionId).finally(() => {
+        this.restarts.delete(sessionId);
+        this.replacing.delete(sessionId);
+      });
+      this.restarts.set(sessionId, switching);
+    }
+    await switching;
+    return { id: session.id, name: session.name };
+  }
+
+  private async switchToWeb(sessionId: string): Promise<void> {
+    const session = this.store.getSession(sessionId);
+    if (session?.interface !== "tui") return;
+    if (session.conversationId === null) {
+      throw new ServiceError("invalid", "This Session has no conversation to open");
+    }
+    // Checked before the terminal goes: what would stop the Agent starting must not cost the
+    // owner a terminal that was fine.
+    if (!isDirectory(session.folder)) {
+      throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
+    }
+    if (!this.agents.current && !this.agents.install()) {
+      throw new ServiceError(
+        "invalid",
+        "Claude Agents are not available on this install",
+      );
+    }
+    // Gone before the interface changes, as in the other direction: while the Session is a
+    // Claude Agent and a terminal's tmux session still exists, nothing may attach to it.
+    await this.tmux.killSession(sessionId);
+    this.store.setInterface(sessionId, "agent");
+    try {
+      await this.startStopped(
+        { ...session, interface: "agent" },
+        { importTerminal: true },
+      );
+    } catch (error) {
+      // The terminal is gone and the Agent did not start: a Stopped Claude TUI, which Restart
+      // starts again on the same conversation.
+      this.store.setInterface(sessionId, "tui");
+      throw error;
+    }
+  }
+
   /** Ends the Session's shell and everything in it, then forgets the Session. */
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.store.getSession(sessionId);
@@ -541,13 +602,17 @@ export class Service {
     return { id: session.id, name: session.name };
   }
 
-  private async startStopped(session: {
-    id: string;
-    folder: string;
-    conversationId: string | null;
-    launchOptions: LaunchOptions | null;
-    interface: ClaudeInterface | null;
-  }): Promise<void> {
+  private async startStopped(
+    session: {
+      id: string;
+      folder: string;
+      conversationId: string | null;
+      launchOptions: LaunchOptions | null;
+      interface: ClaudeInterface | null;
+    },
+    /** Open in web: the runtime imports the terminal's turns before Claude Code starts. */
+    options: { importTerminal?: boolean } = {},
+  ): Promise<void> {
     if ((await this.tmux.listSessions()).some((live) => live.id === session.id)) return;
     if (!isDirectory(session.folder)) {
       throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
@@ -563,6 +628,7 @@ export class Service {
             mode: "resume",
             // Every Launch option is passed again each time (ADR-0005).
             options: launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
+            ...(options.importTerminal ? { importTerminal: true } : {}),
           });
         } catch (error) {
           throw error instanceof AgentStartError

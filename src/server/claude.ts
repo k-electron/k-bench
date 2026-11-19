@@ -199,6 +199,10 @@ export interface AgentLaunch {
   mode: "start" | "resume";
   /** The Session's Launch options, passed again at every start (ADR-0005). */
   options: LaunchOptions;
+  /** Open in web: the runtime imports the terminal's turns before it starts (#156). */
+  importTerminal?: boolean;
+  /** Tests only: where Claude Code's files are (`InstanceConfig.claudeConfigDir`). */
+  claudeConfigDir?: string;
 }
 
 /**
@@ -281,5 +285,7 @@ export function agentCommand(input: {
     launch.mode,
     launch.conversationId,
     ...agentLaunchArguments(launch.options),
+    ...(launch.importTerminal ? ["--import-terminal"] : []),
+    ...(launch.claudeConfigDir ? ["--claude-config-dir", launch.claudeConfigDir] : []),
   ]);
 }

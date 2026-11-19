@@ -156,6 +156,8 @@ export class AgentRuntimes {
     mode: "start" | "resume";
     /** The Session's Launch options, passed to the runtime at every start. */
     options: LaunchOptions;
+    /** Open in web: the runtime adds the terminal's turns to the log before it starts (#156). */
+    importTerminal?: boolean;
   }): Promise<void> {
     const runtime = this.installed ?? this.install();
     if (!runtime) {
@@ -176,6 +178,7 @@ export class AgentRuntimes {
       conversationId: input.conversationId,
       mode: input.mode,
       options: input.options,
+      ...(input.importTerminal ? { importTerminal: true } : {}),
     });
   }
 

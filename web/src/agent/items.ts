@@ -453,6 +453,18 @@ function readSdkMessage(
         for (const block of results) resolveTool(state, message, block);
       } else if (message.isSynthetic === true) {
         // Claude Code's own bookkeeping, not something anyone said.
+      } else if (message.isCompactSummary === true) {
+        // Claude's summary of the conversation, from a compaction in the terminal (#156): not
+        // something anyone typed, so a line of output, under the divider that says so.
+        const text = textOf(inner.content);
+        if (text.trim() !== "") {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
       } else if (message.isReplay === true) {
         // The echo of a prompt. k-bench's own was already shown from its `prompt` entry; one
         // that k-bench did not send (typed in the terminal, imported) is shown here.
@@ -587,6 +599,14 @@ export function buildItems(
         }
         break;
       }
+      case "divider":
+        state.items.push({
+          kind: "divider",
+          key: `entry-${entry.seq}`,
+          seq: entry.seq,
+          label: entry.label,
+        });
+        break;
       case "declined":
         // What the runtime declined for the owner (an MCP elicitation): it happened here.
         addUnsupported(state, entry.seq, `${entry.seq}-declined`, [

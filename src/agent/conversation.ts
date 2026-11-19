@@ -37,7 +37,9 @@ export class ConversationTracker {
 
   /** Reads the next log entry, in order. True when the conversation changed. */
   observe(entry: LogEntry): boolean {
-    if (entry.kind === "prompt") {
+    // A divider is written only with turns imported from the terminal, so the conversation
+    // has been saved there even though k-bench sent nothing in it (#156).
+    if (entry.kind === "prompt" || entry.kind === "divider") {
       this.promptedSinceStart = true;
       return false;
     }

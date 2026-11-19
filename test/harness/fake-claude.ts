@@ -9,14 +9,24 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { PermissionMode } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 import type { TerminalClient } from "./terminal.ts";
 
 const STUB = join(import.meta.dirname, "fake-claude.sh");
 const SDK_FAKE = join(import.meta.dirname, "fake-claude-sdk.mjs");
+const SESSION_FILES = join(import.meta.dirname, "fake-claude-session.mjs");
 const FIXTURES = join(import.meta.dirname, "fixtures");
+
+/**
+ * Claude Code's folder for one test instance: where both fakes save the conversations as Claude
+ * Code does, and what the instance's config names as `claudeConfigDir`, so that the Agent
+ * Runtime's import reads it and never the owner's own.
+ */
+export function fakeClaudeConfigDir(program: string): string {
+  return join(dirname(program), "claude-config");
+}
 
 /**
  * Puts the fake Claude Code (`fake-claude.sh`) in a folder of `root` and returns its path,
@@ -33,6 +43,7 @@ export function installFakeClaude(root: string): string {
   copyFileSync(STUB, program);
   chmodSync(program, 0o755);
   copyFileSync(SDK_FAKE, join(folder, "fake-claude-sdk.mjs"));
+  copyFileSync(SESSION_FILES, join(folder, "fake-claude-session.mjs"));
   cpSync(FIXTURES, join(folder, "fixtures"), { recursive: true });
   symlinkSync(process.execPath, join(folder, "node"));
   return program;

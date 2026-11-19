@@ -41,6 +41,8 @@ export interface Actions {
   stopSession(sessionId: string): Promise<void>;
   /** Switches a Claude Agent to Claude TUI in the same Session; every device follows. */
   openInTerminal(sessionId: string): Promise<void>;
+  /** Switches a Claude TUI back to a Claude Agent, with the terminal's turns imported. */
+  openInWeb(sessionId: string): Promise<void>;
 }
 
 /**
@@ -127,6 +129,9 @@ export function useAppState(): {
       },
       openInTerminal: async (sessionId) => {
         await reporting(() => act(api.openInTerminal(sessionId)));
+      },
+      openInWeb: async (sessionId) => {
+        await reporting(() => act(api.openInWeb(sessionId)));
       },
     };
   }, []);
