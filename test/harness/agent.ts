@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import {
   type AgentClientMessage,
+  type AgentCommands,
   type AgentHello,
   type AgentPage,
   type AgentServerMessage,
@@ -15,6 +16,7 @@ import {
   openPermissionAsks,
   type PermissionAskEntry,
   type PermissionMode,
+  type PermissionReply,
 } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
@@ -109,6 +111,14 @@ export class AgentClient {
     return undefined;
   }
 
+  /** The names the `/` menu offers, from the newest `commands` message (none before a `sync`). */
+  get commandNames(): string[] | undefined {
+    const message = this.messages.findLast(
+      (m): m is AgentCommands => m.type === "commands",
+    );
+    return message?.commands.map((command) => command.name);
+  }
+
   /** The `seq` of the newest entry received: what a reconnecting client syncs from. */
   get lastSeq(): number {
     return this.entries.at(-1)?.seq ?? 0;
@@ -190,9 +200,27 @@ export class AgentClient {
     this.send({ type: "set_permission_mode", mode });
   }
 
-  /** Answers an ask as a Pane's Allow or Deny button does. */
-  answer(requestId: string, decision: "allow" | "deny"): void {
-    this.send({ type: "answer", requestId, decision });
+  /** Stops one subagent or background task, as the Stop on its line in the Transcript does. */
+  stopTask(taskId: string): void {
+    this.send({ type: "stop_task", taskId });
+  }
+
+  /** The IDs of the tasks the newest `status` says are running, in the order they started. */
+  get taskIds(): string[] {
+    return (this.status?.tasks ?? []).map((task) => task.id);
+  }
+
+  /**
+   * Answers an ask as a Pane's choices do: a reply of `{ decision: "allow" }` (with
+   * `alwaysAllow: true` for "don't ask again") or `{ decision: "deny" }` (with the owner's
+   * `message`); a bare decision is the plain choice.
+   */
+  answer(requestId: string, reply: PermissionReply | PermissionReply["decision"]): void {
+    this.send({
+      type: "answer",
+      requestId,
+      ...(typeof reply === "string" ? { decision: reply } : reply),
+    });
   }
 
   /** Interrupts the turn that is running, as a Pane's Interrupt button or Esc does. */

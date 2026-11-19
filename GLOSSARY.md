@@ -68,6 +68,10 @@ _Avoid_: blocked, needs input, pending
 A Session's request for attention, raised while no device is viewing the Session: when its program rings the terminal bell, or, for a Claude Agent, when a turn finishes or it becomes Waiting for you. It is cleared once the owner views that Session on any device. A Claude Agent counts as viewed only while a Pane shows it on a visible page: a background browser tab does not count, so walking away from the desk leaves the pulse for the phone. The sidebar shows it as the Session's row pulsing (and a collapsed Workspace's, while any Session in it has one).
 _Avoid_: notification, alert, activity, unviewed
 
+**Unsupported**:
+Something a Claude Agent met that k-bench can't show or answer: a message or content type it doesn't recognise, a dialog or request it declines (such as an MCP server asking the owner a question), or a command that isn't available in a web interface. It is reported in the conversation, as a row where it happened that says what Claude tried and opens the raw view, and in the running list of unsupported kinds, reached from the sidebar, which counts each kind across every Session. It raises no Bell of its own.
+_Avoid_: unknown, error, unavailable
+
 **Claude conversation**:
 A Claude Code conversation. A Claude Session runs one at a time and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
 _Avoid_: session, Claude session id (use conversation ID)

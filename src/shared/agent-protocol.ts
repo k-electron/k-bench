@@ -67,6 +67,19 @@ export type LogEntry =
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
   /**
+   * Something Claude Code asked of k-bench that the runtime declined, because a Claude Agent
+   * has no way to answer it (#153). The browser shows it as an Unsupported row where it
+   * happened. `request` is what Claude Code sent, as the SDK handed it over, so the log holds
+   * what was asked even for fields no row shows yet. A reader that does not know `what`
+   * shows nothing.
+   */
+  | (LogEntryBase & {
+      kind: "declined";
+      /** What was declined: `elicitation`, an MCP server asking the owner for input. */
+      what: "elicitation";
+      request: Record<string, unknown>;
+    })
+  /**
    * An Allow/Deny that Claude Code is waiting on: written when it asks, and open until a
    * `permission_answered` with the same `requestId` follows (see `openPermissionAsks`).
    * Every field of the SDK's `canUseTool` request that can be serialised is kept, because the
@@ -112,16 +125,27 @@ export type LogEntry =
     });
 
 /**
+ * The owner's reply to an ask, as a client sends it and as the log records it:
+ * - `allow`, with `alwaysAllow` for "Yes, don't ask again": Claude Code's own suggested rule
+ *   changes are saved with it. The log records it only when the runtime did apply them (the
+ *   ask had suggestions and did not suppress the choice), so the log says what happened.
+ * - `deny`, with `message` for "No, and tell Claude what to do differently": what the owner
+ *   wrote, which Claude reads as the reason.
+ */
+export type PermissionReply =
+  | { decision: "allow"; alwaysAllow?: true }
+  | { decision: "deny"; message?: string };
+
+/**
  * How an ask ended. `allow` and `deny` are the owner's answer, from whichever device came
  * first. The others were nobody's answer: `cancelled` is Claude Code withdrawing the ask (the
  * turn was interrupted, the tool call gone), and `interrupted` is the runtime ending, or
  * finding at its next start that the previous one ended, while the ask was open: it could
  * never be answered ("not answered, the Agent stopped"). Later tickets add fields to `allow`
- * and `deny` (#146, #147), never new meanings to a `decision`.
+ * and `deny` (#147), never new meanings to a `decision`.
  */
 export type PermissionAnswer =
-  | { decision: "allow" }
-  | { decision: "deny" }
+  | PermissionReply
   | { decision: "cancelled" }
   | { decision: "interrupted" };
 
@@ -241,6 +265,18 @@ export function isPermissionMode(value: unknown): value is PermissionMode {
   return PERMISSION_MODES.includes(value as PermissionMode);
 }
 
+/**
+ * A subagent or a background task Claude Code is running now (ticket #149). `id` is Claude
+ * Code's `task_id`: what `stop_task` names, and what the Transcript's lines for it carry.
+ */
+export interface AgentTask {
+  id: string;
+  /** `subagent`: an agent Claude launched. `background`: a shell command, monitor or other background work. */
+  kind: "subagent" | "background";
+  /** What it is for, as Claude Code described it ("Survey the tests", a command). */
+  description: string;
+}
+
 /** What the Agent is doing, pushed to every connection whenever it changes (and on connect). */
 export interface AgentStatus {
   type: "status";
@@ -274,6 +310,12 @@ export interface AgentStatus {
    * Code that cannot (an older one).
    */
   context?: AgentContextUsage;
+  /**
+   * The subagents and background tasks running now, in the order they started; absent when
+   * there are none. They outlive turns, so an Idle Agent can have some. This is what Open in
+   * terminal lists as "what would stop" (#155).
+   */
+  tasks?: AgentTask[];
 }
 
 /**
@@ -333,6 +375,33 @@ export interface AgentSnapshot {
   blocks: Array<{ index: number; type: string; text: string }>;
 }
 
+/**
+ * One entry of the `/` menu: a command, or a skill, as Claude Code lists it (the SDK's
+ * `SlashCommand`: its own, the owner's, a project's, a plugin's or an MCP server's).
+ */
+export interface AgentCommand {
+  /** Without the leading slash. */
+  name: string;
+  description: string;
+  /** What follows the name (`<file>`); empty when it takes nothing. */
+  argumentHint: string;
+  /** Other names that run it (`/cost` and `/stats` for `/usage`). */
+  aliases?: string[];
+}
+
+/**
+ * What the `/` menu offers, whole: the commands and skills Claude Code lists, **without the
+ * ones it marks as bound to a terminal** (`exit`, `statusline`...). Sent to a connection right
+ * after its `replay`, and again to every synced connection whenever it changes (Claude Code
+ * found skills as the work moved on, a plugin came, or a turn's `init` said which commands are
+ * terminal-only). Each one replaces the last. Never logged: it describes the Claude Code now
+ * running, not the conversation.
+ */
+export interface AgentCommands {
+  type: "commands";
+  commands: AgentCommand[];
+}
+
 /** A message the runtime refused, or a request it could not carry out. */
 export interface AgentError {
   type: "error";
@@ -361,6 +430,7 @@ export type AgentServerMessage =
   | AgentEntry
   | AgentPartial
   | AgentSnapshot
+  | AgentCommands
   | AgentError;
 
 // ---- Client to runtime -------------------------------------------------------------------
@@ -396,13 +466,15 @@ export type AgentClientMessage =
    */
   | { type: "prompt"; id: string; text: string; images?: string[] }
   /**
-   * The owner's answer to an open ask. The runtime builds what Claude Code is sent from the
-   * ask it holds, so a client says only which: it can never change the tool's input or the
-   * rules to save. The first answer for a `requestId` wins; one for an ask that is no longer
-   * open (answered on another device, withdrawn, never asked) is ignored, with no error.
-   * What came of it arrives as the ask's `permission_answered` entry, to every device.
+   * The owner's answer to an open ask (see `PermissionReply`). The runtime builds what Claude
+   * Code is sent from the ask it holds, so a client says only which choice: it can never change
+   * the tool's input or the rules to save (`alwaysAllow` saves Claude Code's own suggestion,
+   * and only if the ask offered it). The first answer for a `requestId` wins; one for an ask
+   * that is no longer open (answered on another device, withdrawn, never asked) is ignored,
+   * with no error. What came of it arrives as the ask's `permission_answered` entry, to every
+   * device.
    */
-  | { type: "answer"; requestId: string; decision: "allow" | "deny" }
+  | ({ type: "answer"; requestId: string } & PermissionReply)
   /**
    * Switches Claude Code to this permission mode. A target, not a "next": two devices that
    * both tap at once ask for the same mode, and it is set once. Only the modes of
@@ -417,6 +489,13 @@ export type AgentClientMessage =
    * is running.
    */
   | { type: "interrupt" }
+  /**
+   * Stops one subagent or background task, by Claude Code's `task_id`, and nothing else: the
+   * turn and the other tasks go on (an interrupt does not stop tasks either). What came of it
+   * is Claude Code's `task_notification` and the next `status`; a task that is not running is
+   * not an error.
+   */
+  | { type: "stop_task"; taskId: string }
   /**
    * Says whether this connection's page shows the Agent in a Pane right now: the page is
    * visible (not a background tab, not a locked phone) and the Pane is open. Sent when the
@@ -511,13 +590,39 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
           }
         : undefined;
     }
-    case "answer":
-      return typeof message.requestId === "string" &&
-        message.requestId !== "" &&
-        message.requestId.length <= MAX_REQUEST_ID_CHARACTERS &&
-        (message.decision === "allow" || message.decision === "deny")
-        ? { type: "answer", requestId: message.requestId, decision: message.decision }
-        : undefined;
+    case "answer": {
+      if (
+        typeof message.requestId !== "string" ||
+        message.requestId === "" ||
+        message.requestId.length > MAX_REQUEST_ID_CHARACTERS
+      ) {
+        return undefined;
+      }
+      const { requestId } = message;
+      if (message.decision === "allow") {
+        if (message.message !== undefined) return undefined;
+        if (message.alwaysAllow === undefined || message.alwaysAllow === false) {
+          return { type: "answer", requestId, decision: "allow" };
+        }
+        return message.alwaysAllow === true
+          ? { type: "answer", requestId, decision: "allow", alwaysAllow: true }
+          : undefined;
+      }
+      if (message.decision === "deny") {
+        if (message.alwaysAllow !== undefined) return undefined;
+        if (message.message === undefined) {
+          return { type: "answer", requestId, decision: "deny" };
+        }
+        if (typeof message.message !== "string") return undefined;
+        const reply = message.message.trim();
+        if (reply.length > MAX_PROMPT_CHARACTERS) return undefined;
+        // An empty reply is a plain "No".
+        return reply === ""
+          ? { type: "answer", requestId, decision: "deny" }
+          : { type: "answer", requestId, decision: "deny", message: reply };
+      }
+      return undefined;
+    }
     case "set_permission_mode":
       return isPermissionMode(message.mode) &&
         PERMISSION_MODE_CYCLE.includes(message.mode)
@@ -525,6 +630,12 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         : undefined;
     case "interrupt":
       return { type: "interrupt" };
+    case "stop_task":
+      return typeof message.taskId === "string" &&
+        message.taskId !== "" &&
+        message.taskId.length <= MAX_REQUEST_ID_CHARACTERS
+        ? { type: "stop_task", taskId: message.taskId }
+        : undefined;
     case "view":
       return typeof message.visible === "boolean"
         ? { type: "view", visible: message.visible }
@@ -553,6 +664,7 @@ const SERVER_TYPES: readonly string[] = [
   "entry",
   "partial",
   "snapshot",
+  "commands",
   "error",
 ] satisfies AgentServerMessage["type"][];
 

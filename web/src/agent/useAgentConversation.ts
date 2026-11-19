@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
+  type AgentCommand,
   type AgentContextUsage,
   type AgentHello,
   type AgentStatus,
   type LogEntry,
   nextPermissionMode,
   type PermissionMode,
+  type PermissionReply,
 } from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
 import { pageViewing } from "../pageViewing";
@@ -114,7 +116,7 @@ export interface AgentConversation {
    * applied: the ask ends, here and on every device, when its entry arrives, and an answer
    * that came second is ignored without a word.
    */
-  answer(requestId: string, decision: "allow" | "deny"): boolean;
+  answer(requestId: string, reply: PermissionReply): boolean;
   /**
    * Stops the turn that is running. False when nothing runs, when it could not be sent
    * (reconnecting: dropped, never queued), or when an interrupt is already on its way: a
@@ -124,8 +126,16 @@ export interface AgentConversation {
   interrupt(): boolean;
   /** An interrupt has been sent and the turn it stops has not ended yet. */
   interrupting: boolean;
+  /**
+   * Stops one subagent or background task (#149), by its `task_id`, and nothing else. False
+   * when it could not be sent (reconnecting: dropped, never queued). True means sent: the
+   * task's line changes when Claude Code says it stopped.
+   */
+  stopTask(taskId: string): boolean;
   /** The prompts typed in this Agent, oldest first: what Up and Down in the input step through. */
   history: string[];
+  /** What the `/` menu offers (#150), as the runtime last said; empty until it has. */
+  commands: readonly AgentCommand[];
 }
 
 interface Model {
@@ -135,6 +145,7 @@ interface Model {
   mode: PermissionMode | undefined;
   turnStartedAt: number | undefined;
   context: AgentContextUsage | undefined;
+  commands: readonly AgentCommand[];
   ended: boolean;
   reconnecting: boolean;
   /** The `beforeSeq` of the page request waiting for its answer, if one is. */
@@ -170,6 +181,7 @@ function reduce(model: Model, event: Event): Model {
     return { ...model, requestedBefore: event.before };
   const { message } = event;
   if (message.type === "hello") return { ...model, hello: message };
+  if (message.type === "commands") return { ...model, commands: message.commands };
   if (message.type === "status") {
     return {
       ...model,
@@ -183,6 +195,7 @@ function reduce(model: Model, event: Event): Model {
 }
 
 const NO_ASKS: PermissionAsk[] = [];
+const NO_COMMANDS: readonly AgentCommand[] = [];
 
 const initial: Model = {
   transcript: emptyTranscript,
@@ -191,6 +204,7 @@ const initial: Model = {
   mode: undefined,
   turnStartedAt: undefined,
   context: undefined,
+  commands: NO_COMMANDS,
   ended: false,
   reconnecting: false,
   requestedBefore: undefined,
@@ -236,8 +250,13 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   );
 
   const answer = useCallback(
-    (requestId: string, decision: "allow" | "deny") =>
-      connection.current?.send({ type: "answer", requestId, decision }) ?? false,
+    (requestId: string, reply: PermissionReply) =>
+      connection.current?.send({ type: "answer", requestId, ...reply }) ?? false,
+    [],
+  );
+
+  const stopTask = useCallback(
+    (taskId: string) => connection.current?.send({ type: "stop_task", taskId }) ?? false,
     [],
   );
 
@@ -321,6 +340,8 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     answer,
     interrupt,
     interrupting,
+    stopTask,
     history,
+    commands: model.commands,
   };
 }

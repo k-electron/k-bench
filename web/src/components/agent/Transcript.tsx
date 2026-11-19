@@ -1,10 +1,14 @@
 import { memo } from "react";
 import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
+import { CommandOutput } from "./CommandOutput";
 import { Markdown } from "./Markdown";
 import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
+import { TaskLine } from "./TaskLine";
 import { ToolCall } from "./ToolCall";
+import { UncommonLine } from "./UncommonLine";
+import { UnsupportedRow } from "./UnsupportedRow";
 
 /**
  * The conversation in Claude TUI's shape. The scaffolding (`>`, `⏺`, `⎿`, tool names, output)
@@ -107,6 +111,8 @@ export const TranscriptItemView = memo(function TranscriptItemView({
       );
     case "tool":
       return <ToolCall item={item} collapsed={focusView} />;
+    case "task":
+      return <TaskLine item={item} />;
     case "interrupted":
       return (
         <div className="my-1 flex gap-2 pl-5 text-red-300">
@@ -114,6 +120,49 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           <span>Interrupted</span>
         </div>
       );
+    case "compaction":
+    case "hook":
+    case "mcp":
+    case "problem":
+    case "notice":
+    case "advisor":
+    case "todos":
+      // The less common lines (#148), in one component.
+      return <UncommonLine item={item} />;
+    case "command_output":
+      return <CommandOutput text={item.text} />;
+    case "permission":
+      return (
+        <div className="my-0.5 flex gap-2 pl-5 text-xs text-muted-foreground">
+          <Gutter>⎿</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            permission: {item.answer}
+          </span>
+        </div>
+      );
+    case "goal-set":
+      return (
+        <article aria-label="Goal set" className="my-1.5 flex gap-2">
+          <Gutter className="text-white/70">◎</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            <strong>Goal set:</strong> {item.condition}
+          </span>
+        </article>
+      );
+    case "goal-check-in":
+      return (
+        <article
+          aria-label="Goal check-in"
+          className="my-1 flex gap-2 pl-5 text-muted-foreground"
+        >
+          <Gutter>⎿</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            Goal check-in: {item.feedback}
+          </span>
+        </article>
+      );
+    case "unsupported":
+      return <UnsupportedRow item={item} />;
     default: {
       // Every kind of item has a case above: a new kind fails to compile here until it has one.
       const missing: never = item;

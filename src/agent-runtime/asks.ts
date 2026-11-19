@@ -1,8 +1,13 @@
-import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  CanUseTool,
+  PermissionResult,
+  PermissionUpdate,
+} from "@anthropic-ai/claude-agent-sdk";
 import type {
   NewLogEntry,
   PermissionAnswer,
   PermissionAskEntry,
+  PermissionReply,
 } from "../shared/agent-protocol.ts";
 
 /** What Claude Code is told when the owner denies, which Claude reads as the tool's error. */
@@ -11,10 +16,21 @@ const DENIED_MESSAGE =
   "(eg. if it was a file edit, the new_string was NOT written to the file). " +
   "STOP what you are doing and wait for the user to tell you how to proceed.";
 
+/**
+ * What Claude Code is told when the owner denies and says why: the same sentence, then the
+ * owner's words, which Claude reads as how to proceed.
+ */
+const DENIED_WITH_REPLY =
+  "The user doesn't want to proceed with this tool use. The tool use was rejected " +
+  "(eg. if it was a file edit, the new_string was NOT written to the file). " +
+  "To tell you how to proceed, the user said:\n";
+
 /** An ask Claude Code is waiting on: what it takes to answer it later. */
 interface OpenAsk {
   input: Record<string, unknown>;
   toolUseId: string;
+  /** The rule changes Claude Code suggested for "don't ask again"; none if it offered none. */
+  suggestions: PermissionUpdate[];
   resolve(result: PermissionResult): void;
   reject(error: Error): void;
 }
@@ -58,7 +74,14 @@ export class PermissionAsks {
         return;
       }
       const known = this.open.has(requestId);
-      this.open.set(requestId, { input, toolUseId: options.toolUseID, resolve, reject });
+      this.open.set(requestId, {
+        input,
+        toolUseId: options.toolUseID,
+        // "Don't ask again" is offered only where Claude Code offers it.
+        suggestions: options.suppressAlwaysAllowRule ? [] : (options.suggestions ?? []),
+        resolve,
+        reject,
+      });
       signal.addEventListener(
         "abort",
         () => {
@@ -91,16 +114,36 @@ export class PermissionAsks {
   /**
    * The owner's answer. The first for an ask wins; an ask that is not open (answered
    * already, withdrawn, never made) is ignored without a word. What Claude Code is sent is
-   * built here from the ask, never taken from the client.
+   * built here from the ask, never taken from the client: "don't ask again" sends back the
+   * rule changes Claude Code itself suggested, and only if it did.
    */
-  answer(requestId: string, decision: "allow" | "deny"): void {
-    const ask = this.close(requestId, { decision });
+  answer(requestId: string, reply: PermissionReply): void {
+    const ask = this.open.get(requestId);
     if (!ask) return;
-    ask.resolve(
-      decision === "allow"
-        ? { behavior: "allow", updatedInput: ask.input, toolUseID: ask.toolUseId }
-        : { behavior: "deny", message: DENIED_MESSAGE, toolUseID: ask.toolUseId },
+    if (reply.decision === "allow") {
+      const always = reply.alwaysAllow === true && ask.suggestions.length > 0;
+      this.close(
+        requestId,
+        always ? { decision: "allow", alwaysAllow: true } : { decision: "allow" },
+      );
+      ask.resolve({
+        behavior: "allow",
+        updatedInput: ask.input,
+        toolUseID: ask.toolUseId,
+        ...(always && { updatedPermissions: ask.suggestions }),
+      });
+      return;
+    }
+    const said = reply.message?.trim() ?? "";
+    this.close(
+      requestId,
+      said === "" ? { decision: "deny" } : { decision: "deny", message: said },
     );
+    ask.resolve({
+      behavior: "deny",
+      message: said === "" ? DENIED_MESSAGE : DENIED_WITH_REPLY + said,
+      toolUseID: ask.toolUseId,
+    });
   }
 
   /** The runtime is ending: every ask still open ends as not answered. */

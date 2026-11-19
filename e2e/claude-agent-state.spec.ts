@@ -46,7 +46,10 @@ test("a Claude Agent's dot, row edge and top bar follow Idle, Working, Waiting f
   await app.expandWorkspace("project");
   await expect(app.workspaceWaiting("project")).toHaveCount(0);
 
-  await app.permissionPrompt("session 1").getByRole("button", { name: "Allow" }).click();
+  await app
+    .permissionPrompt("session 1")
+    .getByRole("button", { name: "1. Yes", exact: true })
+    .click();
   await expect(app.agentRegion("session 1").getByRole("log")).toContainText("all listed");
   await expect(app.sessionStatus("session 1", "idle")).toBeVisible();
   await expect(app.paneLabel(1)).toContainText("Idle");

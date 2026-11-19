@@ -10,7 +10,7 @@ import { type AgentRuntimes, AgentStartError } from "./agents.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
-import type { Store } from "./store.ts";
+import type { Store, UnsupportedEntry } from "./store.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
 /** A failure the HTTP layer maps to a status code. */
@@ -22,6 +22,9 @@ export class ServiceError extends Error {
     this.kind = kind;
   }
 }
+
+/** The longest kind or occurrence id a browser may report: a bound on what a client can store. */
+const MAX_REPORT_FIELD = 300;
 
 function isDirectory(path: string): boolean {
   try {
@@ -281,6 +284,48 @@ export class Service {
       kind: this.store.getLastSessionKind() ?? "shell",
       claude: this.store.getLastLaunchOptions() ?? DEFAULT_LAUNCH_OPTIONS,
     };
+  }
+
+  /**
+   * Counts an occurrence of an unsupported kind a browser saw in a Session (#154). The
+   * `occurrenceId` is the browser's name for the occurrence, the same from every device, so a
+   * report that arrives twice counts once. `at` is when it happened, if the browser knows.
+   */
+  reportUnsupported(input: {
+    kind: unknown;
+    sessionId: unknown;
+    occurrenceId: unknown;
+    at: unknown;
+  }): void {
+    const { kind, sessionId, occurrenceId } = input;
+    if (typeof kind !== "string" || kind === "" || kind.length > MAX_REPORT_FIELD) {
+      throw new ServiceError("invalid", "kind is required");
+    }
+    if (
+      typeof occurrenceId !== "string" ||
+      occurrenceId === "" ||
+      occurrenceId.length > MAX_REPORT_FIELD
+    ) {
+      throw new ServiceError("invalid", "occurrenceId is required");
+    }
+    if (typeof sessionId !== "string" || !this.store.getSession(sessionId)) {
+      throw new ServiceError("not_found", "Unknown Session");
+    }
+    const now = Date.now();
+    const at =
+      typeof input.at === "number" && Number.isFinite(input.at)
+        ? Math.min(Math.round(input.at), now)
+        : now;
+    this.store.recordUnsupported({ kind, sessionId, occurrenceId, at });
+  }
+
+  /** The running list of unsupported kinds, latest first. */
+  listUnsupported(): UnsupportedEntry[] {
+    return this.store.listUnsupported();
+  }
+
+  clearUnsupported(kind: string): void {
+    this.store.clearUnsupported(kind);
   }
 
   renameSession(sessionId: string, requestedName: string): { id: string; name: string } {

@@ -288,12 +288,12 @@ export function transcriptInfo(state: TranscriptState): {
 }
 
 /**
- * An Allow/Deny Claude Code is waiting on, as the Pane shows it: what the log's
+ * A permission ask Claude Code is waiting on, as the Pane shows it: what the log's
  * `permission_asked` entry says, without its numbering. It is open from the moment its entry
- * arrives until the ask's `permission_answered` does, on every device alike: **the card never
+ * arrives until the ask's `permission_answered` does, on every device alike: **the panel never
  * goes by a local decision**, only when that entry arrives, so the device whose answer came
- * second sees it go exactly as the others do. Ticket #146 shows more of it (the diff, "don't
- * ask again" from `suggestions`); #147 renders the questions and the plan.
+ * second sees it go exactly as the others do. The panel (`PermissionPrompt`) shows the diff,
+ * and "don't ask again" when `suggestions` offers it; #147 renders the questions and the plan.
  */
 export interface PermissionAsk {
   /** What an `answer` names. */
