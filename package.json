@@ -53,6 +53,7 @@
     "test:e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "smoke": "node scripts/smoke.ts",
+    "live-check": "node scripts/live-check.ts",
     "release": "node scripts/release.ts",
     "screenshots": "playwright test --config playwright.screenshots.config.ts",
     "screenshots:record": "node scripts/record-hero.ts",

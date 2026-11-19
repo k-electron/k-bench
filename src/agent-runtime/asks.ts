@@ -26,7 +26,7 @@ const DENIED_MESSAGE =
  * What Claude Code is told when the owner denies and says why: the same sentence, then the
  * owner's words, which Claude reads as how to proceed.
  */
-const DENIED_WITH_REPLY =
+export const DENIED_WITH_REPLY =
   "The user doesn't want to proceed with this tool use. The tool use was rejected " +
   "(eg. if it was a file edit, the new_string was NOT written to the file). " +
   "To tell you how to proceed, the user said:\n";
