@@ -28,7 +28,7 @@ k-bench asks first when something would be cut off: when Claude is working, when
 
 The terminal is also where these live, because the Claude Agent has no web version of them: the rewind and branch controls (`/rewind` restores code a Claude Agent edited), `!` shell commands (a shell Session in the same Workspace is one tap away), viewing `/permissions` rules, `/hooks`, `/memory`, `/diff`, `/add-dir`, `/cd`, `/plugin`, `/status` and the `/config` panel, and vim mode and keybindings. The [checklist](../claude-agent-parity.md) has each one.
 
-Whenever a Claude Agent meets something k-bench can't show or answer, it says so in the conversation with an **Unsupported** row that offers Open in terminal, and adds the kind to a list beside the Claude Agent settings. The list shows where k-bench should grow.
+Whenever a Claude Agent meets something k-bench can't show or answer, it says so in the conversation with an **Unsupported** row that offers Open in terminal, and adds the kind to a running list across every Session. Open it with **Unsupported** at the bottom of the sidebar (k-bench has no settings page, so the list lives there). Each kind shows how many times it has happened, when it last did and a link to that Session; **Clear** removes one, and it comes back if it happens again. The server keeps the list, so every device sees the same one, and two devices looking at the same thing count it once. The list shows where k-bench should grow.
 
 ## Subscription only
 
