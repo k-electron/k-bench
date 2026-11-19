@@ -115,6 +115,20 @@ describe("the list of unsupported kinds", () => {
     ]);
   });
 
+  it("refuses an oversize report with a 413 and stores nothing", async () => {
+    const { server, workspace } = await boot();
+    const session = await server.createSession(workspace.id);
+
+    const response = await server.post("/api/unsupported", {
+      kind: "block:foo",
+      sessionId: session.id,
+      occurrenceId: "z".repeat(5 * 1024 * 1024),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await list(server)).toEqual([]);
+  });
+
   it("refuses a report that names no kind or no Session that exists", async () => {
     const { server, workspace } = await boot();
     const session = await server.createSession(workspace.id);

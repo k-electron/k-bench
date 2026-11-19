@@ -325,6 +325,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   const info = useMemo(() => transcriptInfo(model.transcript), [model.transcript]);
   const { hello } = model;
   const folder = info.cwd ?? hello?.folder;
+  const version = hello?.claudeVersion ?? info.claudeVersion;
   const versionWarning = hello
     ? claudeVersionWarning(hello.claudeVersion, hello.sdkClaudeCodeVersion)
     : undefined;
@@ -332,7 +333,8 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     items,
     focusView: info.focusView,
     header: {
-      ...(hello ? { version: hello.claudeVersion } : {}),
+      // A Stopped Agent has no hello: its last turn's init in the log says which claude it was.
+      ...(version === undefined ? {} : { version }),
       ...(versionWarning === undefined ? {} : { versionWarning }),
       ...(info.model === undefined ? {} : { model: info.model }),
       ...(folder === undefined ? {} : { folder }),

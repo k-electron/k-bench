@@ -51,3 +51,35 @@ test("an Agent shows its claude version, and warns only when that claude is olde
     await expect(region.getByRole("log")).toContainText("fake claude heard: hello");
   }
 });
+
+// Versions are compared as numbers, not as text, and one that cannot be read is no reason to warn.
+test("an Agent compares claude versions numerically, and does not warn about one it cannot read", async ({
+  app,
+  kbench,
+}) => {
+  const { fakeClaude } = kbench.instance;
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+
+  // As text, "2.1.99" sorts after the SDK's 2.1.3xx and "2.1.1000" before it.
+  for (const [name, version, warns] of [
+    ["fewer-digits", `${major}.${minor}.99`, true],
+    ["more-digits", `${major}.${minor}.1000`, false],
+    ["unreadable", "unknown", false],
+  ] as const) {
+    fakeClaude.configure({ version });
+    await app.openNewSessionDialog("project");
+    await app.createInDialog({ name, kind: "Claude Agent (WIP)" });
+    await expect(app.newSessionDialog).toBeHidden();
+
+    const region = app.agentRegion(name);
+    await expect(region.getByRole("note", { name: "Claude Code" })).toContainText(
+      `claude ${version}`,
+    );
+    const warning = region.getByRole("note", { name: "Version warning" });
+    if (warns) {
+      await expect(warning).toContainText(`(${version}) is older than ${expected}`);
+    } else {
+      await expect(warning).toHaveCount(0);
+    }
+  }
+});

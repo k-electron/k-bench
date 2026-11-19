@@ -70,6 +70,11 @@ test("typing / lists Claude Code's commands with their hints, minus the terminal
   await input.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(input).toHaveValue("/");
+  // It stays closed only until the text changes: the same text typed again opens it.
+  await input.press("r");
+  await input.press("Backspace");
+  await expect(input).toHaveValue("/");
+  await expect(menu).toBeVisible();
 
   // A tap picks too (a phone has no Enter to reach for).
   await input.fill("/re");

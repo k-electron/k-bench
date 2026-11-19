@@ -76,6 +76,7 @@ test("stopping a Claude Agent mid-turn asks first, then leaves its whole convers
   kbench,
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
+  kbench.instance.fakeClaude.configure({ version: "9.8.7" });
   await app.createClaudeAgent("project");
   kbench.instance.fakeClaude.script([
     { tool: { name: "Bash", input: { command: "make clean" } }, ask: true },
@@ -103,6 +104,10 @@ test("stopping a Claude Agent mid-turn asks first, then leaves its whole convers
   await expect(conversation).toContainText("Not answered, the Agent stopped");
   await expect(app.permissionPrompt("session 1")).toHaveCount(0);
   await expect(agent).toContainText("Stopped: You stopped it");
+  // The header still says which claude it was, from the log.
+  await expect(agent.getByRole("note", { name: "Claude Code" })).toContainText(
+    "claude 9.8.7",
+  );
   await expect(app.agentInput("session 1")).toHaveCount(0);
 
   // Restart resumes: the input is back, the earlier turn is still there, and it answers.

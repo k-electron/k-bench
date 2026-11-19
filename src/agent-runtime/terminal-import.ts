@@ -26,6 +26,9 @@ export const BACK_IN_WEB = "Back in web";
 export const COMPACTED_IN_THE_TERMINAL =
   "Compacted in the terminal: earlier turns above are from before";
 
+export const NOT_MATCHED =
+  "The terminal's turns could not be matched to this conversation and were not imported";
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -82,7 +85,8 @@ function asEntry(message: SavedMessage, options: { summary: boolean }): NewLogEn
  * - **Nothing to anchor on**: the log holds no message, as when the Session began as a Claude
  *   TUI. The whole conversation is imported.
  * Anything else (the log has messages and none is in the chain, with no compaction) imports
- * nothing: duplicating the conversation would be worse than missing a stretch of it.
+ * nothing but a divider saying so: duplicating the conversation would be worse than missing a
+ * stretch of it, and the owner should be able to see that a stretch may be missing.
  */
 export function planTerminalImport(
   entries: readonly LogEntry[],
@@ -111,7 +115,13 @@ export function planTerminalImport(
   } else if (known.size > 0) {
     // The SDK gives a system message no more than its type, so a chain that begins with one is
     // told as compacted: a compaction writes its `compact_boundary` as the chain's first message.
-    if (saved[0]?.type !== "system") return [];
+    if (saved[0]?.type !== "system") {
+      // Duplicating the conversation would be worse than missing a stretch of it, but missing it
+      // without a word would hide that anything is missing: say so where the turns would be.
+      return saved.some((message) => message.type !== "system")
+        ? [{ kind: "divider", label: NOT_MATCHED }]
+        : [];
+    }
     start = 1;
     firstLabel = COMPACTED_IN_THE_TERMINAL;
     summary = true;

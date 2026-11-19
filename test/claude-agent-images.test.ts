@@ -96,7 +96,8 @@ describe("images in a Claude Agent's prompts", () => {
     // Over Claude's 5 MB, measured on the base64 text.
     const huge = Buffer.concat([PNG, Buffer.alloc(4 * 1024 * 1024)]).toString("base64");
 
-    expect((await upload(server, session.id, "image/png", huge)).status).toBe(422);
+    // Well over it, the body is refused before it is all read; see the next test.
+    expect((await upload(server, session.id, "image/png", huge)).status).toBe(413);
     expect((await upload(server, session.id, "image/bmp", png)).status).toBe(422);
     // A label is not trusted: these bytes are not a JPEG, and this is not base64.
     expect((await upload(server, session.id, "image/jpeg", png)).status).toBe(422);
@@ -114,6 +115,44 @@ describe("images in a Claude Agent's prompts", () => {
     const shell = await server.createSession(workspace.id);
     expect((await upload(server, shell.id, "image/png", png)).status).toBe(404);
 
+    const folder = agentFolder(instance.config.dataDir, session.id);
+    expect(existsSync(join(folder, "images"))).toBe(false);
+  });
+
+  it("refuses an oversize body with a 413 whether or not it says how long it is, and stores nothing", async () => {
+    const { instance, server, workspace } = await boot();
+    const session = await server.createClaudeAgent(workspace.id);
+    const path = `/api/sessions/${session.id}/agent/images`;
+    const body = JSON.stringify({
+      mediaType: "image/png",
+      data: "A".repeat(20 * 1024 * 1024),
+    });
+
+    const sized = await server.request(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+    // Sent in pieces, with no length up front.
+    const piece = Buffer.from(body);
+    const chunked: RequestInit & { duplex: "half" } = {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new ReadableStream({
+        start(controller) {
+          for (let at = 0; at < piece.length; at += 1024 * 1024) {
+            controller.enqueue(piece.subarray(at, at + 1024 * 1024));
+          }
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    };
+    const streamed = await server.request(path, chunked);
+
+    expect(sized.status).toBe(413);
+    expect(((await sized.json()) as { error: string }).error).toMatch(/too large/i);
+    expect(streamed.status).toBe(413);
     const folder = agentFolder(instance.config.dataDir, session.id);
     expect(existsSync(join(folder, "images"))).toBe(false);
   });
