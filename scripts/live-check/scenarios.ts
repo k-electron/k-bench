@@ -57,14 +57,7 @@ const baseline: Scenario = {
     cap.notes.modelFrom = s.msgs.length;
     await s.turn("/model haiku");
     cap.notes.unavailableFrom = s.msgs.length;
-    script(ctx, [
-      {
-        system: {
-          subtype: "local_command_output",
-          content: "/plugin isn't available in this environment.",
-        },
-      },
-    ]);
+    script(ctx, [{ commandReply: "/plugin isn't available in this environment." }]);
     await s.turn("/plugin");
     cap.notes.unavailableTo = s.msgs.length;
     await s.close();

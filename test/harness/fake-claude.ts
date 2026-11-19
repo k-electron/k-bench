@@ -120,6 +120,12 @@ export type FakeStep =
    * the turn waits for the SDK's answer, which `received()` then holds as a `control_response`.
    */
   | { elicit: { serverName?: string; message?: string; requestedSchema?: object } }
+  /**
+   * What a typed command prints (`/model`, `/plugin`, `/compact`), as a real Claude Code sends it
+   * (the live check, #161): an assistant message of model `<synthetic>` carrying the output as
+   * `local_command_source`, then the echo of the command as its own markup.
+   */
+  | { commandReply: string }
   /** `/clear`: the conversation resets and the next `init` carries a new session id. */
   | { reset: true }
   /** Changes fields of the turn's final `result` message (`is_error`, `subtype`, ...). */

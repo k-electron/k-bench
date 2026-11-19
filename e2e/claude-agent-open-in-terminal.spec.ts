@@ -77,12 +77,7 @@ test("an Unsupported row offers Open in terminal", async ({ app, kbench }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
   await app.createClaudeAgent("project");
   kbench.instance.fakeClaude.script([
-    {
-      system: {
-        subtype: "local_command_output",
-        content: "/plugin isn't available in this environment.",
-      },
-    },
+    { commandReply: "/plugin isn't available in this environment." },
     { text: "That is all." },
   ]);
   await app.agentInput("session 1").fill("try it");

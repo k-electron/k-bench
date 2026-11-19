@@ -449,14 +449,69 @@ export class LiveSession {
     return from;
   }
 
-  /** One prompt and the `result` that ends it. */
+  /**
+   * One prompt, until Claude Code says its command is over (`command_lifecycle` `completed`
+   * or `cancelled` for the prompt's `uuid`, which every prompt of the recorded runs got), and
+   * the last `result` before that. A `result` alone is not the end of a prompt: a background
+   * task that finishes starts a turn nobody sent, whose `result` would be taken for it.
+   */
   async turn(
     text: string,
     options: { uuid?: string; timeoutMs?: number } = {},
   ): Promise<{ result: Msg | null; msgs: Msg[]; from: number }> {
-    const from = this.send(text, options.uuid);
-    const result = await this.next((m) => m.type === "result", options.timeoutMs, from);
+    const uuid = options.uuid ?? randomUUID();
+    const from = this.send(text, uuid);
+    const over = await this.next(
+      (m) =>
+        m.type === "command_lifecycle" &&
+        m.command_uuid === uuid &&
+        (m.state === "completed" || m.state === "cancelled"),
+      options.timeoutMs,
+      from,
+    );
+    const upto = over ? this.msgs.indexOf(over) + 1 : this.msgs.length;
+    const result = this.msgs.slice(from, upto).filter(isResult).at(-1) ?? null;
     return { result, msgs: this.msgs.slice(from), from };
+  }
+
+  /** Waits until Claude Code says each of these prompts' commands is over; returns how many were, after at most `timeoutMs`. */
+  async waitForCompleted(
+    uuids: readonly string[],
+    from: number,
+    timeoutMs: number,
+  ): Promise<number> {
+    const deadline = Date.now() + timeoutMs;
+    const done = new Set<string>();
+    while (done.size < uuids.length) {
+      const left = deadline - Date.now();
+      if (left <= 0) break;
+      const found = await this.next(
+        (m) =>
+          m.type === "command_lifecycle" &&
+          typeof m.command_uuid === "string" &&
+          uuids.includes(m.command_uuid) &&
+          !done.has(m.command_uuid) &&
+          (m.state === "completed" || m.state === "cancelled"),
+        left,
+        from,
+      );
+      if (!found) break;
+      done.add(String(found.command_uuid));
+    }
+    return done.size;
+  }
+
+  /** Waits until Claude Code says it is idle (the latest `session_state_changed`), for a turn that starts by itself. */
+  async settled(timeoutMs: number): Promise<boolean> {
+    const state = () =>
+      this.msgs.filter((m) => isSystem(m, "session_state_changed")).at(-1)?.state;
+    if (state() === "idle") return true;
+    const found = await this.next(
+      (m) => isSystem(m, "session_state_changed") && m.state === "idle",
+      timeoutMs,
+      this.msgs.length,
+    );
+    return found !== null;
   }
 
   /** Stops the turn that is running, if any. */
