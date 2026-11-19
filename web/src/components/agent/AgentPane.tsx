@@ -95,7 +95,7 @@ export function AgentPane({
           This Session has ended.
         </p>
       )}
-      <PromptDock conversation={conversation} focused={focused} />
+      <PromptDock sessionId={session.id} conversation={conversation} focused={focused} />
     </div>
   );
 }

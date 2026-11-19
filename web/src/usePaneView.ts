@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SessionState, State } from "../../src/shared/state-protocol.ts";
+import { forgetDraftsOfMissing } from "./agent/drafts";
 import {
   focusPane,
   forgetMissingSessions,
@@ -75,6 +76,7 @@ export function usePaneView(state: State | undefined, phone: boolean): PaneViewM
     setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
     update((l) => forgetMissingSessions(l, existing));
     forgetSmartTypingOfMissing(existing);
+    forgetDraftsOfMissing(existing);
   }, [state, a, b, update]);
 
   // On a phone the one Pane is the saved Focused Pane, wherever it sits in the saved layout.
