@@ -9,6 +9,13 @@ import {
   toolTarget,
 } from "./toolDisplay";
 import {
+  newUncommonState,
+  readUncommonBlock,
+  readUncommonMessage,
+  type UncommonItem,
+  type UncommonState,
+} from "./uncommon";
+import {
   terminalOnlyCommand,
   type Unsupported,
   unsupportedInMessage,
@@ -117,7 +124,8 @@ export type TranscriptItem =
   | ToolItem
   | InterruptedItem
   | PermissionItem
-  | UnsupportedItem;
+  | UnsupportedItem
+  | UncommonItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -174,6 +182,8 @@ interface BuildState {
   askTool: Map<string, string>;
   /** The tool calls the owner denied. */
   denied: Set<string>;
+  /** What the readers of the less common lines (`uncommon.ts`) carry. */
+  uncommon: UncommonState;
 }
 
 /**
@@ -281,6 +291,8 @@ function readSdkMessage(
   );
   // A subagent's messages (#149 shows them) are not the conversation's own.
   if (message.parent_tool_use_id != null) return;
+  // The less common messages (#148) have their own reader; it says whether it handled one.
+  if (readUncommonMessage(state, entry)) return;
   switch (message.type) {
     case "system":
       if (message.subtype === "init") {
@@ -307,6 +319,7 @@ function readSdkMessage(
           : undefined;
       blocksOf(inner.content).forEach((block, index) => {
         if (!isObject(block)) return;
+        if (readUncommonBlock(state, entry, block, index)) return;
         const key = `entry-${entry.seq}-${index}`;
         if (block.type === "text" && typeof block.text === "string") {
           if (block.text.trim() === "") return;
@@ -387,9 +400,9 @@ function readSdkMessage(
       interruptRunningTools(state);
       return;
     default:
-      // Everything else that Claude Code sends and k-bench knows (status, rate limits, hooks,
-      // ...) shows nothing yet: the later tickets (#148, #149, #152) each give their kinds a
-      // line. What it does not know is an Unsupported row (above).
+      // Everything else that Claude Code sends and k-bench knows shows nothing yet: the later
+      // tickets (#149, #152) each give their kinds a line. What it does not know is an
+      // Unsupported row (above).
       return;
   }
 }
@@ -415,6 +428,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     queued: queuedPromptIds(entries),
     askTool: new Map(),
     denied: new Set(),
+    uncommon: newUncommonState(),
   };
   for (const entry of entries) {
     switch (entry.kind) {

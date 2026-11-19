@@ -20,6 +20,10 @@ export function currentActivity(items: readonly TranscriptItem[]): string {
         return item.status === "running"
           ? `Running ${toolDisplayName(item.name)}`
           : "Working";
+      case "advisor":
+        return item.status === "consulting" ? "Consulting the advisor" : "Working";
+      case "compaction":
+        return item.state === "running" ? "Compacting" : "Working";
       default:
         return "Working";
     }
