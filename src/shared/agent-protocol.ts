@@ -11,8 +11,11 @@
  * it. A change that cannot be made that way bumps `AGENT_PROTOCOL_VERSION`, and the browser
  * speaks only the current number (ADR-0008).
  *
- * Imported by the browser too, so this file has no imports and no Node APIs.
+ * Imported by the browser too, so this file has no Node APIs and imports only its sibling
+ * `agent-images.ts`, which has none either.
  */
+
+import { MAX_PROMPT_IMAGES, STORED_IMAGE_NAME } from "./agent-images.ts";
 
 /** The protocol's number. A client that sees another number in `hello` must not carry on. */
 export const AGENT_PROTOCOL_VERSION = 1;
@@ -58,7 +61,7 @@ export type LogEntry =
    * A prompt k-bench sent to Claude Code. Logged before it is sent, because no echo of it
    * exists until Claude Code picks it up. `id` is the client-set ID the SDK echoes back.
    */
-  | (LogEntryBase & { kind: "prompt"; id: string; text: string })
+  | (LogEntryBase & { kind: "prompt"; id: string; text: string; images?: string[] })
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
   /**
@@ -385,8 +388,11 @@ export type AgentClientMessage =
    * A prompt to send to Claude Code as typed. `id` is a UUID chosen by the client; it goes
    * to Claude Code as the message's `uuid`, which Claude Code echoes back when it takes the
    * message up. Prompts are never marked as composed by the client, so `@path` works.
+   * `images` names images already uploaded to the Agent (`POST .../agent/images`), which go
+   * to Claude as image blocks before the text; `text` may then be empty. The log keeps the
+   * names, never the bytes.
    */
-  | { type: "prompt"; id: string; text: string }
+  | { type: "prompt"; id: string; text: string; images?: string[] }
   /**
    * The owner's answer to an open ask. The runtime builds what Claude Code is sent from the
    * ask it holds, so a client says only which: it can never change the tool's input or the
@@ -444,6 +450,19 @@ export const MAX_PROMPT_CHARACTERS = 1_000_000;
 export const MAX_REQUEST_ID_CHARACTERS = 200;
 
 /**
+ * The image names of a prompt (none when absent), or undefined when they are not a short list
+ * of valid stored names: a name is a file the runtime reads, so nothing else may pass.
+ */
+function decodeImageNames(value: unknown): string[] | undefined {
+  if (value === undefined) return [];
+  return Array.isArray(value) &&
+    value.length <= MAX_PROMPT_IMAGES &&
+    value.every((name) => typeof name === "string" && STORED_IMAGE_NAME.test(name))
+    ? (value as string[])
+    : undefined;
+}
+
+/**
  * The message a client's text holds, or undefined when it is not a valid one. The runtime
  * checks every message it receives with this, so nothing a client sends reaches Claude Code
  * unchecked.
@@ -474,14 +493,22 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         isCount(message.limit, 1, MAX_TURNS_PER_REQUEST)
         ? { type: "page", beforeSeq: message.beforeSeq, limit: message.limit }
         : undefined;
-    case "prompt":
+    case "prompt": {
+      const images = decodeImageNames(message.images);
       return typeof message.id === "string" &&
         UUID.test(message.id) &&
         typeof message.text === "string" &&
-        message.text.trim() !== "" &&
+        images !== undefined &&
+        (message.text.trim() !== "" || images.length > 0) &&
         message.text.length <= MAX_PROMPT_CHARACTERS
-        ? { type: "prompt", id: message.id, text: message.text }
+        ? {
+            type: "prompt",
+            id: message.id,
+            text: message.text,
+            ...(images.length > 0 && { images }),
+          }
         : undefined;
+    }
     case "answer":
       return typeof message.requestId === "string" &&
         message.requestId !== "" &&

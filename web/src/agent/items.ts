@@ -47,6 +47,8 @@ export interface PromptItem extends ItemBase {
    * waits its turn (`prompts.ts`, #138).
    */
   queued: boolean;
+  /** The names of the images it carried (`PromptImages`); absent when it carried none. */
+  images?: string[];
 }
 
 /** Claude's prose (`⏺`), markdown. Complete, or still streaming in. */
@@ -395,6 +397,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
           key: `entry-${entry.seq}`,
           seq: entry.seq,
           text: entry.text,
+          ...(entry.images && { images: entry.images }),
           queued: state.queued.has(entry.id),
         });
         break;
