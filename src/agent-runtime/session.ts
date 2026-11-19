@@ -1,5 +1,6 @@
 import {
   type CanUseTool,
+  type ElicitationRequest,
   type PermissionMode,
   type Query,
   query,
@@ -15,6 +16,12 @@ export interface SessionHandlers {
   message(message: SDKMessage): void;
   /** Claude Code's output ended: it exited, or the SDK failed. `error` is why, if it failed. */
   ended(error: unknown): void;
+  /**
+   * An MCP server asked the owner for input (an elicitation) and the session declined for
+   * them: a Claude Agent has nowhere to show the question (#153). Called before the answer
+   * goes to Claude Code.
+   */
+  elicitationDeclined(request: ElicitationRequest): void;
 }
 
 /** What `ClaudeSession` needs to start Claude Code. */
@@ -87,6 +94,12 @@ export class ClaudeSession {
         enableFileCheckpointing: true,
         extraArgs: { "replay-user-messages": null },
         canUseTool,
+        // Left unset, the SDK declines an elicitation by itself and the runtime never hears of
+        // it. Set, the same decline is recorded, so the Transcript can say what was asked.
+        onElicitation: async (request) => {
+          handlers.elicitationDeclined(request);
+          return { action: "decline" };
+        },
         // The owner's own environment, plus a request that Claude Code report when a turn
         // starts and ends (`session_state_changed`), which `Activity` believes when it comes.
         env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1" },

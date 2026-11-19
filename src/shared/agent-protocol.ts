@@ -62,6 +62,19 @@ export type LogEntry =
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
   /**
+   * Something Claude Code asked of k-bench that the runtime declined, because a Claude Agent
+   * has no way to answer it (#153). The browser shows it as an Unsupported row where it
+   * happened. `request` is what Claude Code sent, as the SDK handed it over, so the log holds
+   * what was asked even for fields no row shows yet. A reader that does not know `what`
+   * shows nothing.
+   */
+  | (LogEntryBase & {
+      kind: "declined";
+      /** What was declined: `elicitation`, an MCP server asking the owner for input. */
+      what: "elicitation";
+      request: Record<string, unknown>;
+    })
+  /**
    * An Allow/Deny that Claude Code is waiting on: written when it asks, and open until a
    * `permission_answered` with the same `requestId` follows (see `openPermissionAsks`).
    * Every field of the SDK's `canUseTool` request that can be serialised is kept, because the
