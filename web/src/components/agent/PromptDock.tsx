@@ -85,6 +85,7 @@ export function PromptDock({
           working={conversation.state === "working"}
           interrupting={conversation.interrupting}
           onInterrupt={conversation.interrupt}
+          commands={conversation.commands}
         />
       </div>
       {conversation.mode !== undefined && (

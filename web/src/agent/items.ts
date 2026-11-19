@@ -13,6 +13,13 @@ import {
   toolTarget,
 } from "./toolDisplay";
 import {
+  newUncommonState,
+  readUncommonBlock,
+  readUncommonMessage,
+  type UncommonItem,
+  type UncommonState,
+} from "./uncommon";
+import {
   terminalOnlyCommand,
   type Unsupported,
   unsupportedInMessage,
@@ -95,6 +102,15 @@ export interface InterruptedItem extends ItemBase {
 }
 
 /**
+ * What a command typed in the input answered (`system/local_command_output`: `/context`,
+ * `/usage`, `/model opus`...), under the `⎿` as a muted block of lines (#150).
+ */
+export interface CommandOutputItem extends ItemBase {
+  kind: "command_output";
+  text: string;
+}
+
+/**
  * `⎿ permission: allowed`: how an ask the owner answered ended, left in the Transcript where
  * the answer came. Not made for an ask nobody answered (withdrawn, or the Agent stopped): the
  * tool's own red mark says that.
@@ -127,7 +143,9 @@ export type TranscriptItem =
   | ToolItem
   | InterruptedItem
   | PermissionItem
-  | UnsupportedItem;
+  | UnsupportedItem
+  | UncommonItem
+  | CommandOutputItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -162,6 +180,21 @@ function textOf(content: unknown): string {
     .join("\n");
 }
 
+/**
+ * What a command printed, to show: without the `<local-command-stdout>` wrapper Claude Code
+ * puts round it in its own transcripts, or the colour codes a terminal would have drawn.
+ */
+function commandOutputText(content: unknown): string {
+  if (typeof content !== "string") return "";
+  return (
+    content
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is removed
+      .replace(/\u001b\[[0-9;]*[A-Za-z]/g, "")
+      .replace(/<\/?local-command-std(?:out|err)>/g, "")
+      .trim()
+  );
+}
+
 /** A tool call as the builder holds it until its result arrives. */
 interface OpenTool {
   item: ToolItem;
@@ -184,6 +217,8 @@ interface BuildState {
   askTool: Map<string, { toolUseId: string; toolName: string }>;
   /** The tool calls the owner denied. */
   denied: Set<string>;
+  /** What the readers of the less common lines (`uncommon.ts`) carry. */
+  uncommon: UncommonState;
 }
 
 /**
@@ -283,14 +318,12 @@ function readSdkMessage(
 ): void {
   const { message } = entry;
   // What k-bench does not know shows wherever it came from, a subagent's included.
-  addUnsupported(
-    state,
-    entry.seq,
-    `${entry.seq}-unsupported`,
-    unsupportedInMessage(message),
-  );
+  const unsupported = unsupportedInMessage(message);
+  addUnsupported(state, entry.seq, `${entry.seq}-unsupported`, unsupported);
   // A subagent's messages (#149 shows them) are not the conversation's own.
   if (message.parent_tool_use_id != null) return;
+  // The less common messages (#148) have their own reader; it says whether it handled one.
+  if (readUncommonMessage(state, entry)) return;
   switch (message.type) {
     case "system":
       if (message.subtype === "init") {
@@ -307,6 +340,18 @@ function readSdkMessage(
           addUnsupported(state, entry.seq, `${entry.seq}-terminal`, [terminalOnly]);
         }
         state.focusView = message.view_mode === "focus";
+      } else if (message.subtype === "local_command_output") {
+        const text = commandOutputText(message.content);
+        // A reply saying the command isn't available here is an Unsupported row (#153) already.
+        const answeredUnsupported = unsupported.some((one) => one.what === "command");
+        if (text !== "" && !answeredUnsupported) {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
       }
       return;
     case "assistant": {
@@ -317,6 +362,7 @@ function readSdkMessage(
           : undefined;
       blocksOf(inner.content).forEach((block, index) => {
         if (!isObject(block)) return;
+        if (readUncommonBlock(state, entry, block, index)) return;
         const key = `entry-${entry.seq}-${index}`;
         if (block.type === "text" && typeof block.text === "string") {
           if (block.text.trim() === "") return;
@@ -397,9 +443,9 @@ function readSdkMessage(
       interruptRunningTools(state);
       return;
     default:
-      // Everything else that Claude Code sends and k-bench knows (status, rate limits, hooks,
-      // ...) shows nothing yet: the later tickets (#148, #149, #152) each give their kinds a
-      // line. What it does not know is an Unsupported row (above).
+      // Everything else that Claude Code sends and k-bench knows shows nothing yet: the later
+      // tickets (#149, #152) each give their kinds a line. What it does not know is an
+      // Unsupported row (above).
       return;
   }
 }
@@ -453,6 +499,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     queued: queuedPromptIds(entries),
     askTool: new Map(),
     denied: new Set(),
+    uncommon: newUncommonState(),
   };
   for (const entry of entries) {
     switch (entry.kind) {

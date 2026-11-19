@@ -69,7 +69,7 @@ A Session's request for attention, raised while no device is viewing the Session
 _Avoid_: notification, alert, activity, unviewed
 
 **Unsupported**:
-Something a Claude Agent met that k-bench can't show or answer: a message or content type it doesn't recognise, a dialog or request it declines (such as an MCP server asking the owner a question), or a command that isn't available in a web interface. It is reported in the conversation, as a row where it happened that says what Claude tried and opens the raw view, and in the running list of unsupported kinds. It raises no Bell of its own.
+Something a Claude Agent met that k-bench can't show or answer: a message or content type it doesn't recognise, a dialog or request it declines (such as an MCP server asking the owner a question), or a command that isn't available in a web interface. It is reported in the conversation, as a row where it happened that says what Claude tried and opens the raw view, and in the running list of unsupported kinds, reached from the sidebar, which counts each kind across every Session. It raises no Bell of its own.
 _Avoid_: unknown, error, unavailable
 
 **Claude conversation**:

@@ -2,10 +2,14 @@ import { SendIcon, SquareIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { loadDraft, saveDraft } from "@/agent/drafts";
 import { imageFilesIn } from "@/agent/images";
+import { completion } from "@/agent/slashCommands";
 import { useAttachments } from "@/agent/useAttachments";
 import { Button } from "@/components/ui/button";
 import { useIsPhone } from "@/useIsPhone";
+import type { AgentCommand } from "../../../../src/shared/agent-protocol.ts";
 import { AttachButton, AttachmentStrip } from "./Attachments";
+import { PickerMenu } from "./PickerMenu";
+import { useCommandMenu } from "./useCommandMenu";
 
 /**
  * The input box under a Claude Agent's conversation. On desktop, Enter sends and Shift+Enter
@@ -19,6 +23,8 @@ import { AttachButton, AttachmentStrip } from "./Attachments";
  * Down goes back, as in a terminal.
  * What is typed and not sent is kept as a draft on this device, per Agent, until it is sent.
  * Images are attached by paste, drop or the Attach button (`useAttachments`).
+ * Typing `/` opens the commands menu (`useCommandMenu`), which owns the arrow keys while it is
+ * open, and so keeps them from stepping through history.
  */
 export function Composer({
   sessionId,
@@ -31,6 +37,7 @@ export function Composer({
   working,
   interrupting,
   onInterrupt,
+  commands,
 }: {
   /** The Agent's Session ID: whose draft the box keeps. */
   sessionId: string;
@@ -54,6 +61,8 @@ export function Composer({
   interrupting: boolean;
   /** Interrupts the turn; false when nothing was sent. */
   onInterrupt: () => boolean;
+  /** What the `/` menu offers (#150). */
+  commands: readonly AgentCommand[];
 }) {
   const phone = useIsPhone();
   const [text, setText] = useState(() => loadDraft(sessionId));
@@ -74,6 +83,17 @@ export function Composer({
 
   const recalled = back === undefined ? undefined : history[history.length - back];
   const recalling = recalled !== undefined && text === recalled;
+  const menu = useCommandMenu({
+    text,
+    commands,
+    suppressed: disabled || recalling,
+    onPick: (command) => {
+      // Its name and nothing more: the owner carries on from there.
+      edit(completion(command));
+      setBack(undefined);
+      caretAtEnd.current = true;
+    },
+  });
 
   // The Focused Pane's box takes the keyboard, as its terminal would. Not on a phone, where
   // focusing raises the on-screen keyboard over the conversation.
@@ -116,7 +136,7 @@ export function Composer({
 
   return (
     <form
-      className={`shrink-0 border-t ${dropping ? "bg-accent/40" : ""}`}
+      className={`relative shrink-0 border-t ${dropping ? "bg-accent/40" : ""}`}
       onSubmit={(event) => {
         event.preventDefault();
         send();
@@ -136,6 +156,15 @@ export function Composer({
         attach(files);
       }}
     >
+      {menu.open && (
+        <PickerMenu
+          id={menu.menuId}
+          label="Commands"
+          options={menu.options}
+          active={menu.active}
+          onPick={menu.pick}
+        />
+      )}
       <AttachmentStrip
         attached={attachments.attached}
         problems={attachments.problems}
@@ -152,6 +181,8 @@ export function Composer({
           disabled={disabled}
           ref={field}
           placeholder="Message Claude"
+          aria-controls={menu.open ? menu.menuId : undefined}
+          aria-activedescendant={menu.activeId}
           // `field-sizing` makes the box as tall as its text, up to the cap.
           className="field-sizing-content max-h-48 min-h-9 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           onChange={(event) => edit(event.target.value)}
@@ -170,6 +201,7 @@ export function Composer({
             }
             // Not while an input method is composing (its Enter confirms a character).
             if (event.nativeEvent.isComposing) return;
+            if (menu.handleKey(event)) return;
             if (!phone && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               send();
