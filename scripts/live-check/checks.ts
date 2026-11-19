@@ -1246,8 +1246,8 @@ const knownKinds: Check = {
       for (const session of cap.sessions) {
         for (const item of await itemsOf(session)) {
           if (item.kind !== "unsupported") continue;
-          // The one expected: a command that is not available here.
-          if (item.what === "command") continue;
+          // The ones expected: /plugin is sent on purpose, and may be listed as terminal-only.
+          if (item.what === "command" || item.what === "terminal-command") continue;
           const label = `${String(item.what)}:${String(item.name)}`;
           unknown.set(label, (unknown.get(label) ?? 0) + 1);
         }

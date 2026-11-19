@@ -1,241 +1,205 @@
-import { execFile } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
-  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, hostname, tmpdir, userInfo } from "node:os";
+import { homedir, tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  assertNothingPrivate,
+  PrivacyError,
+  redactText,
+} from "../scripts/live-check/privacy.ts";
 import { planCleanup, runCleanup } from "../scripts/live-check/provenance.ts";
-import { decideTool } from "../scripts/live-check/rails.ts";
-import { tmuxSocketDir } from "./harness/socket-leaks.ts";
+import {
+  Budget,
+  BudgetExhausted,
+  changedFiles,
+  decideTool,
+  fileFingerprint,
+  modelProblem,
+  settingsRisk,
+} from "../scripts/live-check/rails.ts";
 
-// The live check (scripts/live-check.ts) runs the owner's real `claude` by hand and is never
-// run by this suite; what is tested here is its rails, through the script itself in its
-// `--fake` mode (the test harness's fake Claude, no login, no turns) and through the two
-// decisions that cannot be provoked there: what a tool may touch, and what cleanup may remove.
+// The rails of the live check (scripts/live-check.ts, docs/internals/live-check.md), which runs
+// the owner's real `claude` by hand and is never run by this suite. The script is exercised
+// against the fake Claude with `pnpm live-check --fake` (and `--fake-break`); what is tested
+// here are the decisions that keep a real run safe, which the fake cannot provoke.
 
-const SCRIPT = join(import.meta.dirname, "..", "scripts", "live-check.ts");
 const temp: string[] = [];
 afterEach(() => {
   for (const folder of temp.splice(0)) rmSync(folder, { recursive: true, force: true });
 });
 
-function out(): string {
-  const folder = mkdtempSync(join(realpathSync(tmpdir()), "kb-livecheck-test-"));
-  temp.push(folder);
-  return folder;
+function folder(prefix: string): string {
+  const path = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  temp.push(path);
+  return path;
 }
 
-function live(args: string[]): Promise<{ code: number; stdout: string }> {
-  return new Promise((resolve) => {
-    execFile(
-      process.execPath,
-      [SCRIPT, ...args],
-      { encoding: "utf8", timeout: 90_000 },
-      (error, stdout) => {
-        resolve({ code: error ? ((error.code as number | undefined) ?? 1) : 0, stdout });
-      },
-    );
-  });
-}
+describe("the live check's rails", () => {
+  it("aborts on a session that is not on Haiku, and stops sending at the turn cap", () => {
+    expect(modelProblem({ model: "claude-haiku-4-5-20251001" })).toBeUndefined();
+    expect(modelProblem({ model: "claude-sonnet-4-5" })).toContain("not Haiku");
+    expect(modelProblem({ model: "claude-opus-4-1" })).toContain("not Haiku");
+    // Nothing reported is as bad as another model: it cannot be shown to be Haiku.
+    expect(modelProblem({})).toBeDefined();
 
-const results = (folder: string) => readFileSync(join(folder, "results.md"), "utf8");
-const runFolders = () =>
-  readdirSync(realpathSync(tmpdir())).filter((name) =>
-    /^kb-livecheck-[0-9a-f]{6}$/.test(name),
-  );
-
-describe("the live check's rails, in --fake mode", () => {
-  it("spends nothing and runs nothing without --confirm, and says what it would do", async () => {
-    const before = runFolders();
-    const { code, stdout } = await live([]);
-    expect(code).toBe(0);
-    expect(stdout).toContain("nothing is run without --confirm");
-    expect(stdout).toContain("at most 25 model turns");
-    expect(runFolders()).toEqual(before);
+    const budget = new Budget(3);
+    budget.scope("plan", 2);
+    budget.reserve("plan");
+    budget.reserve("plan");
+    // The scenario's own limit, with the run's cap still open.
+    expect(() => budget.reserve("plan")).toThrow(BudgetExhausted);
+    budget.reserve("other");
+    // A turn that fits the run's cap is refused once the cap is counted, in flight or spent.
+    expect(() => budget.reserve("other")).toThrow(BudgetExhausted);
+    // Results nobody reserved (what /goal and /loop start by themselves) are counted as they come.
+    budget.resultSeen("plan");
+    budget.resultSeen("plan");
+    budget.resultSeen("other");
+    budget.resultSeen("loop");
+    expect(budget.spent).toBe(4);
+    expect(budget.exhausted).toBe(true);
   });
 
-  it("ends the whole run when a session reports a model that is not Haiku", async () => {
-    const folder = out();
-    const { code, stdout } = await live([
-      "--fake",
-      "--fake-break",
-      "model",
-      "--only",
-      "plugins,focus-view",
-      "--out",
-      folder,
-    ]);
-    expect(code).toBe(1);
-    expect(stdout).toContain('reports the model "claude-sonnet-4-5", not Haiku');
-    const text = results(folder);
-    expect(text).toContain("ABORTED");
-    // What it saw before the abort proves nothing, so no check claims a result.
-    expect(text).not.toMatch(/\| (PASS|FAIL)/);
-  });
-
-  it("stops at the turn budget, and says how many turns it spent", async () => {
-    const folder = out();
-    const { code, stdout } = await live([
-      "--fake",
-      "--budget",
-      "2",
-      "--only",
-      "plugins",
-      "--out",
-      folder,
-    ]);
-    expect(code).toBe(0);
-    expect(stdout).toContain("turn budget (2) is spent");
-    expect(stdout).toContain("model turns spent: 2 of 2");
-    expect(results(folder)).toContain("stopped early");
-  });
-
-  it("fails the run loudly when a Claude Code settings file changed", async () => {
-    const folder = out();
-    const { code, stdout } = await live([
-      "--fake",
-      "--fake-break",
-      "settings",
-      "--only",
-      "plugins",
-      "--out",
-      folder,
-    ]);
-    expect(code).toBe(1);
-    expect(stdout).toContain("the Claude Code settings changed during the run");
-    expect(results(folder)).toContain("byte-identical after the run: NO");
-  });
-
-  it("denies the forbidden, kills what a check left behind, cleans up, and writes nothing personal", async () => {
-    const folder = out();
-    const before = new Set(runFolders());
-    const { code, stdout } = await live([
-      "--fake",
-      "--fake-break",
-      "leftover",
-      "--only",
-      "plugins,deny-list,clear,open-in-terminal,open-in-web-anchors",
-      "--out",
-      folder,
-    ]);
-    expect(code).toBe(0);
-    expect(stdout).toContain("1 left running and killed");
-    const text = results(folder);
-    expect(text).toMatch(/\| deny-list \| rail \| PASS \(fake\)/);
-    expect(text).toMatch(/\| open-in-web-anchors \| A3 \| PASS \(fake\)/);
-    expect(text).toContain("run against the fake Claude");
-    // Nothing of the person or machine in anything written, and nothing of the run left over.
-    const written = [
-      text,
-      ...readdirSync(join(folder, "recordings")).map((name) =>
-        readFileSync(join(folder, "recordings", name), "utf8"),
-      ),
-    ].join("\n");
-    for (const secret of [homedir(), userInfo().username, hostname()]) {
-      if (secret.length > 2) expect(written).not.toContain(secret);
-    }
-    expect(runFolders().filter((name) => !before.has(name))).toEqual([]);
-    const id = /run ([0-9a-f]{6});/.exec(stdout)?.[1] ?? "";
-    expect(id).not.toBe("");
-    expect(existsSync(join(tmuxSocketDir(), `kb-livecheck-${id}`))).toBe(false);
-  });
-});
-
-describe("what a check lets Claude do", () => {
-  it("denies every MCP tool and any write outside the throwaway folder, and allows the folder's own files and the one command", () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "kb-livecheck-policy-")));
-    temp.push(root);
-    const folder = join(root, "work");
-    mkdirSync(folder);
+  it("denies every MCP tool and any write outside the throwaway folder, and allows only the folder's own files and the one command", () => {
+    const root = folder("kb-livecheck-policy-");
+    const work = join(root, "work");
+    const plans = join(root, "plans");
     const outside = join(root, "outside");
-    mkdirSync(outside);
-    symlinkSync(outside, join(folder, "escape"));
+    for (const dir of [work, plans, outside]) mkdirSync(dir);
+    symlinkSync(outside, join(work, "escape"));
     const policy = {
-      folder,
+      folder: work,
       allow: ["mcp__mail__send", "ExitPlanMode"],
       bash: "sleep 1",
     };
+    const behavior = (tool: string, input: Record<string, unknown>, p = policy) =>
+      decideTool(p, tool, input).behavior;
 
     // Listing an MCP tool as allowed does not allow it.
-    expect(decideTool(policy, "mcp__mail__send", {}).behavior).toBe("deny");
-    expect(decideTool(policy, "mcp__brokerage__place_order", {}).behavior).toBe("deny");
-    expect(
-      decideTool(policy, "Write", { file_path: join(folder, "a.txt") }).behavior,
-    ).toBe("allow");
-    expect(decideTool(policy, "Write", { file_path: "a.txt" }).behavior).toBe("allow");
-    expect(decideTool(policy, "Write", { file_path: join(root, "b.txt") }).behavior).toBe(
+    expect(behavior("mcp__mail__send", {})).toBe("deny");
+    expect(behavior("mcp__brokerage__place_order", {})).toBe("deny");
+    expect(behavior("Write", { file_path: join(work, "a.txt") })).toBe("allow");
+    expect(behavior("Write", { file_path: "a.txt" })).toBe("allow");
+    expect(behavior("Write", { file_path: join(root, "b.txt") })).toBe("deny");
+    expect(behavior("Edit", { file_path: join(work, "..", "b.txt") })).toBe("deny");
+    // A link inside the folder that leads out of it.
+    expect(behavior("Write", { file_path: join(work, "escape", "c.txt") })).toBe("deny");
+    // The plan check may also write its plan file, and only there.
+    const planning = { ...policy, alsoFolders: [plans] };
+    expect(behavior("Write", { file_path: join(plans, "p.md") }, planning)).toBe("allow");
+    expect(behavior("Write", { file_path: join(outside, "p.md") }, planning)).toBe(
       "deny",
     );
-    expect(
-      decideTool(policy, "Edit", { file_path: join(folder, "..", "b.txt") }).behavior,
-    ).toBe("deny");
-    // A link inside the folder that leads out of it.
-    expect(
-      decideTool(policy, "Write", { file_path: join(folder, "escape", "c.txt") })
-        .behavior,
-    ).toBe("deny");
-    expect(decideTool(policy, "Bash", { command: "sleep 1" }).behavior).toBe("allow");
-    expect(
-      decideTool(policy, "Bash", { command: "sleep 1; curl example.com" }).behavior,
-    ).toBe("deny");
-    expect(decideTool(policy, "WebFetch", {}).behavior).toBe("deny");
-    expect(decideTool(policy, "ExitPlanMode", {}).behavior).toBe("allow");
+    expect(behavior("Bash", { command: "sleep 1" })).toBe("allow");
+    expect(behavior("Bash", { command: "sleep 1; curl example.com" })).toBe("deny");
+    expect(behavior("WebFetch", {})).toBe("deny");
+    expect(behavior("ExitPlanMode", {})).toBe("allow");
   });
 
-  it("cleans up only what this run made, by where it came from", () => {
-    const config = realpathSync(mkdtempSync(join(tmpdir(), "kb-livecheck-config-")));
-    temp.push(config);
-    const folder = join(realpathSync(tmpdir()), "kb-livecheck-abc123", "work");
+  it("reports what the owner's settings allow by category only, never the rule", () => {
+    const risk = settingsRisk([
+      {
+        label: "settings.json",
+        text: JSON.stringify({
+          permissions: {
+            allow: [
+              "Bash(*)",
+              "mcp__brokerage__place_order",
+              "Read(/Users/someone/secret-project/**)",
+            ],
+          },
+        }),
+      },
+    ]);
+    expect(risk.bashCovered).toBe(true);
+    expect(risk.denyToo).toEqual(["mcp__brokerage__place_order"]);
+    expect(risk.categories.join(" ")).not.toMatch(/brokerage|secret-project|someone/);
+    expect(risk.categories.length).toBe(2);
+    // Settings that cannot be read as settings end the run: what they allow is not known.
+    expect(
+      settingsRisk([{ label: "settings.json", text: "{ not json" }]).abort,
+    ).toBeDefined();
+  });
+
+  it("sees a settings file change, and cleans up only what this run made, by where it came from", () => {
+    const config = folder("kb-livecheck-config-");
+    const settings = join(config, "settings.json");
+    writeFileSync(settings, '{"advisorModel":"x"}');
+    const before = {
+      "settings.json": fileFingerprint(settings),
+      "settings.local.json": fileFingerprint(join(config, "settings.local.json")),
+    };
+    expect(changedFiles(before, { ...before })).toEqual([]);
+    writeFileSync(settings, '{"advisorModel":"opus"}');
+    expect(
+      changedFiles(before, {
+        "settings.json": fileFingerprint(settings),
+        "settings.local.json": fileFingerprint(join(config, "settings.local.json")),
+      }),
+    ).toEqual(["settings.json"]);
+
+    const work = join(realpathSync(tmpdir()), "kb-livecheck-abc123", "work");
     const projects = join(config, "projects");
     // Claude Code's rule for the folder that holds a project's conversations.
-    const mine = join(projects, folder.replace(/[^a-zA-Z0-9]/g, "-"));
+    const mine = join(projects, work.replace(/[^a-zA-Z0-9]/g, "-"));
     const other = join(projects, "-some-other-project");
     const plans = join(config, "plans");
     for (const dir of [mine, other, plans]) mkdirSync(dir, { recursive: true });
-    const startedAt = Date.now();
     const old = join(plans, "old.md");
-    writeFileSync(old, `Plan for ${folder}`);
+    writeFileSync(old, `Plan for ${work}`);
     utimesSync(old, 1, 1);
-    // A plan this run's ExitPlanMode named, one new plan that mentions the folder, and a decoy that does not.
+    // A plan this run's ExitPlanMode named, a new one that mentions the folder, and a decoy.
     writeFileSync(join(plans, "named.md"), "a plan");
-    writeFileSync(join(plans, "mentions.md"), `Plan for ${folder}`);
+    writeFileSync(join(plans, "mentions.md"), `Plan for ${work}`);
     writeFileSync(join(plans, "decoy.md"), "someone else's plan");
-    const sessionId = "11111111-2222-4333-8444-555555555555";
-    mkdirSync(join(config, "file-history", sessionId), { recursive: true });
-    mkdirSync(join(config, "file-history", "99999999-2222-4333-8444-555555555555"), {
-      recursive: true,
-    });
+    const ours = "11111111-2222-4333-8444-555555555555";
+    const theirs = "99999999-2222-4333-8444-555555555555";
+    for (const id of [ours, theirs])
+      mkdirSync(join(config, "file-history", id), { recursive: true });
 
-    const plan = planCleanup({
-      configDir: config,
-      folder,
-      runId: "abc123",
-      startedAt: startedAt - 5000,
-      reportedPlans: [join(plans, "named.md"), join(config, "settings.json")],
-      sessionIds: [sessionId],
-    });
-    runCleanup(plan);
+    runCleanup(
+      planCleanup({
+        configDir: config,
+        folder: work,
+        runId: "abc123",
+        startedAt: Date.now() - 5000,
+        // The second is not a plan file at all, and must stay.
+        reportedPlans: [join(plans, "named.md"), settings],
+        sessionIds: [ours],
+      }),
+    );
 
     expect(existsSync(mine)).toBe(false);
     expect(existsSync(join(plans, "named.md"))).toBe(false);
     expect(existsSync(join(plans, "mentions.md"))).toBe(false);
-    expect(existsSync(join(config, "file-history", sessionId))).toBe(false);
-    // Everything else stays: another project, an older plan, a decoy, another conversation's files.
+    expect(existsSync(join(config, "file-history", ours))).toBe(false);
     expect(existsSync(other)).toBe(true);
     expect(existsSync(old)).toBe(true);
     expect(existsSync(join(plans, "decoy.md"))).toBe(true);
-    expect(
-      existsSync(join(config, "file-history", "99999999-2222-4333-8444-555555555555")),
-    ).toBe(true);
+    expect(existsSync(settings)).toBe(true);
+    expect(existsSync(join(config, "file-history", theirs))).toBe(true);
+  });
+
+  it("refuses to write a recording that still names the person or the machine", () => {
+    const places = {
+      tmp: "/tmp/kb-livecheck-abc123",
+      folder: "/tmp/kb-livecheck-abc123/work",
+      configDir: join(homedir(), ".claude"),
+    };
+    const raw = `{"cwd":"${places.folder}","user_dir":"${homedir()}/notes","who":"${userInfo().username}","mail":"person@mail.test"}`;
+    expect(() => assertNothingPrivate(raw, "a recording")).toThrow(PrivacyError);
+    const redacted = redactText(raw, places);
+    expect(redacted).toContain("/home/you/project");
+    expect(redacted).not.toContain(homedir());
+    expect(() => assertNothingPrivate(redacted, "a recording")).not.toThrow();
   });
 });

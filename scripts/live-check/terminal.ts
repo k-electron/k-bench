@@ -5,8 +5,10 @@
 // Driving the TUI by keystrokes is the fragile part, and what its menus look like cannot be
 // confirmed without the real `claude`, so every wait is bounded and polls the pane for text,
 // and a menu that does not appear is recorded as "not reached" (the checks then say NOT
-// PROVOKED), never waited on for ever. A permission dialog is accepted only when it names the
-// file the check asked about.
+// PROVOKED), never waited on for ever. Every decision is made on the screen as it is now (no
+// scrollback, where old dialogs and labels linger), and on text only a menu has: the command
+// typed to open it, which is echoed on the screen, never counts. A permission dialog is
+// accepted only when the text after its own question names the file the check asked about.
 import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,10 +22,14 @@ import type { Ctx, Scenario } from "./types.ts";
 export const TUI_PROMPT =
   "Use the Write tool to overwrite story.txt with the single line: terminal one. Then reply with the single word DONE.";
 export const DENY_FEEDBACK = "use exactly the content I gave you";
+/** Starts the web's first prompt, so that its line in the `/rewind` menu is found by it. */
+export const WEB_MARKER = "WEBONE";
 
 const IDLE = /\? for shortcuts/;
 const WORKING = /esc to interrupt/i;
 const TRUST = /trust the files|Do you trust|Yes, proceed|Yes, I trust/i;
+const MODE_LABEL =
+  /(accept edits on|plan mode on|auto mode on|auto-accept edits on|bypass permissions on|don't ask on)/i;
 
 const readTrim = (path: string): string => {
   try {
@@ -33,22 +39,58 @@ const readTrim = (path: string): string => {
   }
 };
 
-/** The line the TUI's menu cursor (`❯`) is on. */
-const cursorLine = (pane: string) =>
-  pane.split("\n").find((line) => /^\s*[❯›>]\s/.test(line)) ?? "";
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function steer(
-  tmux: Tmux,
-  ctx: Ctx,
-  options: { fake: boolean; sid: string },
-): Promise<void> {
+/** The text after the last place `marker` matches, or "" when it does not match. */
+function afterLast(text: string, marker: RegExp): string {
+  let end = -1;
+  for (const found of text.matchAll(new RegExp(marker.source, `${marker.flags}g`))) {
+    end = (found.index ?? 0) + found[0].length;
+  }
+  return end < 0 ? "" : text.slice(end);
+}
+
+/** The line the menu cursor (`❯`) is on: the lowest one on the screen. */
+const cursorLine = (pane: string) =>
+  pane
+    .split("\n")
+    .filter((line) => /^\s*❯/.test(line))
+    .at(-1) ?? "";
+
+/** The footer, where the permission mode is named: the screen's last lines. */
+const footerOf = (pane: string) =>
+  pane
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .slice(-4)
+    .join("\n");
+
+/** A menu is open: text only a menu has, on a line that is not the command typed to open it. */
+const menuShown = (pane: string, menu: RegExp) =>
+  pane.split("\n").some((line) => menu.test(line) && !/\/rewind/.test(line));
+
+function newTmux(ctx: Ctx): Tmux {
+  const { run, extras } = ctx;
+  const tmux = new Tmux(
+    run.id,
+    claudeEnvironment(process.env, {
+      ...(run.fake ? { configDir: run.configDir } : {}),
+      advisorOff: true,
+    }),
+    run.abort.signal,
+  );
+  extras.tmux = tmux;
+  return tmux;
+}
+
+async function steer(tmux: Tmux, ctx: Ctx, sid: string): Promise<void> {
   const { run } = ctx;
   const command = run.fake
-    ? `${shellQuote(run.claude)} --resume ${options.sid}`
+    ? `${shellQuote(run.claude)} --resume ${sid}`
     : [
         shellQuote(run.claude),
         "--resume",
-        options.sid,
+        sid,
         "--model",
         "haiku",
         "--effort",
@@ -71,7 +113,7 @@ async function steer(
     if (ready.test(pane)) return;
     if (!run.fake && TRUST.test(pane)) tmux.keys("Enter");
     if (!tmux.alive() || run.abort.signal.aborted) break;
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await sleep(500);
   }
   throw new Error("the terminal did not come up");
 }
@@ -96,19 +138,14 @@ const newVisit = (): Visit => ({ reached: {}, details: {} });
 
 /** Visit 1: one turn that asks for a permission (denied once with a reply, then allowed), then `/rewind`. */
 async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
-  const { run, extras } = ctx;
+  const { run } = ctx;
   const visit = newVisit();
-  const tmux = new Tmux(
-    run.id,
-    claudeEnvironment(process.env, { configDir: run.configDir, advisorOff: true }),
-    run.abort.signal,
-  );
-  extras.tmux = tmux;
+  const tmux = newTmux(ctx);
   try {
-    await steer(tmux, ctx, { fake: run.fake, sid });
+    await steer(tmux, ctx, sid);
     visit.reached.up = true;
     run.budget.spendUnobserved("terminal");
-    tmux.type(run.fake ? TUI_PROMPT : TUI_PROMPT);
+    tmux.type(TUI_PROMPT);
     tmux.keys("Enter");
     if (run.fake) {
       visit.reached.turn = Boolean(await tmux.waitFor(/claude-stub heard:/, 15_000));
@@ -121,7 +158,7 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
       if (run.abort.signal.aborted) break;
       const pane = tmux.capture();
       if (/Do you want to/i.test(pane)) {
-        if (!/story\.txt/.test(pane)) {
+        if (!/story\.txt/.test(afterLast(pane, /Do you want to/i))) {
           // Not the file asked about: refuse, and stop trying.
           tmux.keys("Escape");
           visit.details.dialog = "a permission dialog for something else was refused";
@@ -130,18 +167,20 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
         visit.reached.dialog = true;
         if (!denied) {
           denied = true;
-          // Move the cursor to the "No, and tell Claude what to do differently" option and type the reply.
+          // The reply makes Claude try again: that is a second model call, so a second turn.
+          run.budget.spendUnobserved("terminal");
+          // Move the cursor to "No, and tell Claude what to do differently" and type the reply.
           for (
             let i = 0;
             i < 4 && !/tell Claude/i.test(cursorLine(tmux.capture()));
             i++
           ) {
             tmux.keys("Down");
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            await sleep(300);
           }
           if (/tell Claude/i.test(cursorLine(tmux.capture()))) {
             tmux.type(DENY_FEEDBACK);
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            await sleep(500);
             tmux.keys("Enter");
             visit.reached.deniedWithReply = true;
           } else {
@@ -150,35 +189,41 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
         } else {
           tmux.keys("Enter");
         }
+        // The dialog is answered: let the screen move on before it is looked at again.
+        await sleep(1500);
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await sleep(1000);
     }
     visit.reached.turn = readTrim(story) === "terminal one";
     await until(() => IDLE.test(tmux.capture()) && !WORKING.test(tmux.capture()), 60_000);
 
-    // /rewind: the first prompt of the web, then "Restore code".
+    // /rewind: the web's first prompt (found by its marker), then "Restore code".
     tmux.type("/rewind");
     tmux.keys("Enter");
-    const menu = await tmux.waitFor(/Rewind|Restore/i, 15_000);
-    visit.reached.rewindMenu = menu !== undefined;
-    if (menu) {
+    const opened = await until(
+      () => menuShown(tmux.capture(), /Rewind|Restore|checkpoint/),
+      15_000,
+    );
+    visit.reached.rewindMenu = opened !== undefined;
+    if (opened) {
       for (let i = 0; i < 12; i++) {
-        if (/web one/.test(cursorLine(tmux.capture()))) break;
+        if (cursorLine(tmux.capture()).includes(WEB_MARKER)) break;
         tmux.keys("Up");
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await sleep(300);
       }
-      visit.reached.rewindPicked = /web one/.test(cursorLine(tmux.capture()));
+      visit.reached.rewindPicked = cursorLine(tmux.capture()).includes(WEB_MARKER);
       if (visit.reached.rewindPicked) {
         tmux.keys("Enter");
-        const options = await tmux.waitFor(/Restore code/i, 15_000);
+        const options = await tmux.waitFor(/Restore code/, 15_000);
         if (options) {
           for (let i = 0; i < 5; i++) {
             const line = cursorLine(tmux.capture());
-            if (/Restore code/i.test(line) && !/conversation/i.test(line)) break;
+            if (/Restore code/.test(line) && !/conversation/i.test(line)) break;
             tmux.keys("Down");
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            await sleep(300);
           }
-          if (/Restore code/i.test(cursorLine(tmux.capture()))) {
+          const line = cursorLine(tmux.capture());
+          if (/Restore code/.test(line) && !/conversation/i.test(line)) {
             tmux.keys("Enter");
             visit.reached.rewindAttempted = true;
             visit.reached.rewindRestored = Boolean(
@@ -195,34 +240,30 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
   }
 }
 
-/** Visit 2: the permission-mode cycle, then `/compact`. */
+/** Visit 2: the permission-mode cycle (back to where it started), then `/compact`. */
 async function visitTwo(ctx: Ctx, sid: string): Promise<Visit & { cycle: string[] }> {
-  const { run, extras } = ctx;
+  const { run } = ctx;
   const visit = { ...newVisit(), cycle: [] as string[] };
-  const tmux = new Tmux(
-    run.id,
-    claudeEnvironment(process.env, { configDir: run.configDir, advisorOff: true }),
-    run.abort.signal,
-  );
-  extras.tmux = tmux;
+  const tmux = newTmux(ctx);
   try {
-    await steer(tmux, ctx, { fake: run.fake, sid });
+    await steer(tmux, ctx, sid);
     visit.reached.up = true;
     if (!run.fake) {
-      // Shift+Tab: the modes the footer names, in order, until the first comes round again.
-      const LABEL =
-        /(accept edits on|plan mode on|auto mode on|auto-accept edits on|bypass permissions on|don't ask on)/i;
-      for (let i = 0; i < 6; i++) {
+      // Shift+Tab until no mode is named in the footer again: the default has no label. The
+      // labels seen on the way are the cycle.
+      for (let i = 0; i < 8; i++) {
         tmux.keys("BTab");
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        const label = LABEL.exec(tmux.capture())?.[1]?.toLowerCase() ?? "default";
-        if (visit.cycle.includes(label)) break;
+        await sleep(700);
+        const label = MODE_LABEL.exec(footerOf(tmux.capture()))?.[1]?.toLowerCase();
+        if (label === undefined) {
+          visit.reached.cycle = visit.cycle.length > 0;
+          break;
+        }
         visit.cycle.push(label);
       }
-      visit.reached.cycle = visit.cycle.length > 1;
     }
     run.budget.spendUnobserved("terminal");
-    tmux.type(run.fake ? "/compact" : "/compact");
+    tmux.type("/compact");
     tmux.keys("Enter");
     visit.reached.compacted = Boolean(
       await tmux.waitFor(run.fake ? /claude-stub compacted/ : /compact(ed|ion)/i, 90_000),
@@ -235,7 +276,7 @@ async function visitTwo(ctx: Ctx, sid: string): Promise<Visit & { cycle: string[
 
 export const terminalScenario: Scenario = {
   name: "terminal",
-  budget: 6,
+  budget: 7,
   async run(ctx) {
     const { run, cap } = ctx;
     const story = join(run.folder, "story.txt");
@@ -255,7 +296,7 @@ export const terminalScenario: Scenario = {
     ];
     run.fakeClaude?.script(fakeSteps);
     await web.turn(
-      `Use the Write tool to overwrite ${story} with the single line: web one. Then reply DONE.`,
+      `${WEB_MARKER}: use the Write tool to overwrite ${story} with the single line: web one. Then reply DONE.`,
       { uuid: first },
     );
     await web.turn("Remember the codeword ALBATROSS for later. Reply only OK.", {

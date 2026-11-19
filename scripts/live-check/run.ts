@@ -88,8 +88,9 @@ export function createRun(
     if (!existsSync(configDir)) throw new Error("Claude Code's folder does not exist");
   }
   configDir = realpathSync(configDir);
-  // `getSessionMessages` reads the folder this names, in this process.
-  process.env.CLAUDE_CONFIG_DIR = configDir;
+  // `getSessionMessages` reads the folder this names, in this process. Only a fake run sets it:
+  // with the real `claude` the owner's own variable (or none) stays as it is, as for the runtime.
+  if (options.fake) process.env.CLAUDE_CONFIG_DIR = configDir;
 
   const settingsFiles: Array<{ label: string; text: string }> = [];
   const fingerprints: Record<string, string> = {};

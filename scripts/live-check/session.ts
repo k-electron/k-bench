@@ -231,7 +231,7 @@ export class LiveSession {
         },
         env: {
           ...claudeEnvironment(process.env, {
-            configDir: run.configDir,
+            ...(run.fake ? { configDir: run.configDir } : {}),
             advisorOff: spec.advisorOff ?? launch.advisor === "off",
           }),
         },
@@ -270,7 +270,12 @@ export class LiveSession {
       detached: true,
     });
     this.pid = child.pid;
-    if (child.pid !== undefined) this.run.pids.add(child.pid);
+    const { pid } = child;
+    if (pid !== undefined) {
+      this.run.pids.add(pid);
+      // The ID of a process that has gone is not kept: it may be another process's by the end.
+      child.on("exit", () => this.run.pids.delete(pid));
+    }
     const tap = (dir: Wire["dir"]) =>
       lines((line) => {
         try {

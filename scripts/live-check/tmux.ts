@@ -76,10 +76,10 @@ export class Tmux {
     this.tmux(["send-keys", "-t", PANE, "-l", text]);
   }
 
-  /** The pane's text, with its scrollback. */
+  /** The screen as it is now: no scrollback, where old dialogs and labels linger. */
   capture(): string {
     try {
-      return this.tmux(["capture-pane", "-p", "-t", PANE, "-S", "-300"]);
+      return this.tmux(["capture-pane", "-p", "-t", PANE]);
     } catch {
       return "";
     }

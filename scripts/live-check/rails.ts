@@ -122,6 +122,8 @@ export class Budget {
 export interface ToolPolicy {
   /** The throwaway folder, as `realpath` gives it: the only place Read, Write and Edit may touch. */
   folder: string;
+  /** More folders the file tools may touch (the plan check's plan file lives in Claude Code's own folder). */
+  alsoFolders?: readonly string[];
   /** Tools allowed besides Read, Write and Edit inside the folder (`ExitPlanMode`, ...). Never an `mcp__` tool. */
   allow?: readonly string[];
   /** Names of the subagent tool (`Agent`, once `Task`), allowed when the check is the subagent one. */
@@ -175,7 +177,10 @@ export function decideTool(
     const file = input.file_path;
     if (typeof file !== "string" || file === "")
       return deny(`${toolName} without a path`);
-    return isInside(policy.folder, resolve(policy.folder, file))
+    const target = resolve(policy.folder, file);
+    return [policy.folder, ...(policy.alsoFolders ?? [])].some((folder) =>
+      isInside(folder, target),
+    )
       ? { behavior: "allow" }
       : deny(`${toolName} outside its throwaway folder`);
   }
@@ -322,7 +327,7 @@ const KEPT = new Set(["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR"]);
  */
 export function claudeEnvironment(
   base: Record<string, string | undefined>,
-  options: { configDir: string; advisorOff: boolean },
+  options: { configDir?: string; advisorOff: boolean },
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const [name, value] of Object.entries(base)) {
@@ -331,7 +336,9 @@ export function claudeEnvironment(
     if ((name.startsWith("CLAUDE_") && !kept) || name === "CLAUDECODE") continue;
     env[name] = value;
   }
-  env.CLAUDE_CONFIG_DIR = options.configDir;
+  // Only a fake run points Claude Code at a folder of its own: with the real `claude` the
+  // owner's own variable (or none) reaches it, as it does the shipped runtime.
+  if (options.configDir) env.CLAUDE_CONFIG_DIR = options.configDir;
   // Report when a turn starts and ends, as k-bench's runtime asks (src/agent-runtime/session.ts).
   env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = "1";
   // The owner's claude.ai connectors are not loaded (they are also off in `settings`).

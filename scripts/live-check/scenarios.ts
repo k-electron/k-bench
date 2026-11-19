@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FakeStep } from "../../test/harness/fake-claude.ts";
+import { isInside } from "./rails.ts";
 import { isResult, isSystem, type LiveSession, type Msg, toolCalls } from "./session.ts";
 import { terminalScenario } from "./terminal.ts";
 import type { Ctx, Scenario } from "./types.ts";
@@ -97,10 +98,17 @@ const plan: Scenario = {
     }
     const s = ctx.open({
       permissionMode: "plan",
-      policy: { allow: ["ExitPlanMode"] },
+      // The plan file lives in Claude Code's own folder, so writing it is allowed there too.
+      policy: { allow: ["ExitPlanMode"], alsoFolders: [join(run.configDir, "plans")] },
       onAsk(tool, input) {
-        if (tool === "ExitPlanMode" && typeof input.planFilePath === "string") {
-          run.reportedPlans.push(input.planFilePath);
+        // A plan file this run made: named by its own ExitPlanMode, or written by the model.
+        const file = tool === "ExitPlanMode" ? input.planFilePath : input.file_path;
+        if (
+          typeof file === "string" &&
+          (tool === "ExitPlanMode" || tool === "Write" || tool === "Edit") &&
+          isInside(join(run.configDir, "plans"), file)
+        ) {
+          run.reportedPlans.push(file);
         }
       },
     });
