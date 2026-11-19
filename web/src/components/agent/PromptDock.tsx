@@ -1,5 +1,6 @@
 import type { AgentConversation } from "@/agent/useAgentConversation";
 import { Composer } from "./Composer";
+import { ModeLine } from "./ModeLine";
 import { PermissionPrompt } from "./PermissionPrompt";
 
 /**
@@ -10,9 +11,11 @@ import { PermissionPrompt } from "./PermissionPrompt";
  * back.
  */
 export function PromptDock({
+  sessionId,
   conversation,
   focused,
 }: {
+  sessionId: string;
   conversation: AgentConversation;
   focused: boolean;
 }) {
@@ -29,12 +32,22 @@ export function PromptDock({
       )}
       <div className={ask === undefined ? "contents" : "hidden"}>
         <Composer
+          key={sessionId}
+          sessionId={sessionId}
           onSend={conversation.send}
           disabled={conversation.ended}
           offline={conversation.reconnecting}
           autoFocus={focused && ask === undefined}
+          onShiftTab={conversation.cycleMode}
         />
       </div>
+      {conversation.mode !== undefined && (
+        <ModeLine
+          mode={conversation.mode}
+          onCycle={conversation.cycleMode}
+          disabled={conversation.ended || conversation.reconnecting}
+        />
+      )}
     </>
   );
 }

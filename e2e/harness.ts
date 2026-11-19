@@ -406,6 +406,14 @@ export class AppPage {
     });
   }
 
+  /** The line under the named Claude Agent's input that shows its permission mode; a button that cycles it. */
+  agentModeLine(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("button", {
+      name: "Permission mode",
+      exact: true,
+    });
+  }
+
   /** The Claude glyph on a Session's row; present on Claude Sessions only. */
   claudeGlyph(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {

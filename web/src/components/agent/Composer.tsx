@@ -1,5 +1,6 @@
 import { SendIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { loadDraft, saveDraft } from "@/agent/drafts";
 import { Button } from "@/components/ui/button";
 import { useIsPhone } from "@/useIsPhone";
 
@@ -8,13 +9,18 @@ import { useIsPhone } from "@/useIsPhone";
  * starts a new line. On a phone, Return starts a new line and the Send button sends: there is
  * no Enter to reach for, and an on-screen keyboard's Return is for writing. The box grows
  * with what is typed. It takes no Extra keys and no Smart typing: it is an ordinary field.
+ * What is typed and not sent is kept as a draft on this device, per Agent, until it is sent.
  */
 export function Composer({
+  sessionId,
   onSend,
   disabled,
   offline,
   autoFocus,
+  onShiftTab,
 }: {
+  /** The Agent's Session ID: whose draft the box keeps. */
+  sessionId: string;
   /** Sends the text; false when it could not be sent (reconnecting), and the box keeps it. */
   onSend: (text: string) => boolean;
   /** The Agent has ended: nothing can be sent. */
@@ -22,9 +28,11 @@ export function Composer({
   /** The connection is down: the box stays editable, but Send waits for it to come back. */
   offline: boolean;
   autoFocus: boolean;
+  /** Shift+Tab on desktop: the box keeps the key for this (and the focus) when it is given. */
+  onShiftTab?: () => void;
 }) {
   const phone = useIsPhone();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => loadDraft(sessionId));
   const field = useRef<HTMLTextAreaElement>(null);
 
   // The Focused Pane's box takes the keyboard, as its terminal would. Not on a phone, where
@@ -33,9 +41,14 @@ export function Composer({
     if (autoFocus && !phone) field.current?.focus();
   }, [autoFocus, phone]);
 
+  const edit = (next: string) => {
+    setText(next);
+    saveDraft(sessionId, next);
+  };
+
   const send = () => {
     if (disabled || offline || text.trim() === "") return;
-    if (onSend(text)) setText("");
+    if (onSend(text)) edit("");
   };
 
   return (
@@ -55,8 +68,13 @@ export function Composer({
         placeholder="Message Claude"
         // `field-sizing` makes the box as tall as its text, up to the cap.
         className="field-sizing-content max-h-48 min-h-9 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => edit(event.target.value)}
         onKeyDown={(event) => {
+          if (!phone && onShiftTab && event.key === "Tab" && event.shiftKey) {
+            event.preventDefault();
+            onShiftTab();
+            return;
+          }
           // Not while an input method is composing (its Enter confirms a character).
           if (
             !phone &&

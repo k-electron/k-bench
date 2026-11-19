@@ -25,6 +25,7 @@ import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { ClientHub } from "./hub.ts";
 import { LiveText } from "./live.ts";
+import { PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
 
 /** Put in at build time from the SDK's package.json (`vite.runtime.config.ts`). */
@@ -61,7 +62,7 @@ const hub = new ClientHub({
 // Idle, Working or Waiting for you: Waiting is an open ask (`asks`, below).
 const activity = new Activity({
   openAsks: () => asks.count,
-  publish: (status) => hub.setStatus(status),
+  publish: () => publishStatus(),
 });
 
 /** Appends to the log and tells every synced client, in that order. */
@@ -74,6 +75,16 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
 }
 
 const asks = new PermissionAsks(record);
+
+const permissionMode = new PermissionModeTracker();
+
+/** Sends every connection the status: what the Agent is doing, and its permission mode. */
+function publishStatus(): void {
+  hub.setStatus({
+    ...activity.status,
+    ...(permissionMode.current && { mode: permissionMode.current }),
+  });
+}
 
 record({ kind: "runtime", event: "started" });
 
@@ -111,6 +122,7 @@ const claude = new ClaudeSession(
         return;
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
+      if (permissionMode.observe(message)) publishStatus();
       if (message.type === "result") live.turnEnded();
     },
     ended(error) {
@@ -127,6 +139,14 @@ async function command(message: AgentClientMessage): Promise<void> {
     claude.prompt(message.id, message.text);
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message.decision);
+  } else if (message.type === "set_permission_mode") {
+    try {
+      await claude.setPermissionMode(message.mode);
+      if (permissionMode.set(message.mode)) publishStatus();
+    } catch {
+      // Claude Code refused (the owner's settings can forbid a mode): nothing changes, and
+      // every Pane keeps showing the mode that is in force.
+    }
   } else if (message.type === "shutdown") {
     await finish("Stopped by k-bench", 0);
   }
@@ -169,6 +189,8 @@ process.on("unhandledRejection", (error) => {
 // If it dies first, `ended` above has already recorded why.
 try {
   claudeVersion = await claude.claudeVersion();
+  permissionMode.set(await claude.permissionMode());
+  publishStatus();
   await hub.listen();
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);

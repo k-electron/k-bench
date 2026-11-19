@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { AgentHello, AgentStatus } from "../../../src/shared/agent-protocol.ts";
+import {
+  type AgentHello,
+  type AgentStatus,
+  type LogEntry,
+  nextPermissionMode,
+  type PermissionMode,
+} from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
 import { retryWhenAwake } from "../retryWhenAwake";
 import {
@@ -32,6 +38,8 @@ function newPromptId(): string {
 export interface AgentConversation {
   /** The conversation so far, in order. */
   items: TranscriptItem[];
+  /** The log entries received, in order: what the raw view (#137) shows. */
+  entries: readonly LogEntry[];
   /** The runtime's hello, once it has come: its versions. */
   hello: AgentHello | undefined;
   /** What the Agent is doing, once the runtime has said. */
@@ -41,6 +49,14 @@ export interface AgentConversation {
    * answer them then.
    */
   asks: PermissionAsk[];
+  /** Claude Code's permission mode, once the runtime has said. The same on every device. */
+  mode: PermissionMode | undefined;
+  /**
+   * Switches to the next permission mode in Claude TUI's order. False when it could not be
+   * sent (reconnecting, or no mode known yet): the mode line stays as it is. True means sent,
+   * not applied: the line changes, here and on every device, when the runtime says so.
+   */
+  cycleMode(): boolean;
   /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
   ended: boolean;
   /** The connection dropped and is retrying: what is shown may be behind, and nothing can be sent. */
@@ -61,6 +77,7 @@ interface Model {
   transcript: typeof emptyTranscript;
   hello: AgentHello | undefined;
   state: AgentStatus["state"] | undefined;
+  mode: PermissionMode | undefined;
   ended: boolean;
   reconnecting: boolean;
 }
@@ -75,7 +92,9 @@ function reduce(model: Model, event: Event): Model {
   if (event.type === "reconnecting") return { ...model, reconnecting: event.on };
   const { message } = event;
   if (message.type === "hello") return { ...model, hello: message };
-  if (message.type === "status") return { ...model, state: message.state };
+  if (message.type === "status") {
+    return { ...model, state: message.state, mode: message.mode ?? model.mode };
+  }
   return { ...model, transcript: applyServerMessage(model.transcript, message) };
 }
 
@@ -85,6 +104,7 @@ const initial: Model = {
   transcript: emptyTranscript,
   hello: undefined,
   state: undefined,
+  mode: undefined,
   ended: false,
   reconnecting: false,
 };
@@ -125,13 +145,29 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     [],
   );
 
+  // Asks for the mode after the one shown: a target, so two devices tapping at once agree.
+  const mode = model.mode;
+  const cycleMode = useCallback(
+    () =>
+      mode !== undefined &&
+      (connection.current?.send({
+        type: "set_permission_mode",
+        mode: nextPermissionMode(mode),
+      }) ??
+        false),
+    [mode],
+  );
+
   const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
   const allAsks = useMemo(() => permissionAsks(model.transcript), [model.transcript]);
   return {
     items,
+    entries: model.transcript.entries,
     asks: model.ended ? NO_ASKS : allAsks,
     hello: model.hello,
     state: model.state,
+    mode,
+    cycleMode,
     ended: model.ended,
     reconnecting: model.reconnecting,
     send,
