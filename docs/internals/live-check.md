@@ -52,6 +52,21 @@ Every one is enforced in code. `test/live-check.test.ts` tests the decisions dir
 
 The environment `claude` gets is the owner's own, without the variables of a Claude Code session the script was started from (`CLAUDE_*`, `CLAUDECODE`), except the login's (`CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_*`), `CLAUDE_CONFIG_DIR` is set only in `--fake` (to a temp folder); with the real `claude` the owner's own value, or none, reaches it, as it does the shipped runtime, and the script only reads, hashes and cleans up in the folder that names.
 
+## Driving the terminal: never Enter on a default
+
+The first real run pressed Enter on the folder-trust question, whose **default option is "No, exit"** (the second is "Yes, I trust this folder"), and the terminal quit, so every terminal check came out NOT PROVOKED. Since then no dialog is answered by pressing Enter blindly (`scripts/live-check/screen.ts`): on the trust question the script moves the cursor (`❯`) with Down and presses Enter only once the cursor is on "Yes, I trust this folder"; on a permission dialog it chooses by the option's text ("Yes" without "allow all" or "don't ask again", or "No, and tell Claude what to do differently") and refuses a dialog that does not name the file it asked about; in the `/rewind` menus Enter is pressed only on the line it chose. `fake-claude.sh` asks the same trust question with the same default when a test calls `FakeClaude.requireTrust()` (a `--fake` run always does), so `--fake-break trust-enter`, which presses Enter blindly, shows the terminal quitting and the checks saying NOT PROVOKED. `test/live-check-terminal.test.ts` shows both in a real tmux.
+
+## A settings change is named by scenario and key, never by value
+
+The script keeps the text of `settings.json` and `settings.local.json` in memory (never written) and looks at them after each scenario. A change is reported as the scenario it happened in and the **key paths** that changed (`modelSettings.some-model`, never a value), on the terminal, in `results.md`, and as a run-level FAIL (exit 1): _another running Claude Code may be the cause_ (the owner's own sessions rewrite these files to save defaults, say) as well as a per-session option of the run. The `advisor` check fails only for a change in its own scenario. `--fake-break settings` shows it (the fake's `/advisor` writes the file during `baseline`). The final byte comparison is kept too, for a change no scenario saw.
+
+## Probes that settle what a recording could not
+
+- **`at-path`** tries a path with a space three ways, each with its own file and a model that may not read files: verbatim (`@my note.txt`, what `insertMention` emits today), quoted (`@"my quoted note.txt"`) and backslash-escaped (`@my\ escaped\ note.txt`), and says in the verdict which spelling is expanded without a tool call, so which one `web/src/agent/fileMentions.ts` `insertMention` should emit.
+- **`open-in-web-anchors`**, once the terminal's `/compact` is done, lists the shape of the saved chain's first messages (type, subtype, role, what the content is made of, which flags such as `isCompactSummary` are present, the other field names; never a text), so the compaction heuristic in `src/agent-runtime/terminal-import.ts` can be set from evidence.
+
+A prompt ends at its `command_lifecycle` `completed` (or `cancelled`), not at a `result`: a prompt folded into a running turn shares that turn's `result`, and a finished background task can start a turn nobody sent.
+
 ## What it cannot do for you
 
 - The scenarios were written against the SDK's types, the earlier spike and the fake; the real `claude` has not run them. The terminal's menus (`/rewind`, the permission dialog's "tell Claude what to do differently", the trust question, the Shift+Tab footer labels) are matched by text that is a best guess, and every wait is bounded for that reason.

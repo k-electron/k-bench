@@ -181,25 +181,50 @@ const clear: Scenario = {
   },
 };
 
+/** The spellings of a mention of a path with a space that the check tries, each with its file. */
+export const SPACE_FORMS = [
+  { form: "verbatim", file: "my note.txt", token: "TEAL", mention: "@my note.txt" },
+  {
+    form: "quoted",
+    file: "my quoted note.txt",
+    token: "AMBER",
+    mention: '@"my quoted note.txt"',
+  },
+  {
+    form: "escaped",
+    file: "my escaped note.txt",
+    token: "VIOLET",
+    mention: "@my\\ escaped\\ note.txt",
+  },
+] as const;
+
 const atPath: Scenario = {
   name: "at-path",
-  budget: 3,
+  budget: 5,
   fakeCannot: "the fake does not expand @path",
   async run(ctx) {
     const { cap } = ctx;
     put(ctx, "note.txt", "The secret fruit is QUINCE.\n");
-    put(ctx, "my note.txt", "The secret colour is TEAL.\n");
+    for (const { file, token } of SPACE_FORMS)
+      put(ctx, file, `The secret word is ${token}.\n`);
     // The model may not read: the answer can only come from what Claude Code put in the prompt.
     const s = ctx.open({ blocked: { noFileTools: true } });
     cap.notes.plainFrom = s.msgs.length;
     await s.turn(
       "What is the secret fruit in @note.txt? Do not use any tools. Reply with just the fruit, or NOFILE if you can't see the file.",
     );
-    cap.notes.spaceFrom = s.msgs.length;
-    // What the `@` picker inserts for a path with a space: `@path` verbatim (web/src/agent/fileMentions.ts).
-    await s.turn(
-      "What is the secret colour in @my note.txt? Do not use any tools. Reply with just the colour, or NOFILE if you can't see the file.",
-    );
+    // What the `@` picker inserts for a path with a space is `@path` verbatim
+    // (web/src/agent/fileMentions.ts); the quoted and the backslash-escaped spellings are tried
+    // too, to see which one Claude Code expands, each in a turn of its own with its own file.
+    const spans: Record<string, [number, number]> = {};
+    for (const { form, mention } of SPACE_FORMS) {
+      const from = s.msgs.length;
+      await s.turn(
+        `What is the secret word in ${mention}? Do not use any tools. Reply with just the word, or NOFILE if you can't see the file.`,
+      );
+      spans[form] = [from, s.msgs.length];
+    }
+    cap.notes.spans = spans;
     await s.close();
   },
 };

@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DENIED_WITH_REPLY } from "../../src/agent-runtime/asks.ts";
 import { PERMISSION_MODE_CYCLE } from "../../src/shared/agent-protocol.ts";
+import { SPACE_FORMS } from "./scenarios.ts";
 import {
   assistantText,
   blocks,
@@ -443,7 +444,8 @@ const clear: Check = {
 const atPath: Check = {
   name: "at-path",
   row: "A2",
-  title: "@path in an SDK prompt is handled as in the TUI",
+  title:
+    "@path in an SDK prompt is handled as in the TUI; which spelling of a path with a space is expanded",
   scenario: "at-path",
   fakeCannot: "the fake does not expand @path",
   assumption:
@@ -451,27 +453,43 @@ const atPath: Check = {
   evaluate({ cap }) {
     const session = sessionOf(cap);
     if (!session) return notProvoked("the session did not run");
-    const plain = slice(
-      session,
-      noteOf<number>(cap, "plainFrom"),
-      noteOf<number>(cap, "spaceFrom"),
-    );
-    const spaced = slice(session, noteOf<number>(cap, "spaceFrom"));
+    const spans = noteOf<Record<string, [number, number]>>(cap, "spans") ?? {};
+    const plain = slice(session, noteOf<number>(cap, "plainFrom"), spans.verbatim?.[0]);
     const readTool = (msgs: Msg[]) =>
       toolCalls(msgs).some((call) => /^(Read|Glob|Grep)$/.test(call.name));
     const plainOk = /QUINCE/i.test(assistantText(plain));
-    const spacedOk = /TEAL/i.test(assistantText(spaced));
     const facts = [
       `plain path: the file's content reached the model without a tool: ${yesNo(plainOk && !readTool(plain))}`,
-      `path with a space (inserted verbatim): ${yesNo(spacedOk)}`,
     ];
+    const works: Record<string, boolean> = {};
+    for (const { form, token } of SPACE_FORMS) {
+      const span = spans[form];
+      if (!span) {
+        facts.push(`path with a space, ${form}: not tried`);
+        continue;
+      }
+      const msgs = slice(session, span[0], span[1]);
+      works[form] = new RegExp(token, "i").test(assistantText(msgs)) && !readTool(msgs);
+      facts.push(
+        `path with a space, ${form} (${form === "verbatim" ? "@path" : form === "quoted" ? '@"path"' : "@path\\ with\\ escapes"}): expanded without a tool: ${yesNo(works[form] === true)}`,
+      );
+    }
     if (!plainOk) return fail("@path was not expanded in an SDK prompt", facts);
-    return spacedOk
-      ? pass("@path is expanded, a path with a space too", facts)
-      : fail(
-          "a path with a space is not expanded when inserted verbatim: the picker needs to quote it",
-          facts,
-        );
+    if (works.verbatim) {
+      return pass("@path is expanded, a path with a space too, inserted verbatim", facts);
+    }
+    const emit = works.quoted
+      ? 'quoted: @"path with spaces"'
+      : works.escaped
+        ? "backslash-escaped: @path\\ with\\ spaces"
+        : undefined;
+    facts.push(
+      `insertMention should emit a path with a space ${emit ?? "in none of the three spellings (none is expanded): leave such a path out of the picker, or insert it as text without the @"}`,
+    );
+    return fail(
+      "a path with a space is not expanded when inserted verbatim (web/src/agent/fileMentions.ts insertMention)",
+      facts,
+    );
   },
 };
 
@@ -969,6 +987,43 @@ const modeCycle: Check = {
   },
 };
 
+/**
+ * The shape of the first messages of a saved conversation, kinds only: type, subtype, role,
+ * what the content is made of, which flags are present and which other fields there are, never
+ * a text. For setting the compaction heuristic (src/agent-runtime/terminal-import.ts) from evidence.
+ */
+function chainShape(saved: readonly unknown[]): string[] {
+  const rows = saved.slice(0, 8).map((m, i) => {
+    const row = isObject(m) ? m : {};
+    const inner = isObject(row.message) ? row.message : {};
+    const content =
+      typeof inner.content === "string"
+        ? "string"
+        : Array.isArray(inner.content)
+          ? inner.content.map((b) => (isObject(b) ? String(b.type) : "?")).join("+")
+          : "none";
+    const flags = [
+      "isCompactSummary",
+      "isSynthetic",
+      "isMeta",
+      "isSidechain",
+      "isReplay",
+      "isVisibleInTranscriptOnly",
+    ]
+      .filter((key) => key in row)
+      .map((key) => `${key}=${String(row[key])}`);
+    const others = Object.keys(row)
+      .filter((key) => key !== "message")
+      .sort()
+      .join("|");
+    return `#${i} ${String(row.type)}${typeof row.subtype === "string" ? `/${row.subtype}` : ""} role=${typeof inner.role === "string" ? inner.role : "none"} content=${content}${flags.length > 0 ? ` ${flags.join(",")}` : ""} fields=${others}`;
+  });
+  return [
+    `the chain after the terminal's /compact has ${saved.length} message(s); the first ${rows.length}, kinds only:`,
+    ...rows,
+  ];
+}
+
 const openInWebAnchors: Check = {
   name: "open-in-web-anchors",
   row: "A3",
@@ -1030,6 +1085,7 @@ const openInWebAnchors: Check = {
     }
     // The compaction heuristic: a chain that starts with a system message.
     const visitTwo = noteOf<{ reached: Record<string, boolean> }>(cap, "visitTwo");
+    if (visitTwo?.reached.compacted) facts.push(...chainShape(saved2));
     if (saved2.length === 0 || !visitTwo?.reached.compacted) {
       return notProvoked(
         "the terminal's /compact did not happen or was not read back",
