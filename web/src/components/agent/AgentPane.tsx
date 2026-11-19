@@ -2,8 +2,10 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { contextLeftPercent, currentActivity } from "@/agent/activity";
 import { useReportUnsupported } from "@/agent/reportUnsupported";
 import { useAgentConversation } from "@/agent/useAgentConversation";
+import { useOpenInTerminal } from "@/useOpenInTerminal";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
 import { AgentHeader } from "./AgentHeader";
+import { OpenInTerminalProvider } from "./OpenInTerminal";
 import { PromptDock } from "./PromptDock";
 import { RawSwitch, RawTranscript, useRawView } from "./RawView";
 import { StatusLine } from "./StatusLine";
@@ -33,6 +35,7 @@ export function AgentPane({
   const { items, entries } = conversation;
   const rawView = useRawView();
   useReportUnsupported(session.id, items, entries);
+  const openInTerminal = useOpenInTerminal(session);
   const { stopTask: stop, reconnecting, ended } = conversation;
   // One value until the connection changes, so streaming text does not redraw every task line.
   const stopTask = useMemo(
@@ -80,13 +83,15 @@ export function AgentPane({
           <RawTranscript entries={entries} />
         ) : (
           <StopTaskProvider value={stopTask}>
-            <Transcript
-              sessionId={session.id}
-              items={items}
-              entries={entries}
-              rawView={rawView}
-              focusView={conversation.focusView}
-            />
+            <OpenInTerminalProvider value={openInTerminal.open}>
+              <Transcript
+                sessionId={session.id}
+                items={items}
+                entries={entries}
+                rawView={rawView}
+                focusView={conversation.focusView}
+              />
+            </OpenInTerminalProvider>
           </StopTaskProvider>
         )}
       </div>
@@ -123,6 +128,7 @@ export function AgentPane({
       ) : (
         <StoppedBar sessionId={session.id} reason={conversation.stoppedReason} />
       )}
+      {openInTerminal.dialog}
     </div>
   );
 }

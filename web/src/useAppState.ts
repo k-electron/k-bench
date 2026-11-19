@@ -37,6 +37,8 @@ export interface Actions {
   restartSession(sessionId: string): Promise<void>;
   /** Stops a Claude Agent (the Session stays, Stopped). */
   stopSession(sessionId: string): Promise<void>;
+  /** Switches a Claude Agent to Claude TUI in the same Session; every device follows. */
+  openInTerminal(sessionId: string): Promise<void>;
 }
 
 /**
@@ -117,6 +119,9 @@ export function useAppState(): {
       },
       stopSession: async (sessionId) => {
         await reporting(() => act(api.stopSession(sessionId)));
+      },
+      openInTerminal: async (sessionId) => {
+        await reporting(() => act(api.openInTerminal(sessionId)));
       },
     };
   }, []);

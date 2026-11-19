@@ -211,6 +211,9 @@ export function createApp(
   app.post("/api/sessions/:id/stop", async (c) =>
     c.json(await service.stopSession(c.req.param("id"))),
   );
+  app.post("/api/sessions/:id/open-in-terminal", async (c) =>
+    c.json(await service.openInTerminal(c.req.param("id"))),
+  );
   app.post("/api/sessions/:id/restart", async (c) =>
     c.json(await service.restartSession(c.req.param("id"))),
   );
