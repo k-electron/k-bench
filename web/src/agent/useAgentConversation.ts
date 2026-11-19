@@ -12,11 +12,15 @@ import { promptHistory } from "./prompts";
 import {
   applyServerMessage,
   emptyTranscript,
+  hasEarlier,
   type PermissionAsk,
   permissionAsks,
   type TranscriptItem,
   transcriptItems,
 } from "./transcript";
+
+/** How many turns of older history one scroll-back request asks for. */
+const EARLIER_TURNS = 20;
 
 /** The agent WebSocket URL for a path from `agentPath`. */
 function agentUrl(path: string): string {
@@ -60,6 +64,21 @@ export interface AgentConversation {
   cycleMode(): boolean;
   /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
   ended: boolean;
+  /**
+   * Where the history held begins (undefined before the first replay). A page opens with only
+   * the latest turns; `loadEarlier` brings the rest, lowering this, until `hasEarlier` is false.
+   */
+  earliestSeq: number | undefined;
+  /** There is older history than what is held. */
+  hasEarlier: boolean;
+  /** A `loadEarlier` request is waiting for its answer. */
+  loadingEarlier: boolean;
+  /**
+   * Asks for the turns before what is held. Does nothing while one is already asked for, when
+   * there is nothing earlier, or while reconnecting (the request would be dropped; ask again
+   * once the connection is back).
+   */
+  loadEarlier(): void;
   /** The connection dropped and is retrying: what is shown may be behind, and nothing can be sent. */
   reconnecting: boolean;
   /** Sends a prompt as typed. False when it could not be sent (reconnecting), so the text should stay. */
@@ -92,6 +111,8 @@ interface Model {
   mode: PermissionMode | undefined;
   ended: boolean;
   reconnecting: boolean;
+  /** The `beforeSeq` of the page request waiting for its answer, if one is. */
+  requestedBefore: number | undefined;
   /** How many turns had ended when the owner last interrupted. */
   interruptedAt: number | undefined;
 }
@@ -99,6 +120,7 @@ interface Model {
 type Event =
   | { type: "message"; message: Parameters<typeof applyServerMessage>[1] }
   | { type: "reconnecting"; on: boolean }
+  | { type: "requestedEarlier"; before: number }
   | { type: "ended" }
   | { type: "interrupted" };
 
@@ -114,7 +136,12 @@ function reduce(model: Model, event: Event): Model {
     return { ...model, interruptedAt: turnsEnded(model.transcript) };
   }
   if (event.type === "ended") return { ...model, ended: true, reconnecting: false };
-  if (event.type === "reconnecting") return { ...model, reconnecting: event.on };
+  if (event.type === "reconnecting") {
+    // A request in flight may be lost with the socket: ask again once it is back.
+    return { ...model, reconnecting: event.on, requestedBefore: undefined };
+  }
+  if (event.type === "requestedEarlier")
+    return { ...model, requestedBefore: event.before };
   const { message } = event;
   if (message.type === "hello") return { ...model, hello: message };
   if (message.type === "status") {
@@ -132,6 +159,7 @@ const initial: Model = {
   mode: undefined,
   ended: false,
   reconnecting: false,
+  requestedBefore: undefined,
   interruptedAt: undefined,
 };
 
@@ -139,6 +167,8 @@ const initial: Model = {
 export function useAgentConversation(sessionId: string): AgentConversation {
   const [model, dispatch] = useReducer(reduce, initial);
   const connection = useRef<AgentConnection>(undefined);
+  const latest = useRef(model);
+  latest.current = model;
 
   useEffect(() => {
     const opened = createAgentConnection({
@@ -171,6 +201,19 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     [],
   );
 
+  const loadEarlier = useCallback(() => {
+    const { transcript, requestedBefore } = latest.current;
+    const before = transcript.earliestSeq;
+    if (before === undefined || !hasEarlier(transcript) || requestedBefore === before) {
+      return;
+    }
+    if (
+      connection.current?.send({ type: "page", beforeSeq: before, limit: EARLIER_TURNS })
+    ) {
+      dispatch({ type: "requestedEarlier", before });
+    }
+  }, []);
+
   // Asks for the mode after the one shown: a target, so two devices tapping at once agree.
   const mode = model.mode;
   const cycleMode = useCallback(
@@ -199,6 +242,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     () => promptHistory(model.transcript.entries),
     [model.transcript],
   );
+
   const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
   const allAsks = useMemo(() => permissionAsks(model.transcript), [model.transcript]);
   return {
@@ -211,6 +255,12 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     cycleMode,
     ended: model.ended,
     reconnecting: model.reconnecting,
+    earliestSeq: model.transcript.earliestSeq,
+    hasEarlier: hasEarlier(model.transcript),
+    loadingEarlier:
+      model.requestedBefore !== undefined &&
+      model.requestedBefore === model.transcript.earliestSeq,
+    loadEarlier,
     send,
     answer,
     interrupt,

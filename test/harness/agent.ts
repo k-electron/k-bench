@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import {
   type AgentClientMessage,
   type AgentHello,
+  type AgentPage,
   type AgentServerMessage,
   type AgentSnapshot,
   agentPath,
@@ -121,14 +122,41 @@ export class AgentClient {
    * Asks for the entries after `afterSeq`, and every entry and fragment from now on, and
    * resolves once the replay has come: from then on this connection is in the live set.
    * (Fragments are never replayed: send a prompt from another connection before that and
-   * this one gets the text so far as a snapshot, not the fragments one by one.)
+   * this one gets the text so far as a snapshot, not the fragments one by one.) With
+   * `tailTurns` (and `afterSeq` 0) only the latest turns are replayed, as a fresh page asks;
+   * `replayFrom` says where they begin, and `page` fetches what is before.
    */
-  async sync(afterSeq = 0): Promise<void> {
+  async sync(afterSeq = 0, options: { tailTurns?: number } = {}): Promise<void> {
     const before = this.messages.filter((m) => m.type === "replay").length;
-    this.send({ type: "sync", afterSeq });
+    this.send({
+      type: "sync",
+      afterSeq,
+      ...(options.tailTurns === undefined ? {} : { tailTurns: options.tailTurns }),
+    });
     await pollUntil(
       () => this.messages.filter((m) => m.type === "replay").length > before,
       { description: "the replay" },
+    );
+  }
+
+  /** Where the first replay's contiguous range begins (1: the whole log), once it has come. */
+  get replayFrom(): number | undefined {
+    const replay = this.messages.find((m) => m.type === "replay");
+    return replay?.type === "replay" ? replay.from : undefined;
+  }
+
+  /**
+   * Asks for the `limit` turns before `beforeSeq` and resolves with the answer. Pages are not
+   * among `entries`, which are what a replay and the live feed gave.
+   */
+  async page(beforeSeq: number, limit: number): Promise<AgentPage> {
+    this.send({ type: "page", beforeSeq, limit });
+    return pollUntil(
+      () =>
+        this.messages.find(
+          (m): m is AgentPage => m.type === "page" && m.beforeSeq === beforeSeq,
+        ),
+      { description: `the page before ${beforeSeq}` },
     );
   }
 
