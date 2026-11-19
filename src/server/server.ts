@@ -42,7 +42,11 @@ export async function startServer(
   options: ServerOptions = {},
 ): Promise<RunningServer> {
   const store = new Store(config.dataDir);
-  const tmux = new TmuxDriver(config.tmuxSocket, config.claudeProgram);
+  const tmux = new TmuxDriver(
+    config.tmuxSocket,
+    config.claudeProgram,
+    config.claudeConfigDir,
+  );
   const agents = new AgentRuntimes({
     dataDir: config.dataDir,
     tmux,

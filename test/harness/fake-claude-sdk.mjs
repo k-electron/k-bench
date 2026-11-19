@@ -26,10 +26,13 @@ import {
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import { appendMessage, userMessage } from "./fake-claude-session.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const scriptDir = join(root, "script");
 const conversations = join(root, "conversations");
+/** The test's own Claude Code folder, where the conversations are saved as Claude Code saves them. */
+const configDir = join(root, "claude-config");
 const fixture = JSON.parse(readFileSync(join(root, "fixtures", "messages.json"), "utf8"));
 mkdirSync(conversations, { recursive: true });
 const taskControl = join(root, "tasks");
@@ -100,7 +103,26 @@ function quit(code) {
 
 // ---- Sending ----------------------------------------------------------------------------
 
-const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
+const send = (message) => {
+  saveMessage(message);
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+};
+
+/**
+ * What a turn says is saved to the conversation's file as Claude Code saves it (see
+ * fake-claude-session.mjs), under the same `uuid` it is sent with: the user's own message
+ * (the prompt, saved under the client-set `uuid`) in `runTurn`, the rest here.
+ */
+function saveMessage(message) {
+  const saved =
+    message.type === "assistant" || (message.type === "user" && !message.isReplay);
+  if (!saved || !existsSync(join(conversations, message.session_id))) return;
+  appendMessage(configDir, message.session_id, {
+    type: message.type,
+    uuid: message.uuid,
+    message: message.message,
+  });
+}
 
 /** A recorded message with this session's ids and the values `changes` sets. */
 function make(template, changes = {}) {
@@ -640,7 +662,13 @@ async function runTurn(prompt, scripted) {
   if (!clearing) {
     sendInit(config);
     startOfTurn();
-    if (prompt) saveConversation();
+    if (prompt) {
+      saveConversation();
+      appendMessage(configDir, sessionId, {
+        ...userMessage(prompt.message.content),
+        ...(prompt.uuid ? { uuid: prompt.uuid } : {}),
+      });
+    }
   }
   if (prompt?.uuid && hasFlag("replay-user-messages") && !clearing) {
     send(make(fixture.userEcho, { uuid: prompt.uuid, message: prompt.message }));

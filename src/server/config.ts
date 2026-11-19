@@ -20,6 +20,13 @@ export interface InstanceConfig {
    * the packed-install test sets to its stub; nothing else sets it.
    */
   claudeProgram: string;
+  /**
+   * Where Claude Code keeps its files, handed to the Agent Runtime when set. Only tests set
+   * it (to a folder of their own, so Open in web's import never reads the owner's Claude
+   * Code folder); `resolveConfig` never does, and the owner's own `CLAUDE_CONFIG_DIR`
+   * already reaches the runtime through the login shell.
+   */
+  claudeConfigDir?: string;
 }
 
 const PRESETS = {

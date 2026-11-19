@@ -67,6 +67,13 @@ export type LogEntry =
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
   /**
+   * A line the runtime puts in the Transcript between turns, never from a message: the frames
+   * of what a Claude TUI did while the conversation was open in the terminal (#156, "In the
+   * terminal" ... "Back in web"). `label` is the whole text. A reader that does not know the
+   * kind shows nothing.
+   */
+  | (LogEntryBase & { kind: "divider"; label: string })
+  /**
    * Something Claude Code asked of k-bench that the runtime declined, because a Claude Agent
    * has no way to answer it (#153). The browser shows it as an Unsupported row where it
    * happened. `request` is what Claude Code sent, as the SDK handed it over, so the log holds

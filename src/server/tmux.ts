@@ -141,9 +141,13 @@ export class TmuxDriver {
   /** The program a Claude Session runs (`InstanceConfig.claudeProgram`). */
   private readonly claudeProgram: string;
 
-  constructor(socket: string, claudeProgram = "claude") {
+  /** Where Claude Code's files are, for tests only (`InstanceConfig.claudeConfigDir`). */
+  private readonly claudeConfigDir: string | undefined;
+
+  constructor(socket: string, claudeProgram = "claude", claudeConfigDir?: string) {
     this.socket = socket;
     this.claudeProgram = claudeProgram;
+    this.claudeConfigDir = claudeConfigDir;
   }
 
   private env(): NodeJS.ProcessEnv {
@@ -190,13 +194,13 @@ export class TmuxDriver {
 
   /**
    * Starts a Claude Agent's Agent Runtime as the Session's only program, hidden: nothing ever
-   * attaches a terminal to it (ADR-0007). `launch.claudeProgram` is filled in here, from the
-   * instance's configuration.
+   * attaches a terminal to it (ADR-0007). `launch.claudeProgram` (and, in tests,
+   * `claudeConfigDir`) are filled in here, from the instance's configuration.
    */
   async createAgentSession(
     id: string,
     folder: string,
-    launch: Omit<AgentLaunch, "claudeProgram">,
+    launch: Omit<AgentLaunch, "claudeProgram" | "claudeConfigDir">,
   ): Promise<void> {
     await this.startSession(
       id,
@@ -204,7 +208,11 @@ export class TmuxDriver {
       agentCommand({
         folder,
         shell: ownerShell(),
-        launch: { ...launch, claudeProgram: this.claudeProgram },
+        launch: {
+          ...launch,
+          claudeProgram: this.claudeProgram,
+          ...(this.claudeConfigDir ? { claudeConfigDir: this.claudeConfigDir } : {}),
+        },
       }),
     );
   }

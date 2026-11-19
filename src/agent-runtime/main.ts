@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { getSessionMessages } from "@anthropic-ai/claude-agent-sdk";
 import { conversationOf } from "../agent/conversation.ts";
 import { writeExitRecord } from "../agent/exit.ts";
 import { AgentLog } from "../agent/log.ts";
@@ -35,12 +36,16 @@ import { LiveText } from "./live.ts";
 import { PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
 import { TaskTracker } from "./tasks.ts";
+import { planTerminalImport, type SavedMessage } from "./terminal-import.ts";
 
 /** Put in at build time from the SDK's package.json (`vite.runtime.config.ts`). */
 declare const __SDK_VERSION__: string;
 declare const __SDK_CLAUDE_CODE_VERSION__: string;
 
 const args = parseRuntimeArgs(process.argv.slice(2));
+// Tests only (the server passes it from `InstanceConfig.claudeConfigDir`). Set before anything
+// from the SDK runs: it reads the variable for the files it finds, and so does Claude Code.
+if (args.claudeConfigDir) process.env.CLAUDE_CONFIG_DIR = args.claudeConfigDir;
 // The build ID is the hash of this very file, which a file cannot hold itself.
 const buildId = runtimeBuildId(readFileSync(fileURLToPath(import.meta.url)));
 const log = new AgentLog(agentLogFile(args.agentDir));
@@ -151,6 +156,36 @@ async function refreshContext(): Promise<void> {
     // Nothing to show.
   }
 }
+
+/**
+ * Open in web (#156): before Claude Code starts, and so with no turn running, read what the
+ * terminal did in the conversation, once, and add it to the log between two dividers. It is
+ * before `started`, so the log reads: the Agent's own turns, the Agent stopping, the
+ * terminal's turns, then this runtime. `terminal-import.ts` says what counts as new. If the
+ * conversation cannot be read, the Agent still starts, and says so where the turns would be.
+ */
+async function importTerminalTurns(): Promise<void> {
+  try {
+    const saved = await getSessionMessages(conversation.id, {
+      dir: args.folder,
+      includeSystemMessages: true,
+    });
+    for (const entry of planTerminalImport(
+      log.readAfter(0),
+      saved as unknown as SavedMessage[],
+    )) {
+      record(entry);
+    }
+  } catch (error) {
+    record({
+      kind: "divider",
+      label: `The terminal's turns could not be imported: ${
+        error instanceof Error ? error.message.slice(0, 200) : "unknown error"
+      }`,
+    });
+  }
+}
+if (args.importTerminal) await importTerminalTurns();
 
 record({ kind: "runtime", event: "started" });
 

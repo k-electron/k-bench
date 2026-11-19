@@ -8,6 +8,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Added
 
+- **Open in web** switches a Claude TUI back to a Claude Agent in the same Session, from the row menu or the Pane's top bar. It asks first, because k-bench can't tell whether the terminal's Claude is busy (a Stopped one switches without asking), and adds what you did in the terminal to the Transcript once, between "In the terminal" and "Back in web" lines. After a compaction in the terminal the turns start from Claude's summary and the line says so.
 - **Claude Agent (WIP)** has **Open in terminal**, in the row menu, the Pane's top bar and on an Unsupported row: it switches the same Session to a Claude TUI on the same conversation, with the same Launch options, on every device. It asks first when Claude is working, waiting for you or has tasks running, and Restart resumes in the interface you were last in.
 - **Claude Agent (WIP)** in the New Session dialog: a Claude Session whose Pane is a conversation instead of a terminal. Type a prompt and Claude's reply streams in, as plain text for now. It runs in its own runtime, so closing the browser or restarting k-bench leaves it alone, and k-bench's package still ships no copy of Claude Code.
 - **Claude Agent (WIP)** carries on when you reload the page or restart k-bench mid-reply: the conversation comes back whole, with the text so far and the rest streaming in. The Pane says "Reconnecting…" while it is away, and Send waits.

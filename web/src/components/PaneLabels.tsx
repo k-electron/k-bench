@@ -1,6 +1,7 @@
-import { TerminalIcon } from "lucide-react";
+import { MessageSquareIcon, TerminalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpenInTerminal } from "@/useOpenInTerminal";
+import { useOpenInWeb } from "@/useOpenInWeb";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
 import {
   AGENT_STATE_LABEL,
@@ -72,6 +73,26 @@ function OpenInTerminalButton({ session }: { session: SessionState }) {
   );
 }
 
+/** Open in web for the Claude TUI in a Pane, as Open in terminal is for an Agent (#156). */
+function OpenInWebButton({ session }: { session: SessionState }) {
+  const { open, dialog } = useOpenInWeb(session);
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="shrink-0"
+        aria-label="Open in web"
+        onClick={open}
+      >
+        <MessageSquareIcon />
+        <span className="hidden md:inline">Open in web</span>
+      </Button>
+      {dialog}
+    </>
+  );
+}
+
 interface PaneLabelsProps {
   panes: PaneView[];
   paneCount: 1 | 2;
@@ -107,6 +128,9 @@ export function PaneLabels({ panes, paneCount, ratio, className }: PaneLabelsPro
         </div>
         {content.session.interface === "agent" && (
           <OpenInTerminalButton session={content.session} />
+        )}
+        {content.session.kind === "claude" && content.session.interface === "tui" && (
+          <OpenInWebButton session={content.session} />
         )}
       </div>
     );
