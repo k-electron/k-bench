@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
+import { removeDanglingAgentLinks } from "../../src/server/agent-socket-path.ts";
 import type { InstanceConfig } from "../../src/server/config.ts";
 import {
   type RunningServer,
@@ -16,8 +17,10 @@ import {
 } from "../../src/shared/state-protocol.ts";
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
+import { AgentClient } from "./agent.ts";
+import { HARNESS_RUNTIME_FILE, writeRuntimeVariant } from "./agent-runtime.ts";
 import { EventsClient } from "./events.ts";
-import { installFakeClaude } from "./fake-claude.ts";
+import { FakeClaude, fakeClaudeConfigDir, installFakeClaude } from "./fake-claude.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
 import { TerminalClient, upgradeStatus } from "./terminal.ts";
 import { TerminalConnectionProbe } from "./terminal-connection.ts";
@@ -161,6 +164,37 @@ export class TestServer {
     return (await response.json()) as SessionInfo;
   }
 
+  /**
+   * Creates a Claude Agent (a Claude Session in the Claude Agent interface) and waits, as the
+   * server does, until its runtime is up; fails unless it is created. Launch options are all
+   * Default unless `claude` says otherwise (fields left out are Default).
+   */
+  async createClaudeAgent(
+    workspaceId: string,
+    input: { name?: string; claude?: ClaudeLaunch } = {},
+  ): Promise<SessionInfo> {
+    const response = await this.post(`/api/workspaces/${workspaceId}/sessions`, {
+      ...input,
+      interface: "agent",
+    });
+    if (response.status !== 201) {
+      throw new Error(
+        `create Claude Agent failed: ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as SessionInfo;
+  }
+
+  /**
+   * Opens a Claude Agent's WebSocket like a browser's Pane does, carrying the login header,
+   * and returns once it is open. The client has the runtime's hello after a moment (wait for
+   * `client.hello`), and nothing else until it syncs. A Session that is not a running Claude
+   * Agent has its socket closed with 4410 (`client.closeCode`).
+   */
+  openAgent(sessionId: string): Promise<AgentClient> {
+    return AgentClient.open(this.baseUrl, sessionId, this.loginHeaders);
+  }
+
   /** Renames a Session. Returns the raw response so tests can check the status. */
   renameSession(sessionId: string, name: string): Promise<Response> {
     return this.request(`/api/sessions/${sessionId}`, {
@@ -233,6 +267,8 @@ export class TestServer {
 export class TestInstance {
   readonly config: InstanceConfig;
   readonly root: string;
+  /** The fake Claude Code the Agent SDK drives: what it is, what it does, what it received. */
+  readonly fakeClaude: FakeClaude;
   /** The server most recently started. */
   private running: TestServer | undefined;
   /** Servers and modules this instance stops when it is disposed. */
@@ -240,6 +276,7 @@ export class TestInstance {
 
   constructor(overrides: Partial<InstanceConfig> = {}) {
     this.root = realpathSync(mkdtempSync(join(tmpdir(), "kb-test-")));
+    this.fakeClaude = new FakeClaude(this.root);
     // Sessions run the owner's login shell. Left alone, every test shell would share the
     // owner's ~/.zshrc and ~/.zsh_history: test commands would land in the owner's history,
     // and zsh waits up to 10 seconds for the history file's lock, which shells starting and
@@ -252,6 +289,7 @@ export class TestInstance {
     mkdirSync(zdotdir);
     writeFileSync(join(zdotdir, ".zshrc"), "unset HISTFILE\n");
     process.env.ZDOTDIR = zdotdir;
+    const claudeProgram = installFakeClaude(this.root);
     this.config = {
       dataDir: join(this.root, "data"),
       tmuxSocket: testSocketName(),
@@ -259,14 +297,25 @@ export class TestInstance {
       allowedLogin: "owner@example.com",
       pickerRoot: this.root,
       // Never the real `claude`: the Claude Code boundary is a stub (test/harness/fake-claude.sh).
-      claudeProgram: installFakeClaude(this.root),
+      claudeProgram,
+      // Never the owner's Claude Code folder either: the Agent Runtime's import of a
+      // conversation taken in the terminal reads the fake's own.
+      claudeConfigDir: fakeClaudeConfigDir(claudeProgram),
       ...overrides,
     };
   }
 
+  /**
+   * Boots the server. It installs the harness's build of the Agent Runtime
+   * (`HARNESS_RUNTIME_FILE`) unless `options.agentRuntimeFile` names another, as a test of
+   * an update under a running Agent does.
+   */
   async start(options?: ServerOptions): Promise<TestServer> {
     const server = new TestServer(
-      await startServer(this.config, options),
+      await startServer(this.config, {
+        agentRuntimeFile: HARNESS_RUNTIME_FILE,
+        ...options,
+      }),
       this.config.allowedLogin,
     );
     this.toStop.push(server);
@@ -338,6 +387,15 @@ export class TestInstance {
     return folder;
   }
 
+  /**
+   * Another build of the Agent Runtime for `start({ agentRuntimeFile })`: the same code under
+   * a build ID of its own, or with `protocol`, speaking another protocol number. Kept in a
+   * hidden folder, which the folder picker does not list. The same `label` gives the same file.
+   */
+  runtimeVariant(label: string, options: { protocol?: number } = {}): string {
+    return writeRuntimeVariant(join(this.root, ".runtimes"), label, options);
+  }
+
   /** Kills this instance's tmux server and removes the socket file tmux leaves behind. */
   private killTmux(): void {
     try {
@@ -365,6 +423,8 @@ export class TestInstance {
       // Shells killed with the tmux server die after kill-server returns, so one may still
       // be touching the folder for a moment.
       rmSync(this.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+      // The Agents' socket links outside it (src/server/agent-socket-path.ts), now dangling.
+      removeDanglingAgentLinks();
     }
   }
 }

@@ -3,22 +3,36 @@ import { expect, test } from "./harness.ts";
 // Claude Code is the stub from test/harness/fake-claude.sh: the harness points the instance
 // at it, so nothing here runs the real `claude`.
 
-test("the + menu offers New shell and New Claude…, and New shell still starts a shell", async ({
+test("the + button opens one dialog offering Shell, Claude TUI and Claude Agent, which opens on Shell the first time", async ({
   app,
   kbench,
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
 
-  await app.openNewSessionMenu("project");
-  await expect(app.newSessionMenuItems).toHaveText(["New shell", "New Claude…"]);
+  await app.openNewSessionDialog("project");
+  await expect(app.newSessionKinds).toHaveCount(3);
+  await expect(
+    app.newSessionDialog.getByRole("radio", { name: "Claude Agent (WIP)" }),
+  ).toBeVisible();
+  await expect(app.newSessionDialog.getByRole("radio", { name: "Shell" })).toBeChecked();
+  // A shell takes no Launch options.
+  await expect(app.newSessionDialog.getByLabel("Model", { exact: true })).toBeHidden();
+  await expect(
+    app.newSessionDialog.getByRole("checkbox", { name: "Focus view" }),
+  ).toBeHidden();
+  await app.newSessionDialog.getByRole("radio", { name: "Claude TUI" }).check();
+  await expect(app.newSessionDialog.getByLabel("Model", { exact: true })).toBeVisible();
+  await app.newSessionDialog.getByRole("radio", { name: "Shell" }).check();
+  await expect(app.newSessionDialog.getByLabel("Model", { exact: true })).toBeHidden();
   await app.page.keyboard.press("Escape");
+
   await app.createSession("project");
 
   await app.runMarker(app.terminal("session 1"), "kb-shell-still-works-31");
   await expect(app.claudeGlyph("session 1")).toHaveCount(0);
 });
 
-test("New Claude… launches Claude Code in a new Session, marked with a glyph on it alone", async ({
+test("Claude TUI launches Claude Code in a new Session, marked with a glyph on it alone", async ({
   app,
   kbench,
 }) => {
@@ -28,7 +42,7 @@ test("New Claude… launches Claude Code in a new Session, marked with a glyph o
 
   await app.createClaudeSession("project");
 
-  await expect(app.claudeDialog).toBeHidden();
+  await expect(app.newSessionDialog).toBeHidden();
   await expect(app.session("session 2")).toHaveAttribute("aria-current", "true");
   const terminal = app.terminalIn(1, "session 2");
   await expect(terminal).toContainText("claude-stub ready");
@@ -38,22 +52,23 @@ test("New Claude… launches Claude Code in a new Session, marked with a glyph o
   await expect(app.claudeGlyph("session 1")).toHaveCount(0);
 });
 
-test("the Claude dialog opens with every option Default, and a choice reaches Claude Code", async ({
+test("Claude TUI's options start Default, and a choice reaches Claude Code", async ({
   app,
   kbench,
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
 
-  await app.openClaudeDialog("project");
+  await app.openNewSessionDialog("project");
+  await app.newSessionDialog.getByRole("radio", { name: "Claude TUI" }).check();
   for (const field of ["Model", "Effort", "Advisor"]) {
-    await expect(app.claudeDialog.getByLabel(field, { exact: true })).toHaveValue(
+    await expect(app.newSessionDialog.getByLabel(field, { exact: true })).toHaveValue(
       "default",
     );
   }
   await expect(
-    app.claudeDialog.getByRole("checkbox", { name: "Focus view" }),
+    app.newSessionDialog.getByRole("checkbox", { name: "Focus view" }),
   ).not.toBeChecked();
-  await app.launchClaude({
+  await app.createInDialog({
     model: "Opus",
     effort: "XHigh",
     advisor: "Off",
@@ -70,7 +85,7 @@ test("the Claude dialog opens with every option Default, and a choice reaches Cl
   await expect(terminal).not.toContainText("claude-stub arg: --advisor");
 });
 
-test("the Claude dialog takes an optional name and refuses a taken one without closing", async ({
+test("the dialog takes an optional name, launches on Enter, and refuses a taken name without closing", async ({
   app,
   kbench,
 }) => {
@@ -78,16 +93,23 @@ test("the Claude dialog takes an optional name and refuses a taken one without c
   await app.createClaudeSession("project", { name: "refactor" });
   await expect(app.session("refactor")).toHaveAttribute("aria-current", "true");
 
-  await app.openClaudeDialog("project");
-  await app.launchClaude({ name: "refactor" });
+  await app.openNewSessionDialog("project");
+  // Enter does nothing until the Host's last kind has arrived; it opens on Claude TUI.
+  await expect(
+    app.newSessionDialog.getByRole("radio", { name: "Claude TUI" }),
+  ).toBeChecked();
+  const nameField = app.newSessionDialog.getByRole("textbox", { name: "Session name" });
+  await nameField.fill("refactor");
+  await nameField.press("Enter");
 
   // The refusal belongs to the name: it is the name field's description, and the field is invalid.
-  const nameField = app.claudeDialog.getByRole("textbox", { name: "Session name" });
   await expect(nameField).toHaveAccessibleDescription(/already exists/);
   await expect(nameField).toHaveAttribute("aria-invalid", "true");
-  await expect(app.claudeDialog).toBeVisible();
-  await app.launchClaude({ name: "" });
-  await expect(app.claudeDialog).toBeHidden();
+  await expect(app.newSessionDialog).toBeVisible();
+  // Blank, and Enter: "session N", still a Claude Session (the kind the dialog opened on).
+  await nameField.fill("");
+  await nameField.press("Enter");
+  await expect(app.newSessionDialog).toBeHidden();
   await expect(app.session("session 1")).toHaveAttribute("aria-current", "true");
   await expect(app.claudeGlyph("session 1")).toBeVisible();
 });
@@ -117,7 +139,7 @@ test("quitting Claude Code stops the Session, and an error holds the screen unti
   await expect(app.claudeGlyph("session 1")).toBeVisible();
 });
 
-test("the Claude dialog reopens with the last Launch options, on any device, and an empty name", async ({
+test("the dialog reopens on the last kind and Launch options, on any device, with an empty name", async ({
   app,
   otherDevice,
   kbench,
@@ -133,8 +155,9 @@ test("the Claude dialog reopens with the last Launch options, on any device, and
   await expect(app.session("refactor")).toHaveAttribute("aria-current", "true");
 
   for (const device of [app, otherDevice]) {
-    await device.openClaudeDialog("project");
-    const dialog = device.claudeDialog;
+    await device.openNewSessionDialog("project");
+    const dialog = device.newSessionDialog;
+    await expect(dialog.getByRole("radio", { name: "Claude TUI" })).toBeChecked();
     await expect(dialog.getByLabel("Model", { exact: true })).toHaveValue("opus");
     await expect(dialog.getByLabel("Effort", { exact: true })).toHaveValue("high");
     await expect(dialog.getByLabel("Advisor", { exact: true })).toHaveValue("off");
@@ -143,4 +166,16 @@ test("the Claude dialog reopens with the last Launch options, on any device, and
     await device.page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
   }
+
+  // A shell made afterwards becomes the remembered kind, and the options wait behind it.
+  await app.createSession("project");
+  await expect(app.session("session 1")).toHaveAttribute("aria-current", "true");
+  await otherDevice.openNewSessionDialog("project");
+  await expect(
+    otherDevice.newSessionDialog.getByRole("radio", { name: "Shell" }),
+  ).toBeChecked();
+  await otherDevice.newSessionDialog.getByRole("radio", { name: "Claude TUI" }).check();
+  await expect(
+    otherDevice.newSessionDialog.getByLabel("Model", { exact: true }),
+  ).toHaveValue("opus");
 });

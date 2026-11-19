@@ -45,7 +45,7 @@ The model, effort, advisor and Focus view a Claude Session starts with. k-bench 
 _Avoid_: settings, config, flags
 
 **Stopped**:
-The state of a Session whose program no longer exists, because it exited, or the owner logged out of the Host or restarted it. A Stopped Session can be restarted in the same folder: a shell starts fresh, and a Claude Session resumes its Claude conversation.
+The state of a Session whose program no longer exists, because it exited, or the owner logged out of the Host or restarted it. A Stopped Session can be restarted in the same folder: a shell starts fresh, and a Claude Session resumes its Claude conversation. A Stopped Claude Agent also shows its whole Transcript read-only, with why it stopped; the owner can stop one on purpose (Stop), and one that ends by itself stays Stopped until the owner restarts it.
 _Avoid_: dead, closed, killed
 
 **History**:
@@ -65,8 +65,12 @@ The state of a running Claude Agent that can't go on until the owner answers it:
 _Avoid_: blocked, needs input, pending
 
 **Bell**:
-A Session's request for attention, raised while no device is viewing the Session: when its program rings the terminal bell, or, for a Claude Agent, when a turn finishes or it becomes Waiting for you. It is cleared once the owner views that Session on any device.
+A Session's request for attention, raised while no device is viewing the Session: when its program rings the terminal bell, or, for a Claude Agent, when a turn finishes or it becomes Waiting for you. It is cleared once the owner views that Session on any device. A Claude Agent counts as viewed only while a Pane shows it on a visible page: a background browser tab does not count, so walking away from the desk leaves the pulse for the phone. The sidebar shows it as the Session's row pulsing (and a collapsed Workspace's, while any Session in it has one).
 _Avoid_: notification, alert, activity, unviewed
+
+**Unsupported**:
+Something a Claude Agent met that k-bench can't show or answer: a message or content type it doesn't recognise, a dialog or request it declines (such as an MCP server asking the owner a question), or a command that isn't available in a web interface. It is reported in the conversation, as a row where it happened that says what Claude tried and opens the raw view, and in the running list of unsupported kinds, reached from the sidebar, which counts each kind across every Session. It raises no Bell of its own.
+_Avoid_: unknown, error, unavailable
 
 **Claude conversation**:
 A Claude Code conversation. A Claude Session runs one at a time and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.

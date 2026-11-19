@@ -64,3 +64,73 @@
     overflow: hidden;
   }
 }
+
+/*
+ * The pulse of a row that needs the owner (a Bell). Sky blue on purpose: the orange pulse is
+ * reserved for a Claude Agent Waiting for you. Under reduced motion it is a steady tint.
+ */
+@keyframes row-pulse {
+  0%,
+  100% {
+    background-color: oklch(0.746 0.16 232.661 / 8%);
+    box-shadow: inset 2px 0 0 oklch(0.746 0.16 232.661 / 50%);
+  }
+  50% {
+    background-color: oklch(0.746 0.16 232.661 / 30%);
+    box-shadow: inset 2px 0 0 oklch(0.746 0.16 232.661);
+  }
+}
+
+.row-pulse {
+  animation: row-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-pulse {
+    animation: none;
+    background-color: oklch(0.746 0.16 232.661 / 20%);
+    box-shadow: inset 2px 0 0 oklch(0.746 0.16 232.661);
+  }
+}
+
+/*
+ * What a Claude Agent's row says of it with its left edge: faint green Idle, green Working. A
+ * Stopped Agent has none, and Waiting for you is the orange pulse below. An inset shadow, so
+ * the edge takes no room and rows of every kind line up.
+ */
+.row-agent-idle {
+  box-shadow: inset 2px 0 0 oklch(0.696 0.17 162.48 / 30%);
+}
+
+.row-agent-working {
+  box-shadow: inset 2px 0 0 oklch(0.696 0.17 162.48);
+}
+
+/*
+ * The pulse of a Claude Agent Waiting for you: orange, the one orange pulse (a Bell is sky
+ * blue). After `.row-pulse` so that it wins on a row that has both. Under reduced motion it
+ * is a steady tint.
+ */
+@keyframes row-waiting {
+  0%,
+  100% {
+    background-color: oklch(0.705 0.213 47.604 / 8%);
+    box-shadow: inset 2px 0 0 oklch(0.705 0.213 47.604 / 50%);
+  }
+  50% {
+    background-color: oklch(0.705 0.213 47.604 / 30%);
+    box-shadow: inset 2px 0 0 oklch(0.705 0.213 47.604);
+  }
+}
+
+.row-waiting {
+  animation: row-waiting 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-waiting {
+    animation: none;
+    background-color: oklch(0.705 0.213 47.604 / 20%);
+    box-shadow: inset 2px 0 0 oklch(0.705 0.213 47.604);
+  }
+}

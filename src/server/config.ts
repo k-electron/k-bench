@@ -16,8 +16,17 @@ export interface InstanceConfig {
   /**
    * The program a Claude Session runs as Claude Code: a name resolved through the owner's
    * login shell, or a path. It exists so tests can point it at a stub; it is not a setting.
+   * The one way to change it outside Vitest's own instances is `K_BENCH_CLAUDE_PROGRAM`, which
+   * the packed-install test sets to its stub; nothing else sets it.
    */
   claudeProgram: string;
+  /**
+   * Where Claude Code keeps its files, handed to the Agent Runtime when set. Only tests set
+   * it (to a folder of their own, so Open in web's import never reads the owner's Claude
+   * Code folder); `resolveConfig` never does, and the owner's own `CLAUDE_CONFIG_DIR`
+   * already reaches the runtime through the login shell.
+   */
+  claudeConfigDir?: string;
 }
 
 const PRESETS = {
@@ -63,6 +72,6 @@ export function resolveConfig(
     port: parsePort(env.K_BENCH_PORT) ?? preset.port,
     allowedLogin: env.K_BENCH_ALLOWED_LOGIN ?? "",
     pickerRoot: resolve(env.K_BENCH_PICKER_ROOT ?? homedir()),
-    claudeProgram: "claude",
+    claudeProgram: env.K_BENCH_CLAUDE_PROGRAM || "claude",
   };
 }

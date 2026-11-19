@@ -2,7 +2,12 @@ import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
-import { type ClaudeLaunch, claudeCommand } from "./claude.ts";
+import {
+  type AgentLaunch,
+  agentCommand,
+  type ClaudeLaunch,
+  claudeCommand,
+} from "./claude.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -136,9 +141,13 @@ export class TmuxDriver {
   /** The program a Claude Session runs (`InstanceConfig.claudeProgram`). */
   private readonly claudeProgram: string;
 
-  constructor(socket: string, claudeProgram = "claude") {
+  /** Where Claude Code's files are, for tests only (`InstanceConfig.claudeConfigDir`). */
+  private readonly claudeConfigDir: string | undefined;
+
+  constructor(socket: string, claudeProgram = "claude", claudeConfigDir?: string) {
     this.socket = socket;
     this.claudeProgram = claudeProgram;
+    this.claudeConfigDir = claudeConfigDir;
   }
 
   private env(): NodeJS.ProcessEnv {
@@ -180,6 +189,39 @@ export class TmuxDriver {
           launch: claude,
         })
       : sessionCommand(folder);
+    await this.startSession(id, folder, command);
+  }
+
+  /**
+   * Starts a Claude Agent's Agent Runtime as the Session's only program, hidden: nothing ever
+   * attaches a terminal to it (ADR-0007). `launch.claudeProgram` (and, in tests,
+   * `claudeConfigDir`) are filled in here, from the instance's configuration.
+   */
+  async createAgentSession(
+    id: string,
+    folder: string,
+    launch: Omit<AgentLaunch, "claudeProgram" | "claudeConfigDir">,
+  ): Promise<void> {
+    await this.startSession(
+      id,
+      folder,
+      agentCommand({
+        folder,
+        shell: ownerShell(),
+        launch: {
+          ...launch,
+          claudeProgram: this.claudeProgram,
+          ...(this.claudeConfigDir ? { claudeConfigDir: this.claudeConfigDir } : {}),
+        },
+      }),
+    );
+  }
+
+  private async startSession(
+    id: string,
+    folder: string,
+    command: string[],
+  ): Promise<void> {
     await this.run(...serverConfiguration(), [
       "new-session",
       "-d",
@@ -420,6 +462,9 @@ function isNoSuchSession(error: unknown): boolean {
   return (
     isNoServer(error) ||
     stderrOf(error).includes("can't find") ||
-    stderrOf(error).includes("no such session")
+    stderrOf(error).includes("no such session") ||
+    // Said when the last Session of the tmux server ended an instant before: there is
+    // nothing left to be the target.
+    stderrOf(error).includes("no current target")
   );
 }

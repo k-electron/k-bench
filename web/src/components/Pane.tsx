@@ -1,4 +1,5 @@
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
+import { AgentPane } from "./agent/AgentPane";
 import { TerminalView } from "./TerminalView";
 
 interface PaneProps {
@@ -7,8 +8,18 @@ interface PaneProps {
   focused: boolean;
 }
 
-/** A Session's terminal, filling one slot in the main view. */
+/** A Session in one slot of the main view: a Claude Agent's conversation, or a terminal. */
 export function Pane({ session, focused }: PaneProps) {
+  if (session.kind === "claude" && session.interface === "agent") {
+    return (
+      <section aria-label={`Claude Agent ${session.name}`} className="h-full min-h-0">
+        {/* Stopped or running, the Pane shows the whole conversation: a Stopped Agent's is
+            read-only, served from its log. The key opens a new connection when the status
+            changes (Stop, Restart, a crash), so each is the right kind of connection. */}
+        <AgentPane key={session.status} session={session} focused={focused} />
+      </section>
+    );
+  }
   return (
     <section
       aria-label={`Terminal ${session.name}`}

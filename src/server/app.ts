@@ -1,19 +1,61 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { LaunchOptions } from "../shared/launch-options.ts";
+import { MAX_IMAGE_BASE64_BYTES } from "../shared/agent-images.ts";
+import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import { REVISION_HEADER } from "../shared/state-protocol.ts";
 import { parseLaunchOptions } from "./claude.ts";
 import { DirectoryError, listDirectories } from "./directories.ts";
 import { type Service, ServiceError } from "./service.ts";
 import { mountStatic } from "./static.ts";
 
+/** The most a JSON body may hold unless a route says otherwise: every route takes a few fields. */
+const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+
+/** An image arrives as base64 inside JSON: the largest image Claude takes, and room for the rest. */
+const MAX_IMAGE_BODY_BYTES = MAX_IMAGE_BASE64_BYTES + 4096;
+
+/** A report of an unsupported kind is two short ids and a time. */
+const MAX_REPORT_BODY_BYTES = 16 * 1024;
+
+const tooLarge = () =>
+  new HTTPException(413, { message: "The request body is too large" });
+
 /**
- * The JSON object in a request body ({} when there is none). A body must be declared
- * `application/json`: a page on another site cannot send that without a preflight the
- * server never grants, so it is a second line behind the Origin check.
+ * The body as text, refused with a 413 as soon as it is known to be over `maxBytes`: from the
+ * declared length before reading, and while reading when none was declared (or it was wrong),
+ * so that an oversize body is never held whole.
  */
-async function jsonBody(request: Request): Promise<Record<string, unknown>> {
-  const text = await request.text();
+async function boundedText(request: Request, maxBytes: number): Promise<string> {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge();
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * The JSON object in a request body ({} when there is none), refused with a 413 over
+ * `maxBytes`. A body must be declared `application/json`: a page on another site cannot send
+ * that without a preflight the server never grants, so it is a second line behind the Origin
+ * check.
+ */
+async function jsonBody(
+  request: Request,
+  maxBytes = DEFAULT_MAX_BODY_BYTES,
+): Promise<Record<string, unknown>> {
+  const text = await boundedText(request, maxBytes);
   if (text === "") return {};
   const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
   if (type !== "application/json") {
@@ -126,21 +168,76 @@ export function createApp(
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
     // `claude` makes it a Claude Session; its Launch options are checked before anything starts.
+    // `interface: "agent"` makes it a Claude Agent (a Claude Session too: `claude` may then be
+    // left out, which is all Default). Without it, a Claude Session is a Claude TUI.
     let launchOptions: LaunchOptions | undefined;
     if (body.claude !== undefined) {
       const parsed = parseLaunchOptions(body.claude);
       if ("error" in parsed) throw new ServiceError("invalid", parsed.error);
       launchOptions = parsed.options;
     }
+    const requested = body.interface;
+    if (requested !== undefined && requested !== "tui" && requested !== "agent") {
+      throw new ServiceError("invalid", 'interface must be "tui" or "agent"');
+    }
+    if (requested === "agent") launchOptions ??= DEFAULT_LAUNCH_OPTIONS;
+    if (requested === "tui" && !launchOptions) {
+      throw new ServiceError("invalid", "interface needs claude (a Claude Session)");
+    }
     const session = await service.createSession(
       c.req.param("id"),
       optionalString(body.name),
-      launchOptions,
+      launchOptions && { options: launchOptions, interface: requested ?? "tui" },
     );
     return c.json(session, 201);
   });
 
-  app.get("/api/claude/launch-options", (c) => c.json(service.lastLaunchOptions()));
+  // Images for a Claude Agent's prompts. The bytes travel as base64 inside JSON, not as a raw
+  // upload, so that `jsonBody`'s `application/json` check still stands behind the Origin check.
+  app.post("/api/sessions/:id/agent/images", async (c) => {
+    const body = await jsonBody(c.req.raw, MAX_IMAGE_BODY_BYTES);
+    const name = service.saveAgentImage(c.req.param("id"), body.mediaType, body.data);
+    return c.json({ name }, 201);
+  });
+  app.get("/api/sessions/:id/agent/images/:name", (c) => {
+    const { bytes, mediaType } = service.agentImage(
+      c.req.param("id"),
+      c.req.param("name"),
+    );
+    return c.body(new Uint8Array(bytes), 200, {
+      "content-type": mediaType,
+      // Named by a UUID and never changed.
+      "cache-control": "private, max-age=31536000, immutable",
+      "x-content-type-options": "nosniff",
+    });
+  });
+
+  // The `@` picker's files (#160): those in the Agent's Workspace folder whose path contains `q`.
+  app.get("/api/sessions/:id/files", async (c) =>
+    c.json({
+      files: await service.searchAgentFiles(c.req.param("id"), c.req.query("q") ?? ""),
+    }),
+  );
+
+  // The running list of unsupported kinds (#154). A kind holds `:` and `/`, so it travels
+  // URL-encoded in the path.
+  app.get("/api/unsupported", (c) => c.json({ entries: service.listUnsupported() }));
+  app.post("/api/unsupported", async (c) => {
+    const body = await jsonBody(c.req.raw, MAX_REPORT_BODY_BYTES);
+    service.reportUnsupported({
+      kind: body.kind,
+      sessionId: body.sessionId,
+      occurrenceId: body.occurrenceId,
+      at: body.at,
+    });
+    return c.body(null, 204);
+  });
+  app.delete("/api/unsupported/:kind", (c) => {
+    service.clearUnsupported(c.req.param("kind"));
+    return c.body(null, 204);
+  });
+
+  app.get("/api/new-session/last", (c) => c.json(service.lastNewSession()));
 
   app.patch("/api/sessions/:id", async (c) => {
     const body = await jsonBody(c.req.raw);
@@ -153,8 +250,22 @@ export function createApp(
     await service.deleteSession(c.req.param("id"));
     return c.body(null, 204);
   });
+  app.post("/api/sessions/:id/stop", async (c) =>
+    c.json(await service.stopSession(c.req.param("id"))),
+  );
+  app.post("/api/sessions/:id/open-in-terminal", async (c) =>
+    c.json(await service.openInTerminal(c.req.param("id"))),
+  );
+  app.post("/api/sessions/:id/open-in-web", async (c) =>
+    c.json(await service.openInWeb(c.req.param("id"))),
+  );
   app.post("/api/sessions/:id/restart", async (c) =>
     c.json(await service.restartSession(c.req.param("id"))),
+  );
+  // A running Agent, moved to the runtime build installed now (an update, or a protocol this
+  // k-bench does not speak): its conversation carries on.
+  app.post("/api/sessions/:id/agent/restart", async (c) =>
+    c.json(await service.restartAgent(c.req.param("id"))),
   );
 
   // Last, so it only answers what the API did not.

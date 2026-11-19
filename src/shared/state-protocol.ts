@@ -11,11 +11,61 @@
 /** What a Session runs: the owner's shell, or Claude Code (a Claude Session). */
 export type SessionKind = "shell" | "claude";
 
+/** How a Claude Session is operated: in a terminal (Claude TUI) or in a conversation (Claude Agent). */
+export type ClaudeInterface = "tui" | "agent";
+
+/**
+ * What the New Session dialog offers, and what the Host remembers as the kind created last.
+ * "claude" is Claude TUI. Not what a Session is: that is `SessionKind` and `ClaudeInterface`.
+ */
+export type NewSessionKind = SessionKind | "claude-agent";
+
+/**
+ * What a running Claude Agent is doing. `waiting` is Waiting for you: an Allow/Deny ask is
+ * open. A Stopped Agent has none of these: its `status` is "stopped".
+ */
+export type AgentActivity = "idle" | "working" | "waiting";
+
+/** What the server reports of a running Claude Agent, from its runtime's status connection. */
+export interface AgentState {
+  state: AgentActivity;
+  /** When the turn now running began (ms since the epoch, the Host's clock), while it runs. */
+  turnStartedAt?: number;
+  /** The `claude` the runtime drives. */
+  claudeVersion?: string;
+  /** Which build of the Agent Runtime is running (the SHA-256 of its file). */
+  runtimeBuildId?: string;
+  /**
+   * True when k-bench has been updated to a build of the Agent Runtime other than the one
+   * this Agent runs (their build IDs differ). The Agent keeps working as it is; restarting it
+   * onto the new build is the owner's call. Absent otherwise: an update that left the runtime
+   * unchanged shows nothing.
+   */
+  updateAvailable?: boolean;
+  /**
+   * The subagents and background tasks running now, as the runtime's `status.tasks` lists
+   * them (the same shape as `AgentTask` in agent-protocol.ts); absent when there are none.
+   * Open in terminal reads it to say what would stop.
+   */
+  tasks?: Array<{
+    id: string;
+    kind: "subagent" | "background";
+    description: string;
+  }>;
+}
+
 export interface SessionState {
   id: string;
   name: string;
   kind: SessionKind;
+  /** For a Claude Session, the interface it is in now; absent for a shell. */
+  interface?: ClaudeInterface;
   status: "running" | "stopped";
+  /**
+   * For a running Claude Agent, what it is doing. Absent for anything else, and for an Agent
+   * whose runtime the server has not heard from yet (just started, or the server just did).
+   */
+  agent?: AgentState;
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
 }

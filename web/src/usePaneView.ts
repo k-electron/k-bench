@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SessionState, State } from "../../src/shared/state-protocol.ts";
+import { forgetDraftsOfMissing } from "./agent/drafts";
 import {
   focusPane,
   forgetMissingSessions,
@@ -36,6 +37,8 @@ export interface PaneViewModel {
   ratio: number;
   /** The Session in the Focused Pane, if it has one. */
   focusedSessionId: string | undefined;
+  /** Whether the Focused Pane shows a terminal, which a Claude Agent's conversation is not. */
+  focusedHasTerminal: boolean;
   /** Plain click on a Session: opens it in the Focused Pane. */
   openInFocusedPane(sessionId: string): void;
   /** Opens a Session in the other Pane. On a phone this is not visible. */
@@ -73,6 +76,7 @@ export function usePaneView(state: State | undefined, phone: boolean): PaneViewM
     setNotices(([na, nb]) => [next(a, na), next(b, nb)]);
     update((l) => forgetMissingSessions(l, existing));
     forgetSmartTypingOfMissing(existing);
+    forgetDraftsOfMissing(existing);
   }, [state, a, b, update]);
 
   // On a phone the one Pane is the saved Focused Pane, wherever it sits in the saved layout.
@@ -127,6 +131,8 @@ export function usePaneView(state: State | undefined, phone: boolean): PaneViewM
     paneCount: shown.length === 2 ? 2 : 1,
     ratio: saved.ratio,
     focusedSessionId: focusedSession?.session.id,
+    focusedHasTerminal:
+      focusedSession !== undefined && focusedSession.session.interface !== "agent",
     openInFocusedPane: (id) => update((l) => openInFocusedPane(l, id)),
     openInOtherPane: (id) =>
       update((l) => (phone ? stashInOtherPane(l, id) : openInOtherPane(l, id))),

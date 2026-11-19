@@ -2,6 +2,7 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { Store } from "../src/server/store.ts";
+import { AgentClient } from "../test/harness/agent.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
 import { pollUntil } from "../test/harness/poll.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
@@ -125,9 +126,35 @@ export class AppPage {
     await this.sessionMenu(sessionName, "Open in other pane");
   }
 
-  /** The running/Stopped indicator beside a Session in the sidebar. */
-  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+  /**
+   * The state dot beside a Session in the sidebar: running or stopped, or, for a Claude Agent
+   * whose state is known, idle, working or waiting for you.
+   */
+  sessionStatus(
+    name: string,
+    status: "running" | "stopped" | "idle" | "working" | "waiting for you",
+  ): Locator {
     return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+  }
+
+  /**
+   * What a Session's row shows along its left edge, as the browser computes it: "none" for no
+   * edge. Which colour an edge is, is for the eye; this lets a test tell edges apart.
+   */
+  async rowEdge(sessionName: string): Promise<string> {
+    return this.sidebar
+      .getByRole("img", {
+        name: new RegExp(
+          `^${sessionName} (running|stopped|idle|working|waiting for you)$`,
+        ),
+      })
+      .evaluate((dot) => {
+        const row = dot.parentElement;
+        if (!row) throw new Error("The dot has no row");
+        return (
+          dot.ownerDocument.defaultView?.getComputedStyle(row).boxShadow ?? "unknown"
+        );
+      });
   }
 
   private sizeProbes = 0;
@@ -186,20 +213,42 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
-  /** The Bell badge on a Session's row; present only while its Bell is raised. */
-  bellBadge(sessionName: string): Locator {
-    return this.sidebar.getByRole("img", {
-      name: `${sessionName} rang the bell`,
-      exact: true,
-    });
+  /**
+   * A Session's row is pulsing: it needs the owner (its Bell is raised). The pulse is
+   * animation, so this finds the status text the row carries for it, present only while it pulses.
+   */
+  rowPulse(sessionName: string): Locator {
+    return this.sidebar
+      .getByRole("status")
+      .and(this.page.getByText(`${sessionName} needs you`, { exact: true }));
   }
 
-  /** The hint on a Workspace row saying some Session in it rang the bell. */
-  workspaceBellHint(workspaceName: string): Locator {
-    return this.sidebar.getByRole("img", {
-      name: `${workspaceName} has a session that rang the bell`,
-      exact: true,
-    });
+  /** A collapsed Workspace's row is pulsing: some Session in it needs the owner. */
+  workspacePulse(workspaceName: string): Locator {
+    return this.sidebar.getByRole("status").and(
+      this.page.getByText(`${workspaceName} has a session that needs you`, {
+        exact: true,
+      }),
+    );
+  }
+
+  /**
+   * A Claude Agent's row is pulsing orange: it is Waiting for you. Found by the status text the
+   * row carries for it, present only while it waits.
+   */
+  rowWaiting(sessionName: string): Locator {
+    return this.sidebar
+      .getByRole("status")
+      .and(this.page.getByText(`${sessionName} is waiting for you`, { exact: true }));
+  }
+
+  /** A collapsed Workspace's row is pulsing orange: a Claude Agent in it is Waiting for you. */
+  workspaceWaiting(workspaceName: string): Locator {
+    return this.sidebar.getByRole("status").and(
+      this.page.getByText(`${workspaceName} has an agent waiting for you`, {
+        exact: true,
+      }),
+    );
   }
 
   /** Collapses a Workspace's Sessions out of view. */
@@ -257,75 +306,144 @@ export class AppPage {
     await mouse.up();
   }
 
-  /** Opens the **+** menu on a Workspace's row; it offers New shell and New Claude…. */
-  async openNewSessionMenu(workspaceName: string): Promise<void> {
+  /** The New Session dialog, once a Workspace's **+** was pressed. */
+  get newSessionDialog(): Locator {
+    return this.page.getByRole("dialog", { name: "New Session", exact: true });
+  }
+
+  /** Opens the New Session dialog from a Workspace's **+** button. */
+  async openNewSessionDialog(workspaceName: string): Promise<void> {
     await this.sidebar
       .getByRole("button", { name: `New session in ${workspaceName}`, exact: true })
       .click();
+    await expect(this.newSessionDialog).toBeVisible();
   }
 
-  /** The **+** menu's entries, once it is open. */
-  get newSessionMenuItems(): Locator {
-    return this.page.getByRole("menuitem");
-  }
-
-  /** Creates an ordinary shell Session from the **+** menu. */
-  async createSession(workspaceName: string): Promise<void> {
-    await this.openNewSessionMenu(workspaceName);
-    await this.page.getByRole("menuitem", { name: "New shell", exact: true }).click();
-  }
-
-  /** The New Claude dialog, once **New Claude…** was picked. */
-  get claudeDialog(): Locator {
-    return this.page.getByRole("dialog", { name: "New Claude Session" });
-  }
-
-  /** Opens the New Claude dialog from the **+** menu. */
-  async openClaudeDialog(workspaceName: string): Promise<void> {
-    await this.openNewSessionMenu(workspaceName);
-    await this.page.getByRole("menuitem", { name: "New Claude…", exact: true }).click();
-    await expect(this.claudeDialog).toBeVisible();
+  /** The kinds the open New Session dialog offers, in order. */
+  get newSessionKinds(): Locator {
+    return this.newSessionDialog
+      .getByRole("radiogroup", { name: "Kind" })
+      .getByRole("radio");
   }
 
   /**
-   * Fills in the open New Claude dialog and presses Launch. Everything is optional: the name,
-   * and each Launch option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
+   * Fills in the open New Session dialog and presses Create. Everything is optional: the
+   * name, the kind by its label ("Shell", "Claude TUI", "Claude Agent (WIP)"; left alone it is
+   * whatever the dialog opened on), and for Claude TUI each Launch option by the label of the choice ("XHigh",
+   * "Off") or, for Focus view, on/off.
    */
-  async launchClaude(
+  async createInDialog(
     options: {
       name?: string;
+      kind?: "Shell" | "Claude TUI" | "Claude Agent (WIP)";
       model?: string;
       effort?: string;
       advisor?: string;
       focusView?: boolean;
     } = {},
   ): Promise<void> {
+    const dialog = this.newSessionDialog;
     if (options.name !== undefined) {
-      await this.claudeDialog
-        .getByRole("textbox", { name: "Session name" })
-        .fill(options.name);
+      await dialog.getByRole("textbox", { name: "Session name" }).fill(options.name);
+    }
+    if (options.kind !== undefined) {
+      await dialog.getByRole("radio", { name: options.kind, exact: true }).check();
     }
     for (const field of ["Model", "Effort", "Advisor"] as const) {
       const choice = options[field.toLowerCase() as "model" | "effort" | "advisor"];
       if (choice !== undefined) {
-        await this.claudeDialog.getByLabel(field, { exact: true }).selectOption(choice);
+        await dialog.getByLabel(field, { exact: true }).selectOption(choice);
       }
     }
     if (options.focusView !== undefined) {
-      await this.claudeDialog
+      await dialog
         .getByRole("checkbox", { name: "Focus view" })
         .setChecked(options.focusView);
     }
-    await this.claudeDialog.getByRole("button", { name: "Launch", exact: true }).click();
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
   }
 
-  /** Launches a Claude Session in the Workspace from the **+** menu and the dialog. */
+  /** Creates an ordinary shell Session through the New Session dialog. */
+  async createSession(workspaceName: string, name?: string): Promise<void> {
+    await this.openNewSessionDialog(workspaceName);
+    await this.createInDialog({ kind: "Shell", name });
+    await expect(this.newSessionDialog).toBeHidden();
+  }
+
+  /** Creates a Claude TUI Session through the New Session dialog. */
   async createClaudeSession(
     workspaceName: string,
-    options: Parameters<AppPage["launchClaude"]>[0] = {},
+    options: Omit<Parameters<AppPage["createInDialog"]>[0], "kind"> = {},
   ): Promise<void> {
-    await this.openClaudeDialog(workspaceName);
-    await this.launchClaude(options);
+    await this.openNewSessionDialog(workspaceName);
+    await this.createInDialog({ ...options, kind: "Claude TUI" });
+    await expect(this.newSessionDialog).toBeHidden();
+  }
+
+  /** Creates a Claude Agent Session through the New Session dialog, with these Launch options. */
+  async createClaudeAgent(
+    workspaceName: string,
+    options: Omit<Parameters<AppPage["createInDialog"]>[0], "kind"> = {},
+  ) {
+    await this.openNewSessionDialog(workspaceName);
+    await this.createInDialog({ ...options, kind: "Claude Agent (WIP)" });
+    await expect(this.newSessionDialog).toBeHidden();
+  }
+
+  /**
+   * Makes this page report itself hidden (a background tab, a locked phone) or visible again,
+   * as the browser does: `document.visibilityState` and a `visibilitychange` event. The page
+   * keeps running, as a hidden tab does.
+   */
+  async setPageVisible(visible: boolean): Promise<void> {
+    // A string, because the e2e project's types have no DOM.
+    await this.page.evaluate(`(() => {
+      if (${visible}) delete document.visibilityState;
+      else Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    })()`);
+  }
+
+  /** The conversation of the named Claude Agent: a region, where a terminal is `terminal(name)`. */
+  agentRegion(sessionName: string): Locator {
+    return this.page.getByRole("region", {
+      name: `Claude Agent ${sessionName}`,
+      exact: true,
+    });
+  }
+
+  /** The input box of the named Claude Agent. */
+  agentInput(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("textbox", { name: "Message Claude" });
+  }
+
+  /** The permission panel that takes over the named Claude Agent's input while Claude waits on an ask. */
+  permissionPrompt(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("region", {
+      name: "Permission prompt",
+    });
+  }
+
+  /** The panel with Claude's questions (AskUserQuestion) that takes over the named Claude Agent's input. */
+  questionPrompt(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("region", {
+      name: "Question from Claude",
+    });
+  }
+
+  /** The panel with Claude's plan (ExitPlanMode) to approve, in place of the named Claude Agent's input. */
+  planPrompt(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("region", {
+      name: "Plan for approval",
+    });
+  }
+
+  /** The line under the named Claude Agent's input that shows its permission mode; a button that cycles it. */
+  agentModeLine(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("button", {
+      name: "Permission mode",
+      exact: true,
+    });
   }
 
   /** The Claude glyph on a Session's row; present on Claude Sessions only. */
@@ -402,14 +520,23 @@ export interface Kbench {
   url: string;
   /** Stops the server like a crash or restart would; Sessions keep running in tmux. */
   stopServer(): Promise<void>;
-  /** Starts the server again on the same address, data folder and tmux socket. */
-  startServer(): Promise<void>;
+  /**
+   * Starts the server again on the same address, data folder and tmux socket. With
+   * `agentRuntimeFile` (`instance.runtimeVariant(...)`) it is a k-bench updated to another
+   * build of the Agent Runtime.
+   */
+  startServer(options?: { agentRuntimeFile?: string }): Promise<void>;
   /**
    * Rings the terminal bell in the named Session's shell, with no browser involved, once no
    * terminal is viewing it (one that just moved to another Session can take a moment to let
    * go). Works while the server is stopped too.
    */
   ringBell(sessionName: string): Promise<void>;
+  /**
+   * Opens the named Claude Agent's socket like a device would, with no browser involved, to
+   * send it prompts (a long conversation, say) while the page shows nothing of it yet.
+   */
+  openAgent(sessionName: string): Promise<AgentClient>;
 }
 
 interface Fixtures {
@@ -439,9 +566,13 @@ export const test = base.extend<Fixtures>({
           });
           typeIntoSession(socket, id, "printf '\\a'");
         },
+        openAgent: (sessionName) =>
+          AgentClient.open(server.baseUrl, sessionIdNamed(instance, sessionName), {
+            "Tailscale-User-Login": LOGIN,
+          }),
         stopServer: () => server.stop(),
-        startServer: async () => {
-          server = await instance.start({ webDir: WEB_DIR });
+        startServer: async (options) => {
+          server = await instance.start({ webDir: WEB_DIR, ...options });
         },
       });
     } finally {

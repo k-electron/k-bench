@@ -1,12 +1,27 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { revisionOf } from "../../src/shared/state-protocol.ts";
+import {
+  type ClaudeInterface,
+  type NewSessionKind,
+  revisionOf,
+} from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
   path: string;
   parent?: string;
   directories: Array<{ name: string; path: string }>;
+}
+
+/** One kind on the running list of unsupported kinds. */
+export interface UnsupportedListEntry {
+  /** `what:name`, from `unsupportedKind` in `agent/unsupported.ts`. */
+  kind: string;
+  count: number;
+  /** When the latest happened, in ms since the epoch. */
+  lastAt: number;
+  /** The Session it last happened in; it may have been deleted since. */
+  sessionId: string;
 }
 
 export class ApiError extends Error {
@@ -17,6 +32,15 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/** What creating a Session takes: a shell, or with `claude` a Claude Session. */
+export interface CreateSessionInput {
+  name?: string;
+  /** Makes it a Claude Session, with these Launch options. */
+  claude?: LaunchOptions;
+  /** A Claude Session's interface: a Claude TUI unless this says `agent`, which needs no `claude`. */
+  interface?: ClaudeInterface;
 }
 
 /**
@@ -77,13 +101,14 @@ export const api = {
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
-  /** The Launch options last used for a Claude Session; all Default if none has been. */
-  lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),
-  /** An ordinary shell Session, or with `claude` a Claude Session. */
-  createSession: (
-    workspaceId: string,
-    input: { name?: string; claude?: LaunchOptions } = {},
-  ) =>
+  /**
+   * What the New Session dialog opens on: the kind last created and the Launch options last
+   * used for a Claude Session. A shell with every option Default if none has been created.
+   */
+  lastNewSession: () =>
+    get<{ kind: NewSessionKind; claude: LaunchOptions }>("/api/new-session/last"),
+  /** An ordinary shell Session, or with `claude` or `interface` a Claude Session. */
+  createSession: (workspaceId: string, input: CreateSessionInput = {}) =>
     send<{ id: string; name: string }>(
       "POST",
       `/api/workspaces/${workspaceId}/sessions`,
@@ -93,6 +118,59 @@ export const api = {
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
+  /** Stores an image (base64, inside JSON) for a Claude Agent's next prompt; answers its name. */
+  uploadAgentImage: (sessionId: string, image: { mediaType: string; data: string }) =>
+    send<{ name: string }>("POST", `/api/sessions/${sessionId}/agent/images`, image),
+  /**
+   * The files in a Claude Agent's Workspace folder whose path contains `query`, best first, for
+   * the `@` picker (#160): relative paths, git-ignored ones left out, capped.
+   */
+  searchAgentFiles: async (sessionId: string, query: string) =>
+    (
+      await get<{ files: string[] }>(
+        `/api/sessions/${sessionId}/files?q=${encodeURIComponent(query)}`,
+      )
+    ).files,
+  /** Stops a Claude Agent: the Session stays, Stopped. */
+  stopSession: (sessionId: string) =>
+    send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/stop`, {}),
+  /** Switches a Claude Agent to a Claude TUI on the same conversation (#155). */
+  openInTerminal: (sessionId: string) =>
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/sessions/${sessionId}/open-in-terminal`,
+      {},
+    ),
+  /** Switches a Claude TUI back to a Claude Agent, with the terminal's turns imported (#156). */
+  openInWeb: (sessionId: string) =>
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/sessions/${sessionId}/open-in-web`,
+      {},
+    ),
+  /** The running list of unsupported kinds (#154), latest first. */
+  unsupportedList: async () =>
+    (await get<{ entries: UnsupportedListEntry[] }>("/api/unsupported")).entries,
+  /**
+   * Reports one occurrence of an unsupported kind. `occurrenceId` is the same from every device
+   * that sees it, so the server counts it once; `at` is when it happened (ms since the epoch).
+   */
+  reportUnsupported: (report: {
+    kind: string;
+    sessionId: string;
+    occurrenceId: string;
+    at?: number;
+  }) => send<void>("POST", "/api/unsupported", report),
+  /** Removes a kind from the list; it returns if it happens again. */
+  clearUnsupported: (kind: string) =>
+    send<void>("DELETE", `/api/unsupported/${encodeURIComponent(kind)}`),
   restartSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
+  /** Restarts a running Claude Agent on the runtime installed now; its conversation carries on. */
+  restartAgent: (sessionId: string) =>
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/sessions/${sessionId}/agent/restart`,
+      {},
+    ),
 };

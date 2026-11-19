@@ -2,6 +2,9 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { AccessGuard } from "./access-guard.ts";
+import { AgentSockets } from "./agent-sockets.ts";
+import { AgentStatuses } from "./agent-status.ts";
+import { AgentRuntimes } from "./agents.ts";
 import { createApp } from "./app.ts";
 import { Attachments } from "./attachments.ts";
 import type { InstanceConfig } from "./config.ts";
@@ -20,6 +23,11 @@ export interface ServerOptions {
    * (the feed's default when omitted). Tests make it long, to show that a change was pushed.
    */
   statePollMs?: number;
+  /**
+   * The built Agent Runtime, one self-contained file (`pnpm build:runtime`), which the server
+   * installs into the data directory at startup. Omit it and no Claude Agent can be started.
+   */
+  agentRuntimeFile?: string;
 }
 
 export interface RunningServer {
@@ -34,19 +42,37 @@ export async function startServer(
   options: ServerOptions = {},
 ): Promise<RunningServer> {
   const store = new Store(config.dataDir);
-  const tmux = new TmuxDriver(config.tmuxSocket, config.claudeProgram);
-  const service = new Service(store, tmux);
+  const tmux = new TmuxDriver(
+    config.tmuxSocket,
+    config.claudeProgram,
+    config.claudeConfigDir,
+  );
+  const agents = new AgentRuntimes({
+    dataDir: config.dataDir,
+    tmux,
+    runtimeFile: options.agentRuntimeFile,
+  });
+  agents.install();
+  const statuses = new AgentStatuses(agents);
+  const service = new Service(store, tmux, agents, statuses);
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();
+  // The folder of an Agent whose Session is gone goes too.
+  service.removeStrayAgentFolders();
   // A tmux server that outlived the previous k-bench gets this version's hooks.
   await tmux.configure();
+  // Agents that kept running through the restart: hear what each is doing before the first
+  // state is read, so a client never sees them Idle for a moment.
+  await service.watchAgents();
   const attachments = new Attachments(tmux, service);
   const terminals = new TerminalSockets(attachments);
+  const agentSockets = new AgentSockets(agents, service);
   const feed = new StateFeed(() => service.getState(), {
     intervalMs: options.statePollMs,
   });
   const events = new EventSockets(feed);
   const bells = tmux.watchBells(() => feed.notify());
+  statuses.onChange(() => feed.notify());
 
   // The guard sits in front of everything the server answers, so no route or static file
   // (now or added later) can be reached without the allowed login.
@@ -78,6 +104,11 @@ export async function startServer(
         events.handleUpgrade(request, socket, head);
         return;
       }
+      const agentSession = AgentSockets.match(request);
+      if (agentSession !== undefined) {
+        agentSockets.handleUpgrade(request, socket, head, agentSession);
+        return;
+      }
       const terminal = TerminalSockets.match(request);
       if (terminal === undefined) {
         socket.destroy();
@@ -95,10 +126,12 @@ export async function startServer(
   const stop = () => {
     stopping ??= (async () => {
       await bells.stop();
+      statuses.stop();
       events.closeAll();
       // From here on no tmux client this server started is running or starting.
       await attachments.stop();
       terminals.closeAll();
+      agentSockets.closeAll();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
