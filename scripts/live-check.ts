@@ -5,6 +5,7 @@
 // about Claude Code holds. By hand only: it is not reachable from `pnpm check`, `pnpm test`,
 // `pnpm test:e2e` or CI, it refuses to do anything real without `--confirm`, and `--fake` runs
 // the same script against the test harness's fake Claude, which spends nothing.
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CHECKS } from "./live-check/checks.ts";
@@ -244,6 +245,12 @@ for (const scenario of scenarios) {
   if (!run.fake && scenario.realCannot) continue;
   if (run.budget.exhausted) break;
   await play(scenario);
+}
+
+// `--fake-break leftover`: a process nothing ended, working in the throwaway folder, which the
+// end of the run must find and kill.
+if (options.fakeBreak === "leftover") {
+  spawn("sleep", ["300"], { cwd: run.folder, detached: true, stdio: "ignore" }).unref();
 }
 
 // ---- Verdicts ----------------------------------------------------------------------------

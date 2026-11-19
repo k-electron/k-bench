@@ -2,7 +2,6 @@
 // what it keeps. Judging what was seen is `checks.ts`. With `--fake` each scenario first
 // scripts the fake Claude to say what k-bench's code assumes the real one says, so the checks
 // run on something; that proves the script, not `claude`.
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -508,16 +507,6 @@ const rails: Scenario = {
       decision: ask.decision,
     }));
     await s.close();
-    if (ctx.extras.breakMode === "leftover") {
-      // A process a check forgot to end, working in the throwaway folder: the run must find and kill it.
-      const child = spawn("sleep", ["300"], {
-        cwd: run.folder,
-        detached: true,
-        stdio: "ignore",
-      });
-      child.unref();
-      cap.notes.leftoverPid = child.pid;
-    }
   },
 };
 
