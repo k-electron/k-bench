@@ -6,7 +6,10 @@ import { pollUntil } from "./harness/poll.ts";
 
 // Claude Code is the fake from test/harness/fake-claude.sh; the Agent Runtime is the real one.
 
-/** Sends `count` prompts, one turn at a time, and returns once the last turn has ended. */
+/**
+ * Sends `count` prompts, one turn at a time, and returns once the last turn has ended and the
+ * conversation is quiet (`waitForQuiet`), so that what the client holds is the whole log.
+ */
 async function runTurns(client: AgentClient, count: number): Promise<void> {
   for (let n = 1; n <= count; n += 1) {
     const done = client.entries.filter(isResult).length + 1;
@@ -15,6 +18,7 @@ async function runTurns(client: AgentClient, count: number): Promise<void> {
       description: `turn ${n} to end`,
     });
   }
+  await client.waitForQuiet("the conversation to be quiet");
 }
 
 /** The text of the prompts among entries, in order. */

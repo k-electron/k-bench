@@ -255,6 +255,16 @@ export class AgentClient {
     return pollUntil(() => this.entries.find(check), { description });
   }
 
+  /**
+   * Resolves once the conversation is quiet: the newest entry is Claude Code's `idle`
+   * (`system/session_state_changed`), which it sends after a turn's `result` when nothing is
+   * queued. A test that compares two clients' entries waits for this first: waiting only for
+   * the `result` races that last message, and one copy can hold it while the other does not.
+   */
+  async waitForQuiet(description: string): Promise<void> {
+    await pollUntil(() => isIdle(this.entries.at(-1)), { description });
+  }
+
   /** Resolves with the code the socket closed with. */
   waitForClose(): Promise<number> {
     return pollUntil(() => this.closeCode, { description: "the agent socket to close" });
@@ -264,6 +274,13 @@ export class AgentClient {
     this.socket.close();
   }
 }
+
+/** Whether an entry is Claude Code saying it has nothing left to do. */
+const isIdle = (entry: LogEntry | undefined): boolean =>
+  entry?.kind === "sdk" &&
+  entry.message.type === "system" &&
+  entry.message.subtype === "session_state_changed" &&
+  entry.message.state === "idle";
 
 /** Whether an entry is the `result` that ends a turn. */
 export const isResult = (entry: LogEntry): boolean =>

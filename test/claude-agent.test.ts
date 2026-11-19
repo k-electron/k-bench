@@ -208,6 +208,7 @@ describe("a Claude Agent", () => {
     await pollUntil(() => back.entries.filter(isResult).length === 2, {
       description: "the second turn's result",
     });
+    await back.waitForQuiet("the conversation to be quiet");
 
     const whole = await server.openAgent(session.id);
     await whole.sync();
@@ -249,6 +250,7 @@ describe("a Claude Agent", () => {
     await pollUntil(() => after.entries.filter(isResult).length === 2, {
       description: "the second turn's result",
     });
+    await after.waitForQuiet("the conversation to be quiet");
 
     const whole = await restarted.openAgent(session.id);
     await whole.sync();
