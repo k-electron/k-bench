@@ -162,10 +162,78 @@ export interface AgentHello {
   sdkClaudeCodeVersion: string;
 }
 
+/**
+ * Claude Code's permission modes, as the SDK names them. A Claude Code started with the
+ * owner's own settings can be in any of them; k-bench only ever switches among
+ * `PERMISSION_MODE_CYCLE`.
+ */
+export type PermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "plan"
+  | "auto"
+  | "dontAsk"
+  | "bypassPermissions";
+
+/**
+ * The modes Shift+Tab, and a tap on the mode line, step through, in the order Claude TUI
+ * offers them. `bypassPermissions` is not here: it needs an explicit opt-in the owner makes
+ * outside k-bench, and no client may switch it on. Nor is `auto`, which the TUI offers only
+ * where it is enabled and which nothing tells k-bench about: adding it later is one line here.
+ */
+export const PERMISSION_MODE_CYCLE: readonly PermissionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+];
+
+/**
+ * The mode after `current` in the cycle, wrapping round. A mode outside the cycle (the owner
+ * started Claude Code in `auto`, say) goes to `default`, as the TUI's Shift+Tab does.
+ */
+export function nextPermissionMode(current: PermissionMode): PermissionMode {
+  const index = PERMISSION_MODE_CYCLE.indexOf(current);
+  return PERMISSION_MODE_CYCLE[index + 1] ?? PERMISSION_MODE_CYCLE[0] ?? "default";
+}
+
+/** What the mode line says for each mode. */
+export const PERMISSION_MODE_LABEL: Record<PermissionMode, string> = {
+  default: "Ask before edits",
+  acceptEdits: "Accept edits",
+  plan: "Plan mode",
+  auto: "Auto mode",
+  dontAsk: "Don't ask",
+  bypassPermissions: "Bypass permissions",
+};
+
+const PERMISSION_MODES = Object.keys(PERMISSION_MODE_LABEL) as PermissionMode[];
+
+/** Whether a value read off the wire is one of the modes. */
+export function isPermissionMode(value: unknown): value is PermissionMode {
+  return PERMISSION_MODES.includes(value as PermissionMode);
+}
+
 /** What the Agent is doing, pushed to every connection whenever it changes (and on connect). */
 export interface AgentStatus {
   type: "status";
-  state: "idle" | "working";
+  /**
+   * `working`: a turn is running, one the owner sent or one nobody did (`/loop`). `waiting`:
+   * an Allow/Deny ask is open (it wins over `working`). The same three words as
+   * `SessionState.agent.state`.
+   */
+  state: "idle" | "working" | "waiting";
+  /**
+   * When the turn now running began, in milliseconds since the epoch on the runtime's clock
+   * (the Host's). Present while `working` or `waiting`, and kept across the two: it is the
+   * clock of the turn, not of the wait.
+   */
+  turnStartedAt?: number;
+  /**
+   * Claude Code's permission mode now, whoever changed it: a client's `set_permission_mode`,
+   * Claude Code itself (leaving plan mode), or the settings it started with. Absent only
+   * from a runtime older than this field.
+   */
+  mode?: PermissionMode;
 }
 
 /**
@@ -279,6 +347,20 @@ export type AgentClientMessage =
    * What came of it arrives as the ask's `permission_answered` entry, to every device.
    */
   | { type: "answer"; requestId: string; decision: "allow" | "deny" }
+  /**
+   * Switches Claude Code to this permission mode. A target, not a "next": two devices that
+   * both tap at once ask for the same mode, and it is set once. Only the modes of
+   * `PERMISSION_MODE_CYCLE` are accepted. What came of it is the next `status`, on every
+   * connection; if Claude Code refuses, nothing changes.
+   */
+  | { type: "set_permission_mode"; mode: PermissionMode }
+  /**
+   * Stops the turn that is running, as Esc does in a terminal: its text so far is kept, its
+   * running tool ends unanswered, and the turn's `result` is an error. Prompts already sent
+   * and waiting are not taken back: they run next, in the order sent. Harmless when nothing
+   * is running.
+   */
+  | { type: "interrupt" }
   /** Ends the Agent: the turn is interrupted, the log finished, Claude Code closed. */
   | { type: "shutdown" };
 
@@ -350,6 +432,13 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         (message.decision === "allow" || message.decision === "deny")
         ? { type: "answer", requestId: message.requestId, decision: message.decision }
         : undefined;
+    case "set_permission_mode":
+      return isPermissionMode(message.mode) &&
+        PERMISSION_MODE_CYCLE.includes(message.mode)
+        ? { type: "set_permission_mode", mode: message.mode }
+        : undefined;
+    case "interrupt":
+      return { type: "interrupt" };
     case "shutdown":
       return { type: "shutdown" };
     default:

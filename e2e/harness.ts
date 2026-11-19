@@ -126,9 +126,35 @@ export class AppPage {
     await this.sessionMenu(sessionName, "Open in other pane");
   }
 
-  /** The running/Stopped indicator beside a Session in the sidebar. */
-  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+  /**
+   * The state dot beside a Session in the sidebar: running or stopped, or, for a Claude Agent
+   * whose state is known, idle, working or waiting for you.
+   */
+  sessionStatus(
+    name: string,
+    status: "running" | "stopped" | "idle" | "working" | "waiting for you",
+  ): Locator {
     return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+  }
+
+  /**
+   * What a Session's row shows along its left edge, as the browser computes it: "none" for no
+   * edge. Which colour an edge is, is for the eye; this lets a test tell edges apart.
+   */
+  async rowEdge(sessionName: string): Promise<string> {
+    return this.sidebar
+      .getByRole("img", {
+        name: new RegExp(
+          `^${sessionName} (running|stopped|idle|working|waiting for you)$`,
+        ),
+      })
+      .evaluate((dot) => {
+        const row = dot.parentElement;
+        if (!row) throw new Error("The dot has no row");
+        return (
+          dot.ownerDocument.defaultView?.getComputedStyle(row).boxShadow ?? "unknown"
+        );
+      });
   }
 
   private sizeProbes = 0;
@@ -201,6 +227,25 @@ export class AppPage {
   workspacePulse(workspaceName: string): Locator {
     return this.sidebar.getByRole("status").and(
       this.page.getByText(`${workspaceName} has a session that needs you`, {
+        exact: true,
+      }),
+    );
+  }
+
+  /**
+   * A Claude Agent's row is pulsing orange: it is Waiting for you. Found by the status text the
+   * row carries for it, present only while it waits.
+   */
+  rowWaiting(sessionName: string): Locator {
+    return this.sidebar
+      .getByRole("status")
+      .and(this.page.getByText(`${sessionName} is waiting for you`, { exact: true }));
+  }
+
+  /** A collapsed Workspace's row is pulsing orange: a Claude Agent in it is Waiting for you. */
+  workspaceWaiting(workspaceName: string): Locator {
+    return this.sidebar.getByRole("status").and(
+      this.page.getByText(`${workspaceName} has an agent waiting for you`, {
         exact: true,
       }),
     );
@@ -359,6 +404,14 @@ export class AppPage {
   permissionPrompt(sessionName: string): Locator {
     return this.agentRegion(sessionName).getByRole("region", {
       name: "Permission prompt",
+    });
+  }
+
+  /** The line under the named Claude Agent's input that shows its permission mode; a button that cycles it. */
+  agentModeLine(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("button", {
+      name: "Permission mode",
+      exact: true,
     });
   }
 

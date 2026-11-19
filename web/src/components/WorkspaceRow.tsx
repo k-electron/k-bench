@@ -15,6 +15,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import { isWaiting } from "../agentState";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -53,6 +54,8 @@ export function WorkspaceRow({
   const [collapsed, setCollapsed] = useState(false);
   // Collapsed, the Sessions' own pulses are out of sight: roll them up into this row.
   const pulsing = collapsed && workspace.sessions.some((session) => session.bell);
+  // The same for a Claude Agent Waiting for you, which pulses orange.
+  const waiting = collapsed && workspace.sessions.some(isWaiting);
 
   return (
     <li
@@ -64,6 +67,7 @@ export function WorkspaceRow({
         className={cn(
           "flex items-center gap-1 rounded-md py-1 pr-1 text-sm font-medium",
           pulsing && "row-pulse",
+          waiting && "row-waiting",
         )}
       >
         <button
@@ -97,6 +101,11 @@ export function WorkspaceRow({
         {pulsing && (
           <span role="status" className="sr-only">
             {`${workspace.name} has a session that needs you`}
+          </span>
+        )}
+        {waiting && (
+          <span role="status" className="sr-only">
+            {`${workspace.name} has an agent waiting for you`}
           </span>
         )}
         <Button

@@ -6,6 +6,7 @@ import {
   type LogEntry,
   openPermissionAsks,
 } from "../../../src/shared/agent-protocol.ts";
+import { queuedPromptIds } from "./prompts";
 
 /**
  * What the conversation shows, built from the Agent's log entries and live fragments. This
@@ -17,10 +18,22 @@ import {
  * `transcriptItems` from entries the state already holds.
  */
 export type TranscriptItem =
-  /** A prompt the owner sent (from any device). */
-  | { kind: "prompt"; key: string; text: string }
+  /**
+   * A prompt the owner sent (from any device). `queued` while Claude Code has not picked it
+   * up yet: it was sent during a turn (or an instant ago) and waits its turn.
+   */
+  | { kind: "prompt"; key: string; seq?: number; text: string; queued: boolean }
+  /** The turn before this ended because the owner interrupted it. */
+  | { kind: "interrupted"; key: string; seq?: number }
   /** Text from Claude: complete, or still streaming in. */
-  | { kind: "assistant"; key: string; text: string; streaming: boolean };
+  | { kind: "assistant"; key: string; seq?: number; text: string; streaming: boolean };
+
+/**
+ * **The raw-message seam (#137).** An item built from a log entry carries that entry's `seq`
+ * (`TranscriptItem.seq`), so the Pane can offer that message's raw JSON (`web/src/agent/raw.ts`,
+ * `components/agent/RawView.tsx`). Text still streaming in has no entry yet and no `seq`. Every
+ * item kind a later ticket adds must set `seq` the same way, from the entry it was built from;
+ * a row built from several entries sets the one the owner would call "the message".
 
 /** Text streaming in for the SDK message now being written. */
 interface LiveMessage {
@@ -223,12 +236,42 @@ export function applyServerMessage(
   }
 }
 
+/**
+ * Claude Code's note that the owner interrupted: a synthetic `user` message, "[Request
+ * interrupted by user]" (or "... for tool use" when a tool was running), that closes the
+ * aborted turn.
+ */
+function isInterruptNotice(entry: LogEntry): boolean {
+  if (entry.kind !== "sdk" || entry.message.type !== "user") return false;
+  if (entry.message.parent_tool_use_id != null || !isObject(entry.message.message)) {
+    return false;
+  }
+  const { content } = entry.message.message;
+  const blocks = Array.isArray(content) ? content : [{ type: "text", text: content }];
+  return blocks.some(
+    (block) =>
+      isObject(block) &&
+      block.type === "text" &&
+      typeof block.text === "string" &&
+      block.text.startsWith("[Request interrupted by user"),
+  );
+}
+
 /** The conversation to show, in order: what the log holds, then what is still streaming in. */
 export function transcriptItems(state: TranscriptState): TranscriptItem[] {
   const items: TranscriptItem[] = [];
+  const queued = queuedPromptIds(state.entries);
   for (const entry of state.entries) {
     if (entry.kind === "prompt") {
-      items.push({ kind: "prompt", key: `entry-${entry.seq}`, text: entry.text });
+      items.push({
+        kind: "prompt",
+        key: `entry-${entry.seq}`,
+        seq: entry.seq,
+        text: entry.text,
+        queued: queued.has(entry.id),
+      });
+    } else if (isInterruptNotice(entry)) {
+      items.push({ kind: "interrupted", key: `entry-${entry.seq}`, seq: entry.seq });
     } else if (
       entry.kind === "sdk" &&
       entry.message.type === "assistant" &&
@@ -242,6 +285,7 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
           items.push({
             kind: "assistant",
             key: `entry-${entry.seq}-${index}`,
+            seq: entry.seq,
             text: block.text,
             streaming: false,
           });
