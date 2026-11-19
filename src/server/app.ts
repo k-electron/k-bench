@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { MAX_IMAGE_BASE64_BYTES } from "../shared/agent-images.ts";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import { REVISION_HEADER } from "../shared/state-protocol.ts";
 import { parseLaunchOptions } from "./claude.ts";
@@ -7,13 +8,54 @@ import { DirectoryError, listDirectories } from "./directories.ts";
 import { type Service, ServiceError } from "./service.ts";
 import { mountStatic } from "./static.ts";
 
+/** The most a JSON body may hold unless a route says otherwise: every route takes a few fields. */
+const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+
+/** An image arrives as base64 inside JSON: the largest image Claude takes, and room for the rest. */
+const MAX_IMAGE_BODY_BYTES = MAX_IMAGE_BASE64_BYTES + 4096;
+
+/** A report of an unsupported kind is two short ids and a time. */
+const MAX_REPORT_BODY_BYTES = 16 * 1024;
+
+const tooLarge = () =>
+  new HTTPException(413, { message: "The request body is too large" });
+
 /**
- * The JSON object in a request body ({} when there is none). A body must be declared
- * `application/json`: a page on another site cannot send that without a preflight the
- * server never grants, so it is a second line behind the Origin check.
+ * The body as text, refused with a 413 as soon as it is known to be over `maxBytes`: from the
+ * declared length before reading, and while reading when none was declared (or it was wrong),
+ * so that an oversize body is never held whole.
  */
-async function jsonBody(request: Request): Promise<Record<string, unknown>> {
-  const text = await request.text();
+async function boundedText(request: Request, maxBytes: number): Promise<string> {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge();
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * The JSON object in a request body ({} when there is none), refused with a 413 over
+ * `maxBytes`. A body must be declared `application/json`: a page on another site cannot send
+ * that without a preflight the server never grants, so it is a second line behind the Origin
+ * check.
+ */
+async function jsonBody(
+  request: Request,
+  maxBytes = DEFAULT_MAX_BODY_BYTES,
+): Promise<Record<string, unknown>> {
+  const text = await boundedText(request, maxBytes);
   if (text === "") return {};
   const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
   if (type !== "application/json") {
@@ -153,7 +195,7 @@ export function createApp(
   // Images for a Claude Agent's prompts. The bytes travel as base64 inside JSON, not as a raw
   // upload, so that `jsonBody`'s `application/json` check still stands behind the Origin check.
   app.post("/api/sessions/:id/agent/images", async (c) => {
-    const body = await jsonBody(c.req.raw);
+    const body = await jsonBody(c.req.raw, MAX_IMAGE_BODY_BYTES);
     const name = service.saveAgentImage(c.req.param("id"), body.mediaType, body.data);
     return c.json({ name }, 201);
   });
@@ -181,7 +223,7 @@ export function createApp(
   // URL-encoded in the path.
   app.get("/api/unsupported", (c) => c.json({ entries: service.listUnsupported() }));
   app.post("/api/unsupported", async (c) => {
-    const body = await jsonBody(c.req.raw);
+    const body = await jsonBody(c.req.raw, MAX_REPORT_BODY_BYTES);
     service.reportUnsupported({
       kind: body.kind,
       sessionId: body.sessionId,
