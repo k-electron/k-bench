@@ -678,3 +678,54 @@ test("on a phone, @ lists the Workspace's files inside the screen and a tap inse
     "fake claude heard: see @src/app.ts",
   );
 });
+
+test("on the phone Claude's questions and plan are answered by tapping, with the choices in reach however long the plan is", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const { fakeClaude } = kbench.instance;
+  const steps = Array.from({ length: 60 }, (_, i) => `- step ${i + 1}`).join("\n");
+  fakeClaude.script([
+    {
+      tool: {
+        name: "AskUserQuestion",
+        input: {
+          questions: [
+            {
+              question: "Which colour?",
+              header: "Colour",
+              multiSelect: false,
+              options: [
+                { label: "Red", description: "Warm" },
+                { label: "Blue", description: "Cool" },
+              ],
+            },
+          ],
+        },
+      },
+      ask: true,
+    },
+    {
+      tool: { name: "ExitPlanMode", input: { plan: `## The plan\n\n${steps}` } },
+      ask: true,
+    },
+    { text: "all done" },
+  ]);
+  const region = app.agentRegion("session 1");
+  await app.agentInput("session 1").tap();
+  await app.page.keyboard.type("go");
+  await region.getByRole("button", { name: "Send", exact: true }).tap();
+
+  await app.questionPrompt("session 1").getByRole("button", { name: "2. Blue" }).tap();
+  // The plan is longer than the screen: it scrolls inside its panel and the choices stay on it.
+  const yes = app
+    .planPrompt("session 1")
+    .getByRole("button", { name: "1. Yes, proceed" });
+  await expect(yes).toBeInViewport();
+  await yes.tap();
+  await expect(region.getByRole("log")).toContainText("all done");
+  await expect(region.getByRole("log")).toContainText("question: Which colour? → Blue");
+});
