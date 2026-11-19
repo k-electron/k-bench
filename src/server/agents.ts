@@ -26,6 +26,7 @@ import {
   decodeAgentServerMessage,
   encodeAgentClientMessage,
 } from "../shared/agent-protocol.ts";
+import type { LaunchOptions } from "../shared/launch-options.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
 /** How long a new runtime has to answer with its hello before it is given up on. */
@@ -119,6 +120,8 @@ export class AgentRuntimes {
     workspaceFolder: string;
     conversationId: string;
     mode: "start" | "resume";
+    /** The Session's Launch options, passed to the runtime at every start. */
+    options: LaunchOptions;
   }): Promise<void> {
     const runtime = this.installed ?? this.install();
     if (!runtime) {
@@ -138,6 +141,7 @@ export class AgentRuntimes {
       agentFolder: folder,
       conversationId: input.conversationId,
       mode: input.mode,
+      options: input.options,
     });
   }
 

@@ -74,6 +74,7 @@ export function AgentPane({
             items={items}
             entries={entries}
             rawView={rawView}
+            focusView={conversation.focusView}
           />
         )}
       </div>

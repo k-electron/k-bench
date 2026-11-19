@@ -62,6 +62,8 @@ export interface AgentConversation {
    * the first prompt, and the folder then comes from the hello).
    */
   header: { version?: string; model?: string; folder?: string };
+  /** Whether Claude Code is in Focus view: the Transcript shows a tool call as one line. */
+  focusView: boolean;
   /**
    * The Allow/Deny asks open now, oldest first. Empty when the Session is over: nothing can
    * answer them then.
@@ -282,6 +284,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   const folder = info.cwd ?? hello?.folder;
   return {
     items,
+    focusView: info.focusView,
     header: {
       ...(hello ? { version: hello.claudeVersion } : {}),
       ...(info.model === undefined ? {} : { model: info.model }),
