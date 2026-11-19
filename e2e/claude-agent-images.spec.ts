@@ -122,7 +122,9 @@ test("an image over Claude's limits shows a message and is never uploaded", asyn
   const region = app.agentRegion("session 1");
   const uploads: string[] = [];
   app.page.on("request", (request) => {
-    if (request.url().includes("/agent/images")) uploads.push(request.url());
+    if (request.method() === "POST" && request.url().includes("/agent/images")) {
+      uploads.push(request.url());
+    }
   });
 
   const [chooser] = await Promise.all([
