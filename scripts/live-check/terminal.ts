@@ -16,8 +16,8 @@ import { getSessionMessages } from "@anthropic-ai/claude-agent-sdk";
 import type { FakeStep } from "../../test/harness/fake-claude.ts";
 import { BudgetExhausted, blockedTools, claudeEnvironment } from "./rails.ts";
 import {
-  afterLast,
   cursorLine,
+  dialogFor,
   footerOf,
   menuShown,
   permissionKey,
@@ -54,21 +54,33 @@ const readTrim = (path: string): string => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Moves a dialog's cursor, by the option's text, to the option `want` names. For `allow` it
- * also presses Enter on it; for `reply` it stops there (the reply is typed into that option).
- * Bounded; false when the option was not reached.
+ * Answers the permission dialog one step at a time, as `permissionKey` says from the screen:
+ * `allow` presses Enter only on `1. Yes`; `reply` is Down, Down, Tab, the reply, Enter. Every
+ * step waits for the screen to change and is looked at again; false (nothing more is pressed)
+ * when the screen is not what the step needs. Bounded.
  */
-async function choose(tmux: Tmux, want: "allow" | "reply"): Promise<boolean> {
-  for (let i = 0; i < 5; i++) {
-    const key = permissionKey(tmux.capture(), want);
-    if (key === "type") return true;
-    if (key === "Enter") {
-      tmux.keys("Enter");
-      return true;
-    }
+async function answer(tmux: Tmux, want: "allow" | "reply"): Promise<boolean> {
+  const feedback = want === "reply" ? DENY_FEEDBACK : "";
+  for (let i = 0; i < 12; i++) {
+    const pane = tmux.capture();
+    const key = permissionKey(pane, want, feedback);
     if (key === "none") return false;
-    tmux.keys("Down");
-    await sleep(300);
+    if (key === "type") {
+      tmux.type(DENY_FEEDBACK);
+      // Enter only once the row shows what was typed.
+      const shown = await until(
+        () => permissionKey(tmux.capture(), want, feedback) === "Enter",
+        3000,
+        { everyMs: 200 },
+      );
+      if (!shown) return false;
+      continue;
+    }
+    tmux.keys(key);
+    if (key === "Enter") return true;
+    // Each step is looked at again: the screen must have changed (the cursor moved, the row turned).
+    if (!(await until(() => tmux.capture() !== pane, 3000, { everyMs: 200 })))
+      return false;
   }
   return false;
 }
@@ -159,10 +171,6 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
     run.budget.spendUnobserved("terminal");
     tmux.type(TUI_PROMPT);
     tmux.keys("Enter");
-    if (run.fake) {
-      visit.reached.turn = Boolean(await tmux.waitFor(/claude-stub heard:/, 15_000));
-      return visit;
-    }
     // The turn: a permission dialog for story.txt. The first is denied with a reply, the next allowed.
     let denied = false;
     const deadline = Date.now() + 150_000;
@@ -170,7 +178,7 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
       if (run.abort.signal.aborted) break;
       const pane = tmux.capture();
       if (/Do you want to/i.test(pane)) {
-        if (!/story\.txt/.test(afterLast(pane, /Do you want to/i))) {
+        if (!dialogFor(pane, "story.txt")) {
           // Not the file asked about: refuse, and stop trying.
           tmux.keys("Escape");
           visit.details.dialog = "a permission dialog for something else was refused";
@@ -181,16 +189,13 @@ async function visitOne(ctx: Ctx, sid: string, story: string): Promise<Visit> {
           denied = true;
           // The reply makes Claude try again: that is a second model call, so a second turn.
           run.budget.spendUnobserved("terminal");
-          // Move the cursor to "No, and tell Claude what to do differently" and type the reply.
-          if (await choose(tmux, "reply")) {
-            tmux.type(DENY_FEEDBACK);
-            await sleep(500);
-            tmux.keys("Enter");
+          // Down, Down, Tab, the reply, Enter: each step checked on the screen.
+          if (await answer(tmux, "reply")) {
             visit.reached.deniedWithReply = true;
           } else {
             tmux.keys("Escape");
           }
-        } else if (!(await choose(tmux, "allow"))) {
+        } else if (!(await answer(tmux, "allow"))) {
           // The plain "Yes" could not be found on the screen: nothing is pressed blindly.
           tmux.keys("Escape");
           visit.details.dialog = "the Yes option of a permission dialog was not found";

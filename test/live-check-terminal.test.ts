@@ -4,7 +4,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { permissionKey, trustKey } from "../scripts/live-check/screen.ts";
+import { dialogFor, permissionKey, trustKey } from "../scripts/live-check/screen.ts";
 import { FakeClaude, installFakeClaude } from "./harness/fake-claude.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { testSocketName, tmuxSocketDir } from "./harness/socket-leaks.ts";
@@ -27,19 +27,46 @@ describe("driving a terminal's dialogs", () => {
     expect(trustKey("some other screen\n❯ 1. No, exit")).toBe("none");
     expect(trustKey("Do you trust the files in this folder?\n")).toBe("none");
 
-    const dialog = (cursor: number) =>
+    // The write-permission dialog, as the real TUI (claude 2.1.328) drew it.
+    const option2 =
+      "2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)";
+    const dialog = (
+      cursor: 1 | 2 | 3,
+      row3 = "3. No",
+      footer = "Esc to cancel · Tab to amend",
+    ) =>
       [
-        "Yes",
-        "Yes, allow all edits during this session",
-        "No, and tell Claude what to do differently",
-      ]
-        .map((text, i) => `${i === cursor ? "❯" : " "} ${i + 1}. ${text}`)
-        .join("\n");
-    expect(permissionKey(dialog(0), "allow")).toBe("Enter");
-    expect(permissionKey(dialog(1), "allow")).toBe("Down");
-    expect(permissionKey(dialog(2), "allow")).toBe("Down");
-    expect(permissionKey(dialog(2), "reply")).toBe("type");
-    expect(permissionKey(dialog(0), "reply")).toBe("Down");
+        "⏺ Write(story.txt)",
+        " Do you want to overwrite story.txt?",
+        ` ${cursor === 1 ? "❯" : " "} 1. Yes`,
+        ` ${cursor === 2 ? "❯" : " "} ${option2}`,
+        ` ${cursor === 3 ? "❯" : " "} ${row3}`,
+        ` ${footer}`,
+      ].join("\n");
+    const amended = (typed = "") =>
+      dialog(
+        3,
+        typed === ""
+          ? "3. No, and tell Claude what to do differently"
+          : `3. No, ${typed}`,
+        "Esc to cancel",
+      );
+    expect(dialogFor(dialog(1), "story.txt")).toBe(true);
+    expect(dialogFor(dialog(1), "other.txt")).toBe(false);
+    // Allow: Enter only on exactly "1. Yes", and never on option 2.
+    expect(permissionKey(dialog(1), "allow")).toBe("Enter");
+    expect(permissionKey(dialog(2), "allow")).toBe("Up");
+    expect(permissionKey(dialog(3), "allow")).toBe("Up");
+    // Reply: Down, Down, Tab, type, Enter, each decided by what the screen shows.
+    const said = "use exactly the content I gave you";
+    expect(permissionKey(dialog(1), "reply", said)).toBe("Down");
+    expect(permissionKey(dialog(2), "reply", said)).toBe("Down");
+    expect(permissionKey(dialog(3), "reply", said)).toBe("Tab");
+    expect(permissionKey(amended(), "reply", said)).toBe("type");
+    expect(permissionKey(amended(said), "reply", said)).toBe("Enter");
+    // Nothing on the screen to decide by: nothing is pressed.
+    expect(permissionKey("some other screen", "allow")).toBe("none");
+    expect(permissionKey("some other screen", "reply", said)).toBe("none");
   });
 
   it("the terminal stand-in quits on Enter at the trust question's default, and carries on after Down and Enter", async () => {

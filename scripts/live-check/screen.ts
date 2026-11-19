@@ -54,20 +54,48 @@ export function trustKey(pane: string): Key {
   return cursor === "" ? "none" : "Down";
 }
 
+/** Keys the dialog logic asks for; `type` is the reply text, typed (not a key). */
+export type DialogKey = "Enter" | "Down" | "Up" | "Tab" | "type" | "none";
+
 /**
- * What to press on a permission dialog to choose an option by its text: `allow` is plain
- * "Yes" (not "allow all edits" or "don't ask again"), `reply` is "No, and tell Claude what to
- * do differently". Enter is only for `allow` while the cursor is on it; `reply` is typed into
- * once the cursor is on it, so it is reported as `type`.
+ * The write-permission dialog as the real TUI (claude 2.1.328) draws it:
+ *
+ *      Do you want to overwrite story.txt?
+ *      ❯ 1. Yes
+ *        2. Yes, and switch to accept edits (auto-approve file edits ...) for this session (shift+tab)
+ *        3. No
+ *      Esc to cancel · Tab to amend
+ *
+ * The cursor starts on option 1. Tab on `3. No` turns that row into `3. No, and tell Claude what
+ * to do differently`, and the footer loses `· Tab to amend`; text typed then shows in the row as
+ * `3. No, <text>`, and Enter sends it.
+ */
+export function dialogFor(pane: string, file: string): boolean {
+  const asked = afterLast(pane, /Do you want to/i);
+  return asked !== "" && asked.includes(file);
+}
+
+/**
+ * What to press next on that dialog, from the screen alone, one step at a time (each step is
+ * looked at again before the next):
+ * - `allow`: Enter only while the cursor is on exactly `1. Yes`, Up from anywhere else; never
+ *   option 2, which switches the session to accept edits.
+ * - `reply`: Down to `3. No`, Tab there, then, once the row reads `tell Claude what to do
+ *   differently`, `type` the reply, and Enter once the row shows it.
  */
 export function permissionKey(
   pane: string,
   want: "allow" | "reply",
-): "Enter" | "Down" | "type" | "none" {
+  feedback = "",
+): DialogKey {
   const cursor = cursorLine(pane);
   if (cursor === "") return "none";
-  if (want === "reply") return /tell Claude/i.test(cursor) ? "type" : "Down";
-  return /Yes/.test(cursor) && !/allow all|don't ask|always|session/i.test(cursor)
-    ? "Enter"
-    : "Down";
+  const option = /^\s*❯\s*(\d)\.\s*(.*?)\s*$/.exec(cursor);
+  if (!option) return "none";
+  const [, number, text = ""] = option;
+  if (want === "allow") return number === "1" && text === "Yes" ? "Enter" : "Up";
+  if (number !== "3") return "Down";
+  if (feedback !== "" && text.includes(feedback)) return "Enter";
+  if (/tell Claude what to do differently/i.test(text)) return "type";
+  return text === "No" ? "Tab" : "none";
 }

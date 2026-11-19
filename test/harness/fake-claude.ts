@@ -280,6 +280,15 @@ export class FakeClaude {
     this.write(join(this.folder, "trust-required"), {});
   }
 
+  /**
+   * Makes the terminal stand-in draw Claude Code's write-permission dialog for a prompt that
+   * starts "Use the Write tool to overwrite story.txt" (see `fake-claude.sh`), and write the
+   * file when it is allowed.
+   */
+  requireDialogs(): void {
+    this.write(join(this.folder, "permission-dialog"), {});
+  }
+
   /** Waits for a received entry the check accepts, and returns it. */
   waitForReceived<T extends FakeReceived>(
     check: (entry: FakeReceived) => entry is T,

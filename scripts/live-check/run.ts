@@ -294,6 +294,7 @@ function seedFakeWorld(
     }),
   );
   fake.requireTrust();
+  fake.requireDialogs();
   fake.configure({
     plugins: [{ name: "demo-plugin", path: "/home/you/.claude/plugins/demo-plugin" }],
     terminalSlashCommands: ["heapdump", "doctor"],

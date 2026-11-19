@@ -86,6 +86,60 @@ if [ -e "$here/trust-required" ]; then
   printf '\033[2J\033[H'
 fi
 
+# The write-permission dialog, when the test asked for it (`FakeClaude.requireDialogs()`):
+# drawn and steered as Claude Code's is (scripts/live-check/screen.ts): the cursor starts on
+# "1. Yes", Down and Up move it, Tab on "3. No" turns the row into "3. No, and tell Claude what
+# to do differently" (and drops "Tab to amend" from the footer), typed text shows in the row, and
+# Enter answers. Sets `answer` to allow or deny, and `reply` to the typed text.
+ask_write() {
+  sel=1
+  amend=0
+  reply=""
+  answer=
+  saved_tty=$(stty -g 2>/dev/null)
+  stty -icanon -echo min 1 time 0 2>/dev/null
+  esc=$(printf '\033')
+  tab=$(printf '\t')
+  while [ -z "$answer" ]; do
+    printf '\033[2J\033[H'
+    echo " Write(story.txt)"
+    echo " Do you want to overwrite story.txt?"
+    c1=" "
+    c2=" "
+    c3=" "
+    case $sel in 1) c1="❯" ;; 2) c2="❯" ;; 3) c3="❯" ;; esac
+    echo " $c1 1. Yes"
+    echo " $c2 2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)"
+    if [ "$amend" = 0 ]; then
+      echo " $c3 3. No"
+      echo " Esc to cancel · Tab to amend"
+    else
+      if [ -z "$reply" ]; then
+        echo " $c3 3. No, and tell Claude what to do differently"
+      else
+        echo " $c3 3. No, $reply"
+      fi
+      echo " Esc to cancel"
+    fi
+    key=$(dd bs=1 count=1 2>/dev/null)
+    if [ "$key" = "$esc" ]; then
+      rest=$(dd bs=1 count=2 2>/dev/null)
+      case $rest in
+        "[B") [ "$sel" -lt 3 ] && sel=$((sel + 1)) ;;
+        "[A") [ "$sel" -gt 1 ] && sel=$((sel - 1)) ;;
+      esac
+    elif [ "$key" = "$tab" ]; then
+      [ "$sel" = 3 ] && amend=1
+    elif [ -z "$key" ]; then
+      if [ "$sel" = 3 ]; then answer=deny; else answer=allow; fi
+    elif [ "$sel" = 3 ] && [ "$amend" = 1 ]; then
+      reply="$reply$key"
+    fi
+  done
+  stty "$saved_tty" 2>/dev/null
+  printf '\033[2J\033[H'
+}
+
 echo "claude-stub ready"
 while IFS= read -r line; do
   case $line in
@@ -94,6 +148,26 @@ while IFS= read -r line; do
     /compact)
       "$here/node" "$here/fake-claude-session.mjs" "$here/claude-config" "$id" compact
       echo "claude-stub compacted"
+      ;;
+    "Use the Write tool to overwrite story.txt"*)
+      if [ -e "$here/permission-dialog" ]; then
+        : >"$saved/$id"
+        ask_write
+        # A denial with a reply is answered by Claude trying again, which asks again.
+        if [ "$answer" = deny ]; then
+          "$here/node" "$here/fake-claude-session.mjs" "$here/claude-config" "$id" denied "$reply"
+          ask_write
+        fi
+        if [ "$answer" = allow ]; then echo "terminal one" >story.txt; fi
+        "$here/node" "$here/fake-claude-session.mjs" "$here/claude-config" "$id" turn "$line"
+        echo "claude-stub heard: $line"
+        echo '❯ Try "write a test for <filepath>"'
+        echo "⏸ manual mode on"
+      else
+        : >"$saved/$id"
+        "$here/node" "$here/fake-claude-session.mjs" "$here/claude-config" "$id" turn "$line"
+        echo "claude-stub heard: $line"
+      fi
       ;;
     *)
       : >"$saved/$id"

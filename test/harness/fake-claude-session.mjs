@@ -113,5 +113,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
   } else if (command === "compact") {
     compact(configDir, conversationId);
+  } else if (command === "denied") {
+    // A permission denied with a reply, as Claude Code saves the tool's result (recorded by the
+    // live check, #161).
+    appendMessage(configDir, conversationId, {
+      type: "user",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu_stub",
+            is_error: true,
+            content: `The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\n${text}`,
+          },
+        ],
+      },
+    });
   }
 }

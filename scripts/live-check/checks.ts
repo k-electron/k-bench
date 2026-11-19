@@ -908,7 +908,6 @@ const denyReply: Check = {
   row: "A3",
   title: "Deny with a reply: the wording is what Claude Code itself sends",
   scenario: "terminal",
-  fakeCannot: "the stub has no permission dialog",
   assumption: "src/agent-runtime/asks.ts DENIED_WITH_REPLY",
   evaluate({ cap }) {
     const visit = noteOf<{ reached: Record<string, boolean> }>(cap, "visitOne");
