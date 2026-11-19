@@ -25,6 +25,8 @@ export class ServiceError extends Error {
   }
 }
 
+const unknownAgent = () => new ServiceError("not_found", "Unknown Claude Agent");
+
 /** The longest kind or occurrence id a browser may report: a bound on what a client can store. */
 const MAX_REPORT_FIELD = 300;
 
@@ -339,9 +341,54 @@ export class Service {
     this.store.clearUnsupported(kind);
   }
 
-  renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
+  /** The Session, or the 404 that says there is none. */
+  private requireSession(sessionId: string) {
     const session = this.store.getSession(sessionId);
     if (!session) throw new ServiceError("not_found", "Unknown Session");
+    return session;
+  }
+
+  /**
+   * The Session, which must be a Claude Agent. With `refusal` (what the operation needs), a
+   * Session that is not one is a 422 saying so, and an unknown Session is a 404. Without it,
+   * neither is told apart: both are "Unknown Claude Agent", for routes that only ever name an
+   * Agent's own files.
+   */
+  private requireAgent(sessionId: string, refusal?: string) {
+    if (refusal === undefined) {
+      const session = this.store.getSession(sessionId);
+      if (session?.interface !== "agent") throw unknownAgent();
+      return session;
+    }
+    const session = this.requireSession(sessionId);
+    if (session.interface !== "agent") throw new ServiceError("invalid", refusal);
+    return session;
+  }
+
+  /**
+   * Runs `start` unless one is already in flight for the Session, and waits for it: a double
+   * tap, or another device doing the same, shares one switch or restart. `replacing` keeps the
+   * Agent counting as running, for its Panes, until it is done (see `replacing`).
+   */
+  private sharedSwitch(
+    sessionId: string,
+    start: () => Promise<void>,
+    options: { replacing?: boolean } = {},
+  ): Promise<void> {
+    let inFlight = this.restarts.get(sessionId);
+    if (!inFlight) {
+      if (options.replacing) this.replacing.add(sessionId);
+      inFlight = start().finally(() => {
+        this.restarts.delete(sessionId);
+        if (options.replacing) this.replacing.delete(sessionId);
+      });
+      this.restarts.set(sessionId, inFlight);
+    }
+    return inFlight;
+  }
+
+  renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
+    const session = this.requireSession(sessionId);
     const name = requestedName.trim();
     if (!name) throw new ServiceError("invalid", "name is required");
     const clash = this.store
@@ -361,11 +408,7 @@ export class Service {
    * is already Stopped does nothing.
    */
   async stopSession(sessionId: string): Promise<{ id: string; name: string }> {
-    const session = this.store.getSession(sessionId);
-    if (!session) throw new ServiceError("not_found", "Unknown Session");
-    if (session.interface !== "agent") {
-      throw new ServiceError("invalid", "Only a Claude Agent can be stopped");
-    }
+    const session = this.requireAgent(sessionId, "Only a Claude Agent can be stopped");
     await this.agents.shutdown(sessionId);
     return { id: session.id, name: session.name };
   }
@@ -378,23 +421,12 @@ export class Service {
    * folder stays: its log is what Open in web resumes from.
    */
   async openInTerminal(sessionId: string): Promise<{ id: string; name: string }> {
-    const session = this.store.getSession(sessionId);
-    if (!session) throw new ServiceError("not_found", "Unknown Session");
-    if (session.interface !== "agent") {
-      throw new ServiceError(
-        "invalid",
-        "Only a Claude Agent can be opened in the terminal",
-      );
-    }
+    const session = this.requireAgent(
+      sessionId,
+      "Only a Claude Agent can be opened in the terminal",
+    );
     // A double tap, or another device doing the same, shares one switch.
-    let switching = this.restarts.get(sessionId);
-    if (!switching) {
-      switching = this.switchToTerminal(sessionId).finally(() =>
-        this.restarts.delete(sessionId),
-      );
-      this.restarts.set(sessionId, switching);
-    }
-    await switching;
+    await this.sharedSwitch(sessionId, () => this.switchToTerminal(sessionId));
     return { id: session.id, name: session.name };
   }
 
@@ -435,22 +467,14 @@ export class Service {
    * which has nothing to end. Every device follows, because the state says it is an Agent now.
    */
   async openInWeb(sessionId: string): Promise<{ id: string; name: string }> {
-    const session = this.store.getSession(sessionId);
-    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    const session = this.requireSession(sessionId);
     if (session.kind !== "claude" || session.interface !== "tui") {
       throw new ServiceError("invalid", "Only a Claude TUI can be opened in web");
     }
     // A double tap, or another device doing the same, shares one switch.
-    let switching = this.restarts.get(sessionId);
-    if (!switching) {
-      this.replacing.add(sessionId);
-      switching = this.switchToWeb(sessionId).finally(() => {
-        this.restarts.delete(sessionId);
-        this.replacing.delete(sessionId);
-      });
-      this.restarts.set(sessionId, switching);
-    }
-    await switching;
+    await this.sharedSwitch(sessionId, () => this.switchToWeb(sessionId), {
+      replacing: true,
+    });
     return { id: session.id, name: session.name };
   }
 
@@ -490,8 +514,7 @@ export class Service {
 
   /** Ends the Session's shell and everything in it, then forgets the Session. */
   async deleteSession(sessionId: string): Promise<void> {
-    const session = this.store.getSession(sessionId);
-    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    const session = this.requireSession(sessionId);
     await this.endSession(session);
     this.store.deleteSession(sessionId);
     // Last: the runtime has gone and the row with it, so nothing can write here again.
@@ -563,24 +586,18 @@ export class Service {
    * of being told the Session ended. A Stopped Agent is simply started, as Restart does.
    */
   async restartAgent(sessionId: string): Promise<{ id: string; name: string }> {
-    const session = this.store.getSession(sessionId);
-    if (!session) throw new ServiceError("not_found", "Unknown Session");
-    if (session.interface !== "agent") {
-      throw new ServiceError("invalid", "Only a Claude Agent can be restarted this way");
-    }
-    let restart = this.restarts.get(sessionId);
-    if (!restart) {
-      this.replacing.add(sessionId);
-      restart = (async () => {
+    const session = this.requireAgent(
+      sessionId,
+      "Only a Claude Agent can be restarted this way",
+    );
+    await this.sharedSwitch(
+      sessionId,
+      async () => {
         await this.agents.shutdown(sessionId);
         await this.startStopped(session);
-      })().finally(() => {
-        this.restarts.delete(sessionId);
-        this.replacing.delete(sessionId);
-      });
-      this.restarts.set(sessionId, restart);
-    }
-    await restart;
+      },
+      { replacing: true },
+    );
     return { id: session.id, name: session.name };
   }
 
@@ -590,15 +607,9 @@ export class Service {
    * A Session that is already running is left alone.
    */
   async restartSession(sessionId: string): Promise<{ id: string; name: string }> {
-    const session = this.store.getSession(sessionId);
-    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    const session = this.requireSession(sessionId);
     // Two restarts of the same Session (a double click) share one start.
-    let restart = this.restarts.get(sessionId);
-    if (!restart) {
-      restart = this.startStopped(session).finally(() => this.restarts.delete(sessionId));
-      this.restarts.set(sessionId, restart);
-    }
-    await restart;
+    await this.sharedSwitch(sessionId, () => this.startStopped(session));
     return { id: session.id, name: session.name };
   }
 
@@ -671,9 +682,7 @@ export class Service {
 
   /** The Agent's folder, or the error that says the Session is not a Claude Agent. */
   private agentFolderOf(sessionId: string): string {
-    if (this.store.getSession(sessionId)?.interface !== "agent") {
-      throw new ServiceError("not_found", "Unknown Claude Agent");
-    }
+    this.requireAgent(sessionId);
     return this.agents.folder(sessionId);
   }
 
@@ -686,7 +695,7 @@ export class Service {
       if (error instanceof ImageError) throw new ServiceError("invalid", error.message);
       // The Agent's folder went with its Session, between the check and the write.
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        throw new ServiceError("not_found", "Unknown Claude Agent");
+        throw unknownAgent();
       }
       throw error;
     }
@@ -707,11 +716,7 @@ export class Service {
    * relative paths, git-ignored files left out, capped (`searchFiles`).
    */
   async searchAgentFiles(sessionId: string, query: string): Promise<string[]> {
-    const session = this.store.getSession(sessionId);
-    if (session?.interface !== "agent") {
-      throw new ServiceError("not_found", "Unknown Claude Agent");
-    }
-    return searchFiles(session.folder, query);
+    return searchFiles(this.requireAgent(sessionId).folder, query);
   }
 
   /** Whether the Session is a Claude Agent, running or not. */
