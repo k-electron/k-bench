@@ -44,6 +44,9 @@ const args = parseRuntimeArgs(process.argv.slice(2));
 const buildId = runtimeBuildId(readFileSync(fileURLToPath(import.meta.url)));
 const log = new AgentLog(agentLogFile(args.agentDir));
 
+/** How long the runtime waits for Claude Code to close before it exits anyway. */
+const CLAUDE_CLOSE_WAIT_MS = 2_000;
+
 let claudeVersion = "unknown";
 let finishing = false;
 /** How full Claude Code's context was when last asked (at the start and after each turn). */
@@ -289,6 +292,12 @@ async function finish(
     // Same.
   }
   claude.close();
+  // The runtime's own exit ends its tmux session, which kills whatever still runs in it:
+  // Claude Code is given a moment to close by itself first.
+  await Promise.race([
+    claude.exited,
+    new Promise((resolve) => setTimeout(resolve, CLAUDE_CLOSE_WAIT_MS)),
+  ]);
   await hub.close();
   process.exit(code);
 }

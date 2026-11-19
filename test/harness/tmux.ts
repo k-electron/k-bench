@@ -30,6 +30,18 @@ export function killTmuxServer(socket: string): void {
   tmux(socket, "kill-server");
 }
 
+/**
+ * Ends a Session's tmux session, as its program exiting does, and holds the tmux server up
+ * afterwards. tmux exits with its last session, but not at once: for a moment it is alive with
+ * no sessions, which is when a command naming a session that has just ended answers "no
+ * current target" instead of "no server running". A real server is only in that moment
+ * briefly, so this keeps it there for as long as a test needs.
+ */
+export function endSessionLeavingEmptyServer(socket: string, sessionId: string): void {
+  tmux(socket, "set-option", "-s", "exit-empty", "off");
+  tmux(socket, "kill-session", "-t", `=kb-${sessionId}`);
+}
+
 /** Starts a tmux session named `name` on the socket, with no store record anywhere. */
 export function plantTmuxSession(socket: string, name: string): void {
   tmux(socket, "new-session", "-d", "-s", name);
