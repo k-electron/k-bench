@@ -193,7 +193,7 @@ async function command(message: AgentClientMessage): Promise<void> {
   } else if (message.type === "interrupt") {
     claude.interrupt();
   } else if (message.type === "answer") {
-    asks.answer(message.requestId, message.decision);
+    asks.answer(message.requestId, message);
   } else if (message.type === "set_permission_mode") {
     try {
       await claude.setPermissionMode(message.mode);

@@ -173,6 +173,95 @@ describe("a Claude Agent's permission asks", () => {
     expect(JSON.stringify(response)).not.toContain("bypassPermissions");
   });
 
+  it("saves Claude Code's own suggested rules for 'don't ask again' (and only if it offered them), and tells Claude why on a denial", async () => {
+    const { instance, server, workspace } = await boot();
+    const { fakeClaude } = instance;
+    const session = await server.createClaudeAgent(workspace.id);
+    const client = await server.openAgent(session.id);
+    await client.sync();
+    const suggestion = {
+      type: "addRules",
+      rules: [{ toolName: "Bash", ruleContent: "ls:*" }],
+      behavior: "allow",
+      destination: "localSettings",
+    };
+    fakeClaude.script([
+      {
+        tool: { name: "Bash", input: { command: "ls" } },
+        ask: { suggestions: [suggestion] },
+      },
+      { text: "listed" },
+    ]);
+    fakeClaude.script([
+      { tool: { name: "Bash", input: { command: "make" } }, ask: true },
+      { text: "ok" },
+    ]);
+    fakeClaude.script([
+      { tool: { name: "Bash", input: { command: "rm x" } }, ask: true },
+      { text: "will do it another way" },
+    ]);
+
+    client.prompt("list");
+    const first = await client.waitForAsk();
+    // The client can ask for the choice, but what is saved is what Claude Code suggested.
+    client.sendRaw(
+      JSON.stringify({
+        type: "answer",
+        requestId: first.requestId,
+        decision: "allow",
+        alwaysAllow: true,
+        updatedPermissions: [{ type: "setMode", mode: "bypassPermissions" }],
+      }),
+    );
+    await client.waitForEntry(isResult, "the first turn's result");
+
+    // Claude Code offered nothing to save for this one: "don't ask again" is a plain Yes.
+    client.prompt("build");
+    const second = await pollUntil(() => client.openAsks[0], {
+      description: "the second ask",
+    });
+    client.answer(second.requestId, { decision: "allow", alwaysAllow: true });
+    await pollUntil(() => client.entries.filter(isResult).length === 2, {
+      description: "the second turn's result",
+    });
+
+    client.prompt("remove");
+    const third = await pollUntil(() => client.openAsks[0], {
+      description: "the third ask",
+    });
+    client.answer(third.requestId, {
+      decision: "deny",
+      message: "use trash instead of rm",
+    });
+    await pollUntil(() => client.entries.filter(isResult).length === 3, {
+      description: "the third turn's result",
+    });
+
+    const responses = fakeClaude
+      .received()
+      .flatMap((entry) =>
+        entry.kind === "control_response" ? [entry.message.response.response] : [],
+      );
+    expect(responses[0]).toMatchObject({
+      behavior: "allow",
+      updatedPermissions: [suggestion],
+    });
+    expect(JSON.stringify(responses[0])).not.toContain("bypassPermissions");
+    expect(responses[1]).not.toHaveProperty("updatedPermissions");
+    expect(responses[2]).toMatchObject({ behavior: "deny" });
+    expect((responses[2] as { message: string }).message).toContain(
+      "use trash instead of rm",
+    );
+    // The log says what was done: the saved rule only where it was saved.
+    expect(
+      [first, second, third].map((ask) => answersTo(client, ask.requestId)[0]?.answer),
+    ).toEqual([
+      { decision: "allow", alwaysAllow: true },
+      { decision: "allow" },
+      { decision: "deny", message: "use trash instead of rm" },
+    ]);
+  });
+
   it("closes an ask nobody can answer any more when the Agent comes back after its host went down", async () => {
     const { instance, server, workspace } = await boot();
     const session = await server.createClaudeAgent(workspace.id);
