@@ -263,6 +263,18 @@ export function isPermissionMode(value: unknown): value is PermissionMode {
   return PERMISSION_MODES.includes(value as PermissionMode);
 }
 
+/**
+ * A subagent or a background task Claude Code is running now (ticket #149). `id` is Claude
+ * Code's `task_id`: what `stop_task` names, and what the Transcript's lines for it carry.
+ */
+export interface AgentTask {
+  id: string;
+  /** `subagent`: an agent Claude launched. `background`: a shell command, monitor or other background work. */
+  kind: "subagent" | "background";
+  /** What it is for, as Claude Code described it ("Survey the tests", a command). */
+  description: string;
+}
+
 /** What the Agent is doing, pushed to every connection whenever it changes (and on connect). */
 export interface AgentStatus {
   type: "status";
@@ -296,6 +308,12 @@ export interface AgentStatus {
    * Code that cannot (an older one).
    */
   context?: AgentContextUsage;
+  /**
+   * The subagents and background tasks running now, in the order they started; absent when
+   * there are none. They outlive turns, so an Idle Agent can have some. This is what Open in
+   * terminal lists as "what would stop" (#155).
+   */
+  tasks?: AgentTask[];
 }
 
 /**
@@ -457,6 +475,13 @@ export type AgentClientMessage =
    */
   | { type: "interrupt" }
   /**
+   * Stops one subagent or background task, by Claude Code's `task_id`, and nothing else: the
+   * turn and the other tasks go on (an interrupt does not stop tasks either). What came of it
+   * is Claude Code's `task_notification` and the next `status`; a task that is not running is
+   * not an error.
+   */
+  | { type: "stop_task"; taskId: string }
+  /**
    * Says whether this connection's page shows the Agent in a Pane right now: the page is
    * visible (not a background tab, not a locked phone) and the Pane is open. Sent when the
    * connection opens and whenever it changes; a connection that never says it, such as the
@@ -590,6 +615,12 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         : undefined;
     case "interrupt":
       return { type: "interrupt" };
+    case "stop_task":
+      return typeof message.taskId === "string" &&
+        message.taskId !== "" &&
+        message.taskId.length <= MAX_REQUEST_ID_CHARACTERS
+        ? { type: "stop_task", taskId: message.taskId }
+        : undefined;
     case "view":
       return typeof message.visible === "boolean"
         ? { type: "view", visible: message.visible }

@@ -35,6 +35,16 @@ export interface AgentState {
   claudeVersion?: string;
   /** Which build of the Agent Runtime is running (the SHA-256 of its file). */
   runtimeBuildId?: string;
+  /**
+   * The subagents and background tasks running now, as the runtime's `status.tasks` lists
+   * them (the same shape as `AgentTask` in agent-protocol.ts); absent when there are none.
+   * Open in terminal reads it to say what would stop.
+   */
+  tasks?: Array<{
+    id: string;
+    kind: "subagent" | "background";
+    description: string;
+  }>;
 }
 
 export interface SessionState {

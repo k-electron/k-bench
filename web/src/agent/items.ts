@@ -1,5 +1,6 @@
 import type { LogEntry, PermissionReply } from "../../../src/shared/agent-protocol.ts";
 import { queuedPromptIds } from "./prompts";
+import { isTaskMessage, TaskBuilder, type TaskItem, type TaskView } from "./tasks";
 import {
   contentLines,
   type DiffLine,
@@ -90,6 +91,8 @@ export interface ToolItem extends ItemBase {
   result?: ToolResultView;
   /** For an edit: the lines changed, from its input at first and Claude Code's patch once it ran. */
   diff?: DiffLine[];
+  /** For a subagent or a command run in the background: its task, shown on this line (#149). */
+  task?: TaskView;
 }
 
 /** `⎿ Interrupted`: the owner stopped Claude (the `[Request interrupted by user]` message). */
@@ -132,6 +135,7 @@ export type TranscriptItem =
   | ThinkingItem
   | ToolItem
   | InterruptedItem
+  | TaskItem
   | PermissionItem
   | UnsupportedItem
   | UncommonItem
@@ -207,6 +211,8 @@ interface BuildState {
   askTool: Map<string, string>;
   /** The tool calls the owner denied. */
   denied: Set<string>;
+  /** The subagents and background tasks (`tasks.ts`, #149). */
+  tasks: TaskBuilder;
   /** What the readers of the less common lines (`uncommon.ts`) carry. */
   uncommon: UncommonState;
 }
@@ -310,13 +316,22 @@ function readSdkMessage(
   // What k-bench does not know shows wherever it came from, a subagent's included.
   const unsupported = unsupportedInMessage(message);
   addUnsupported(state, entry.seq, `${entry.seq}-unsupported`, unsupported);
-  // A subagent's messages (#149 shows them) are not the conversation's own.
+  // A subagent's own messages are not the conversation's: its task line (#149) shows how it goes.
   if (message.parent_tool_use_id != null) return;
   // The less common messages (#148) have their own reader; it says whether it handled one.
   if (readUncommonMessage(state, entry)) return;
   switch (message.type) {
     case "system":
-      if (message.subtype === "init") {
+      if (isTaskMessage(message)) {
+        state.tasks.read(entry, {
+          attach(toolUseId, task) {
+            const open = state.tools.get(toolUseId);
+            if (open) open.item.task = task;
+            return open !== undefined;
+          },
+          add: (item) => state.items.push(item),
+        });
+      } else if (message.subtype === "init") {
         if (typeof message.model === "string") state.model = message.model;
         if (typeof message.cwd === "string") state.cwd = message.cwd;
         // Claude Code says which commands only work in a terminal: one just typed is Unsupported.
@@ -431,11 +446,11 @@ function readSdkMessage(
     }
     case "result":
       interruptRunningTools(state);
+      state.tasks.turnEnded();
       return;
     default:
       // Everything else that Claude Code sends and k-bench knows shows nothing yet: the later
-      // tickets (#149, #152) each give their kinds a line. What it does not know is an
-      // Unsupported row (above).
+      // tickets (#152) give theirs a line. What it does not know is an Unsupported row (above).
       return;
   }
 }
@@ -461,6 +476,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     queued: queuedPromptIds(entries),
     askTool: new Map(),
     denied: new Set(),
+    tasks: new TaskBuilder(),
     uncommon: newUncommonState(),
   };
   for (const entry of entries) {
@@ -505,6 +521,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
       case "runtime":
         // A runtime that starts or ends leaves no tool running: Claude Code died with it.
         interruptRunningTools(state);
+        state.tasks.runtimeChanged();
         break;
     }
   }

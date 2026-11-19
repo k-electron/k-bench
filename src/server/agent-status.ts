@@ -67,6 +67,7 @@ export class AgentStatuses {
       ...(status.turnStartedAt === undefined
         ? {}
         : { turnStartedAt: status.turnStartedAt }),
+      ...(status.tasks === undefined ? {} : { tasks: status.tasks }),
       ...(hello ? { claudeVersion: hello.claudeVersion } : {}),
       ...(hello ? { runtimeBuildId: hello.runtimeBuildId } : {}),
     };
