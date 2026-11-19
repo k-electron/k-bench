@@ -21,8 +21,10 @@ import { MAX_PROMPT_IMAGES, STORED_IMAGE_NAME } from "./agent-images.ts";
 export const AGENT_PROTOCOL_VERSION = 1;
 
 /**
- * The agent socket was closed because the Session ended (deleted, Stopped, or never was a
- * Claude Agent): reconnecting is pointless. The same code as the terminal socket's.
+ * The agent socket was closed because the Session ended (deleted, or never was a Claude
+ * Agent), or because the runtime it relayed to went away and the Agent is now Stopped:
+ * reconnecting is pointless (a Stopped Agent is read on a new socket, which the server serves
+ * itself, see `AgentStopped`). The same code as the terminal socket's.
  */
 export const CLOSE_AGENT_SESSION_ENDED = 4410;
 
@@ -419,8 +421,21 @@ export interface AgentError {
   message: string;
 }
 
+/**
+ * Sent by the server itself, never by a runtime, to a connection to an Agent that is Stopped:
+ * the log is served read-only from disk (a `sync` is answered with a `replay`, a `page` with a
+ * `page`, and then this), and nothing else is. `reason` is in plain words for the owner: what
+ * the runtime recorded on its way out, or why it left no record. The connection stays open, so
+ * the Transcript can be paged back, and nothing more arrives on it.
+ */
+export interface AgentStopped {
+  type: "stopped";
+  reason: string;
+}
+
 export type AgentServerMessage =
   | AgentHello
+  | AgentStopped
   | AgentStatus
   | AgentReplay
   | AgentPage
@@ -684,6 +699,7 @@ export function encodeAgentServerMessage(message: AgentServerMessage): string {
 
 const SERVER_TYPES: readonly string[] = [
   "hello",
+  "stopped",
   "status",
   "replay",
   "page",

@@ -69,6 +69,15 @@ export class Service {
     await this.reconciler.reconcile();
   }
 
+  /**
+   * Deletes the Agent folders whose Session is gone. Only at startup, after `reconcile` has
+   * ended the runtimes of such Sessions: a folder is made before its row, so on a running
+   * server this could take the folder of an Agent being created.
+   */
+  removeStrayAgentFolders(): void {
+    this.agents.removeStrayFolders((id) => this.store.getSession(id) !== undefined);
+  }
+
   createWorkspace(input: { name?: string; folder: string }) {
     const folder = resolve(input.folder);
     if (!isDirectory(folder)) {
@@ -335,6 +344,22 @@ export class Service {
     return { id: sessionId, name };
   }
 
+  /**
+   * Stops a Claude Agent: its runtime is told to shut down (it interrupts the turn, closes
+   * any open ask as not answered, finishes the log), and killed if it does not. The Session
+   * stays, Stopped, with its Transcript readable and Restart to carry on. Stopping one that
+   * is already Stopped does nothing.
+   */
+  async stopSession(sessionId: string): Promise<{ id: string; name: string }> {
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    if (session.interface !== "agent") {
+      throw new ServiceError("invalid", "Only a Claude Agent can be stopped");
+    }
+    await this.agents.shutdown(sessionId);
+    return { id: session.id, name: session.name };
+  }
+
   /** Ends the Session's shell and everything in it, then forgets the Session. */
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.store.getSession(sessionId);
@@ -520,6 +545,11 @@ export class Service {
       throw new ServiceError("not_found", "Unknown Claude Agent");
     }
     return searchFiles(session.folder, query);
+  }
+
+  /** Whether the Session is a Claude Agent, running or not. */
+  isAgent(sessionId: string): boolean {
+    return this.store.getSession(sessionId)?.interface === "agent";
   }
 
   /** Whether the agent WebSocket has a runtime to relay to: a known Claude Agent that is running. */

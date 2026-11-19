@@ -35,6 +35,8 @@ export interface Actions {
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   restartSession(sessionId: string): Promise<void>;
+  /** Stops a Claude Agent (the Session stays, Stopped). */
+  stopSession(sessionId: string): Promise<void>;
 }
 
 /**
@@ -112,6 +114,9 @@ export function useAppState(): {
       deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {
         await reporting(() => act(api.restartSession(sessionId)));
+      },
+      stopSession: async (sessionId) => {
+        await reporting(() => act(api.stopSession(sessionId)));
       },
     };
   }, []);

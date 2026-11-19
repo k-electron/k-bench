@@ -208,6 +208,9 @@ export function createApp(
     await service.deleteSession(c.req.param("id"));
     return c.body(null, 204);
   });
+  app.post("/api/sessions/:id/stop", async (c) =>
+    c.json(await service.stopSession(c.req.param("id"))),
+  );
   app.post("/api/sessions/:id/restart", async (c) =>
     c.json(await service.restartSession(c.req.param("id"))),
   );

@@ -131,6 +131,9 @@ export const api = {
         `/api/sessions/${sessionId}/files?q=${encodeURIComponent(query)}`,
       )
     ).files,
+  /** Stops a Claude Agent: the Session stays, Stopped. */
+  stopSession: (sessionId: string) =>
+    send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/stop`, {}),
   /** The running list of unsupported kinds (#154), latest first. */
   unsupportedList: async () =>
     (await get<{ entries: UnsupportedListEntry[] }>("/api/unsupported")).entries,

@@ -1,4 +1,8 @@
-import type { LogEntry, PermissionReply } from "../../../src/shared/agent-protocol.ts";
+import {
+  type LogEntry,
+  openPermissionAsks,
+  type PermissionReply,
+} from "../../../src/shared/agent-protocol.ts";
 import {
   ASK_USER_QUESTION,
   EXIT_PLAN_MODE,
@@ -223,22 +227,36 @@ interface BuildState {
   askTool: Map<string, { toolUseId: string; toolName: string }>;
   /** The tool calls the owner denied. */
   denied: Set<string>;
+  /** The tool calls whose ask nobody answered: the Agent stopped while it was open. */
+  unanswered: Set<string>;
   /** The subagents and background tasks (`tasks.ts`, #149). */
   tasks: TaskBuilder;
   /** What the readers of the less common lines (`uncommon.ts`) carry. */
   uncommon: UncommonState;
 }
 
+/** What a tool call whose ask was open when the Agent stopped says, so it never reads as approved. */
+const NOT_ANSWERED = "Not answered, the Agent stopped";
+
 /**
- * Tool calls still without a result when their turn ends, or the runtime does, never got one:
- * they are red, with no result line of their own (the `Interrupted` line that follows an
- * interrupt says it once).
+ * Ends a tool call that never got a result: red. Most say nothing more (the `Interrupted`
+ * line that follows an interrupt says it once), but one whose ask was still open says that
+ * no one answered it.
+ */
+function interruptTool(state: BuildState, item: ToolItem): void {
+  item.status = "interrupted";
+  if (state.unanswered.has(item.toolUseId)) {
+    item.result = { summary: NOT_ANSWERED, lines: [] };
+  }
+}
+
+/**
+ * Tool calls still without a result when their turn ends, or the runtime does, never got one
+ * (see `interruptTool`).
  */
 function interruptRunningTools(state: BuildState): void {
   for (const { item } of state.tools.values()) {
-    if (item.status === "running") {
-      item.status = "interrupted";
-    }
+    if (item.status === "running") interruptTool(state, item);
   }
 }
 
@@ -285,7 +303,7 @@ function resolveTool(
     item.status = "denied";
     item.result = { summary: "Denied", lines: [] };
   } else if ((lines[0] ?? "").startsWith("[Request interrupted by user")) {
-    item.status = "interrupted";
+    interruptTool(state, item);
   } else {
     item.status = "failed";
     item.result = { lines };
@@ -509,7 +527,15 @@ function permissionLine(
  * The items of the entries, in order. Pure and complete: it reads every entry each time, so
  * a fix here changes how the whole history reads on the next load, as ADR-0008 wants.
  */
-export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
+export function buildItems(
+  entries: readonly LogEntry[],
+  /**
+   * The log is over: the Agent is Stopped (the server said so), so whatever the entries leave
+   * open never will be. A runtime that was killed writes no closing entries, and its last
+   * tool call would otherwise spin for ever and its last ask read as open.
+   */
+  options: { stopped?: boolean } = {},
+): BuiltTranscript {
   const state: BuildState = {
     items: [],
     focusView: false,
@@ -518,6 +544,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     queued: queuedPromptIds(entries),
     askTool: new Map(),
     denied: new Set(),
+    unanswered: new Set(),
     tasks: new TaskBuilder(),
     uncommon: newUncommonState(),
   };
@@ -547,6 +574,9 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
         const asked = state.askTool.get(entry.requestId);
         const { answer } = entry;
         if (asked && answer.decision === "deny") state.denied.add(asked.toolUseId);
+        if (asked && answer.decision === "interrupted") {
+          state.unanswered.add(asked.toolUseId);
+        }
         if (answer.decision === "allow" || answer.decision === "deny") {
           state.items.push({
             kind: "permission",
@@ -569,6 +599,11 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
         state.tasks.runtimeChanged();
         break;
     }
+  }
+  if (options.stopped) {
+    for (const ask of openPermissionAsks(entries)) state.unanswered.add(ask.toolUseId);
+    interruptRunningTools(state);
+    state.tasks.runtimeChanged();
   }
   return {
     items: state.items,
