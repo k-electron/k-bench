@@ -58,6 +58,8 @@ A Claude Agent test drives a real k-bench server, which starts the **real Agent 
 2. `node scripts/record-fake-claude.ts fixtures <out-dir>` picks the example of each kind, replaces what identifies the recorder (the account becomes `you@example.com`, folders become `/home/you/...`, plugins, skills, MCP servers, agents and the recorder's own slash commands are emptied, signatures and rate-limit figures are made up) and rewrites `messages.json`. It refuses to write if the user name, home folder or `<out-dir>` is still in the output.
 3. Read the diff of `messages.json` for anything personal, run `pnpm exec vitest run test/fake-claude-sdk.test.ts` and the tests that use the fake, and commit it with the SDK version it was recorded through.
 
+The less common messages of the Transcript (#148) are scripted with the `raw` and `system` steps. `test/harness/fixtures/uncommon-messages.json` holds the frames recorded by the live check by hand, redacted: the advisor's consultation (encrypted advice) and a hook's response. Compaction, errors, retries, notices, MCP and `TodoWrite` have no recording yet and are shaped from the SDK's types; the next re-recording should add them (a compaction, a usage limit and a `TodoWrite` turn) and replace those.
+
 ## Seam 2: the browser (Playwright)
 
 Specs live in `e2e/`.
