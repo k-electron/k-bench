@@ -1,4 +1,5 @@
 import {
+  AGENT_PROTOCOL_VERSION,
   type AgentClientMessage,
   type AgentServerMessage,
   agentPath,
@@ -124,6 +125,8 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
   let reconnecting = false;
   let closed = false;
   let ended = false;
+  // False while the runtime on the socket speaks another protocol number than this browser.
+  let compatible = true;
   // Frames sent while the first socket is still opening are kept, not dropped, and sent after
   // the sync.
   const queued: string[] = [];
@@ -136,6 +139,7 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
 
   const connect = () => {
     clearTimeout(retry);
+    compatible = true;
     const ws = openSocket(agentPath(sessionId));
     socket = ws;
     ws.onopen = () => {
@@ -161,6 +165,13 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
       if (typeof event.data !== "string" || socket !== ws) return;
       const message = decodeAgentServerMessage(event.data);
       if (!message) return;
+      // Every socket opens with the hello. A runtime that speaks another protocol number
+      // means something else by its messages: only its hello is passed on, so the Pane can
+      // offer Restart, and `lastSeq` stays where it was, so the runtime that replaces it is
+      // read from the start.
+      if (message.type === "hello")
+        compatible = message.protocol === AGENT_PROTOCOL_VERSION;
+      else if (!compatible) return;
       if (message.type === "replay") {
         lastSeq = message.entries.at(-1)?.seq ?? lastSeq;
       } else if (message.type === "entry") {
@@ -203,7 +214,7 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
 
   return {
     send(message) {
-      if (reconnecting || ended) return false;
+      if (reconnecting || ended || !compatible) return false;
       const text = encodeAgentClientMessage(message);
       if (socket?.readyState === OPEN) socket.send(text);
       else if (socket?.readyState === CONNECTING) queued.push(text);

@@ -152,4 +152,11 @@ export const api = {
     send<void>("DELETE", `/api/unsupported/${encodeURIComponent(kind)}`),
   restartSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
+  /** Restarts a running Claude Agent on the runtime installed now; its conversation carries on. */
+  restartAgent: (sessionId: string) =>
+    send<{ id: string; name: string }>(
+      "POST",
+      `/api/sessions/${sessionId}/agent/restart`,
+      {},
+    ),
 };

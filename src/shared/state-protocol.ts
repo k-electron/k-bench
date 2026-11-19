@@ -36,6 +36,13 @@ export interface AgentState {
   /** Which build of the Agent Runtime is running (the SHA-256 of its file). */
   runtimeBuildId?: string;
   /**
+   * True when k-bench has been updated to a build of the Agent Runtime other than the one
+   * this Agent runs (their build IDs differ). The Agent keeps working as it is; restarting it
+   * onto the new build is the owner's call. Absent otherwise: an update that left the runtime
+   * unchanged shows nothing.
+   */
+  updateAvailable?: boolean;
+  /**
    * The subagents and background tasks running now, as the runtime's `status.tasks` lists
    * them (the same shape as `AgentTask` in agent-protocol.ts); absent when there are none.
    * Open in terminal reads it to say what would stop.

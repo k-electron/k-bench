@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
+  AGENT_PROTOCOL_VERSION,
   type AgentCommand,
   type AgentContextUsage,
   type AgentHello,
@@ -81,6 +82,13 @@ export interface AgentConversation {
   cycleMode(): boolean;
   /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
   ended: boolean;
+  /**
+   * The runtime's hello names a protocol number this browser does not speak (an Agent started
+   * before a k-bench update that changed it). The connection passes on nothing else from it
+   * and sends nothing to it; the Pane offers Restart, which resumes the conversation on the
+   * runtime installed now.
+   */
+  incompatible: boolean;
   /**
    * Why the Agent is Stopped, when this is the read-only Transcript of one that is (served
    * from its log on disk): the Pane shows it with Restart where the input was. Undefined for
@@ -328,6 +336,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     mode,
     cycleMode,
     ended,
+    incompatible: hello !== undefined && hello.protocol !== AGENT_PROTOCOL_VERSION,
     stoppedReason,
     reconnecting: model.reconnecting,
     earliestSeq: model.transcript.earliestSeq,

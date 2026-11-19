@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { connect, type Socket } from "node:net";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { readExitRecord } from "../agent/exit.ts";
 import { LineSplitter } from "../agent/lines.ts";
 import { AgentLogReader } from "../agent/log.ts";
@@ -43,6 +43,8 @@ const START_TIMEOUT_MS = 20_000;
 /** How long `shutdown` waits for a runtime to exit by itself before its tmux session is killed. */
 const SHUTDOWN_WAIT_MS = 4_000;
 const RETRY_MS = 50;
+/** What a runtime build's folder is named: its SHA-256, in hex (`runtimeBuildId`). */
+const BUILD_ID = /^[0-9a-f]{64}$/;
 
 /** An Agent Runtime could not be started or did not come up. The message says why. */
 export class AgentStartError extends Error {}
@@ -106,6 +108,29 @@ export class AgentRuntimes {
       console.warn(`Claude Agents are unavailable: ${this.problem}`);
     }
     return this.installed;
+  }
+
+  /**
+   * Deletes the installed runtime builds that are neither the current one nor in `inUse`, the
+   * builds running Agents were started from (ADR-0007: a folder is kept until no running
+   * runtime uses it). A runtime has read its file when it started, so a folder could be removed
+   * earlier; keeping it until its last Agent is gone is the rule, and it is what lets a
+   * running Agent be inspected, or a failed Restart tried again, on the build it runs.
+   * Anything under the runtimes folder that is not a build's folder is left alone.
+   */
+  pruneRuntimes(inUse: ReadonlySet<string>): void {
+    let names: string[];
+    try {
+      names = readdirSync(runtimesRoot(this.dataDir));
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (!BUILD_ID.test(name) || name === this.installed?.buildId || inUse.has(name)) {
+        continue;
+      }
+      rmSync(join(runtimesRoot(this.dataDir), name), { recursive: true, force: true });
+    }
   }
 
   /** The runtime a new Agent would start, or undefined when none could be installed. */

@@ -17,7 +17,7 @@ import {
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
 import { AgentClient } from "./agent.ts";
-import { HARNESS_RUNTIME_FILE } from "./agent-runtime.ts";
+import { HARNESS_RUNTIME_FILE, writeRuntimeVariant } from "./agent-runtime.ts";
 import { EventsClient } from "./events.ts";
 import { FakeClaude, installFakeClaude } from "./fake-claude.ts";
 import { testSocketName, tmuxSocketDir } from "./socket-leaks.ts";
@@ -380,6 +380,15 @@ export class TestInstance {
     const folder = join(this.root, name);
     mkdirSync(folder, { recursive: true });
     return folder;
+  }
+
+  /**
+   * Another build of the Agent Runtime for `start({ agentRuntimeFile })`: the same code under
+   * a build ID of its own, or with `protocol`, speaking another protocol number. Kept in a
+   * hidden folder, which the folder picker does not list. The same `label` gives the same file.
+   */
+  runtimeVariant(label: string, options: { protocol?: number } = {}): string {
+    return writeRuntimeVariant(join(this.root, ".runtimes"), label, options);
   }
 
   /** Kills this instance's tmux server and removes the socket file tmux leaves behind. */

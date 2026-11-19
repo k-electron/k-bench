@@ -214,6 +214,11 @@ export function createApp(
   app.post("/api/sessions/:id/restart", async (c) =>
     c.json(await service.restartSession(c.req.param("id"))),
   );
+  // A running Agent, moved to the runtime build installed now (an update, or a protocol this
+  // k-bench does not speak): its conversation carries on.
+  app.post("/api/sessions/:id/agent/restart", async (c) =>
+    c.json(await service.restartAgent(c.req.param("id"))),
+  );
 
   // Last, so it only answers what the API did not.
   if (options.webDir) mountStatic(app, options.webDir);

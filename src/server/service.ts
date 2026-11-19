@@ -50,6 +50,8 @@ export class Service {
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
+  /** The Agents `restartAgent` is moving to a new runtime: running, as far as Panes know. */
+  private readonly replacing = new Set<string>();
 
   constructor(
     store: Store,
@@ -377,15 +379,17 @@ export class Service {
       sessions: this.store.listSessions(workspace.id),
     }));
     // A Claude Agent that runs is watched, so what it is doing can be reported below.
-    this.statuses.follow(
-      new Set(
-        workspaces.flatMap((workspace) =>
-          workspace.sessions
-            .filter((session) => session.interface === "agent" && live.has(session.id))
-            .map((session) => session.id),
-        ),
+    const running = new Set(
+      workspaces.flatMap((workspace) =>
+        workspace.sessions
+          .filter((session) => session.interface === "agent" && live.has(session.id))
+          .map((session) => session.id),
       ),
     );
+    this.statuses.follow(running);
+    // A runtime build's folder goes once no running Agent has been heard to use it.
+    const builds = this.statuses.buildsInUse(running);
+    if (builds) this.agents.pruneRuntimes(builds);
     return {
       workspaces: workspaces.map((workspace) => ({
         ...workspace,
@@ -420,6 +424,38 @@ export class Service {
   async watchAgents(): Promise<void> {
     await this.getState();
     await this.statuses.settled(3_000);
+    // Each Agent has now said which runtime build it runs: old builds nothing runs go.
+    await this.getState();
+  }
+
+  /**
+   * Restarts a running Claude Agent on the runtime build installed now, carrying on its
+   * conversation: how an Agent moves to a new k-bench's runtime, or past a runtime whose
+   * protocol this k-bench does not speak. The owner's call, never automatic. Like Stop it
+   * interrupts a turn that is running. The Agent's Panes stay connected through it: until it
+   * is up again the Agent still counts as running, so they wait for the new runtime instead
+   * of being told the Session ended. A Stopped Agent is simply started, as Restart does.
+   */
+  async restartAgent(sessionId: string): Promise<{ id: string; name: string }> {
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    if (session.interface !== "agent") {
+      throw new ServiceError("invalid", "Only a Claude Agent can be restarted this way");
+    }
+    let restart = this.restarts.get(sessionId);
+    if (!restart) {
+      this.replacing.add(sessionId);
+      restart = (async () => {
+        await this.agents.shutdown(sessionId);
+        await this.startStopped(session);
+      })().finally(() => {
+        this.restarts.delete(sessionId);
+        this.replacing.delete(sessionId);
+      });
+      this.restarts.set(sessionId, restart);
+    }
+    await restart;
+    return { id: session.id, name: session.name };
   }
 
   /**
@@ -555,6 +591,6 @@ export class Service {
   /** Whether the agent WebSocket has a runtime to relay to: a known Claude Agent that is running. */
   async hasRunningAgent(sessionId: string): Promise<boolean> {
     if (this.store.getSession(sessionId)?.interface !== "agent") return false;
-    return this.agents.isRunning(sessionId);
+    return this.replacing.has(sessionId) || this.agents.isRunning(sessionId);
   }
 }
