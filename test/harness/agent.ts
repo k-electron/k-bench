@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import {
   type AgentClientMessage,
   type AgentHello,
+  type AgentPage,
   type AgentServerMessage,
   type AgentSnapshot,
   type AgentStatus,
@@ -12,6 +13,7 @@ import {
   type LogEntry,
   openPermissionAsks,
   type PermissionAskEntry,
+  type PermissionMode,
 } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
@@ -90,6 +92,14 @@ export class AgentClient {
     return this.messages.filter((m): m is AgentSnapshot => m.type === "snapshot");
   }
 
+  /** The permission mode the newest `status` named: what a Pane's mode line shows. */
+  get mode(): PermissionMode | undefined {
+    for (const message of this.messages.toReversed()) {
+      if (message.type === "status" && message.mode !== undefined) return message.mode;
+    }
+    return undefined;
+  }
+
   /** The `seq` of the newest entry received: what a reconnecting client syncs from. */
   get lastSeq(): number {
     return this.entries.at(-1)?.seq ?? 0;
@@ -118,14 +128,41 @@ export class AgentClient {
    * Asks for the entries after `afterSeq`, and every entry and fragment from now on, and
    * resolves once the replay has come: from then on this connection is in the live set.
    * (Fragments are never replayed: send a prompt from another connection before that and
-   * this one gets the text so far as a snapshot, not the fragments one by one.)
+   * this one gets the text so far as a snapshot, not the fragments one by one.) With
+   * `tailTurns` (and `afterSeq` 0) only the latest turns are replayed, as a fresh page asks;
+   * `replayFrom` says where they begin, and `page` fetches what is before.
    */
-  async sync(afterSeq = 0): Promise<void> {
+  async sync(afterSeq = 0, options: { tailTurns?: number } = {}): Promise<void> {
     const before = this.messages.filter((m) => m.type === "replay").length;
-    this.send({ type: "sync", afterSeq });
+    this.send({
+      type: "sync",
+      afterSeq,
+      ...(options.tailTurns === undefined ? {} : { tailTurns: options.tailTurns }),
+    });
     await pollUntil(
       () => this.messages.filter((m) => m.type === "replay").length > before,
       { description: "the replay" },
+    );
+  }
+
+  /** Where the first replay's contiguous range begins (1: the whole log), once it has come. */
+  get replayFrom(): number | undefined {
+    const replay = this.messages.find((m) => m.type === "replay");
+    return replay?.type === "replay" ? replay.from : undefined;
+  }
+
+  /**
+   * Asks for the `limit` turns before `beforeSeq` and resolves with the answer. Pages are not
+   * among `entries`, which are what a replay and the live feed gave.
+   */
+  async page(beforeSeq: number, limit: number): Promise<AgentPage> {
+    this.send({ type: "page", beforeSeq, limit });
+    return pollUntil(
+      () =>
+        this.messages.find(
+          (m): m is AgentPage => m.type === "page" && m.beforeSeq === beforeSeq,
+        ),
+      { description: `the page before ${beforeSeq}` },
     );
   }
 
@@ -139,9 +176,19 @@ export class AgentClient {
     return pollUntil(() => this.openAsks[0], { description: "a permission ask" });
   }
 
+  /** Asks for a permission mode, as the mode line's tap or Shift+Tab does. */
+  setPermissionMode(mode: PermissionMode): void {
+    this.send({ type: "set_permission_mode", mode });
+  }
+
   /** Answers an ask as a Pane's Allow or Deny button does. */
   answer(requestId: string, decision: "allow" | "deny"): void {
     this.send({ type: "answer", requestId, decision });
+  }
+
+  /** Interrupts the turn that is running, as a Pane's Interrupt button or Esc does. */
+  interrupt(): void {
+    this.send({ type: "interrupt" });
   }
 
   /** Sends a prompt and returns the ID it was sent with. */

@@ -2,6 +2,7 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { Store } from "../src/server/store.ts";
+import { AgentClient } from "../test/harness/agent.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
 import { pollUntil } from "../test/harness/poll.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
@@ -125,9 +126,35 @@ export class AppPage {
     await this.sessionMenu(sessionName, "Open in other pane");
   }
 
-  /** The running/Stopped indicator beside a Session in the sidebar. */
-  sessionStatus(name: string, status: "running" | "stopped"): Locator {
+  /**
+   * The state dot beside a Session in the sidebar: running or stopped, or, for a Claude Agent
+   * whose state is known, idle, working or waiting for you.
+   */
+  sessionStatus(
+    name: string,
+    status: "running" | "stopped" | "idle" | "working" | "waiting for you",
+  ): Locator {
     return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+  }
+
+  /**
+   * What a Session's row shows along its left edge, as the browser computes it: "none" for no
+   * edge. Which colour an edge is, is for the eye; this lets a test tell edges apart.
+   */
+  async rowEdge(sessionName: string): Promise<string> {
+    return this.sidebar
+      .getByRole("img", {
+        name: new RegExp(
+          `^${sessionName} (running|stopped|idle|working|waiting for you)$`,
+        ),
+      })
+      .evaluate((dot) => {
+        const row = dot.parentElement;
+        if (!row) throw new Error("The dot has no row");
+        return (
+          dot.ownerDocument.defaultView?.getComputedStyle(row).boxShadow ?? "unknown"
+        );
+      });
   }
 
   private sizeProbes = 0;
@@ -200,6 +227,25 @@ export class AppPage {
   workspacePulse(workspaceName: string): Locator {
     return this.sidebar.getByRole("status").and(
       this.page.getByText(`${workspaceName} has a session that needs you`, {
+        exact: true,
+      }),
+    );
+  }
+
+  /**
+   * A Claude Agent's row is pulsing orange: it is Waiting for you. Found by the status text the
+   * row carries for it, present only while it waits.
+   */
+  rowWaiting(sessionName: string): Locator {
+    return this.sidebar
+      .getByRole("status")
+      .and(this.page.getByText(`${sessionName} is waiting for you`, { exact: true }));
+  }
+
+  /** A collapsed Workspace's row is pulsing orange: a Claude Agent in it is Waiting for you. */
+  workspaceWaiting(workspaceName: string): Locator {
+    return this.sidebar.getByRole("status").and(
+      this.page.getByText(`${workspaceName} has an agent waiting for you`, {
         exact: true,
       }),
     );
@@ -361,6 +407,14 @@ export class AppPage {
     });
   }
 
+  /** The line under the named Claude Agent's input that shows its permission mode; a button that cycles it. */
+  agentModeLine(sessionName: string): Locator {
+    return this.agentRegion(sessionName).getByRole("button", {
+      name: "Permission mode",
+      exact: true,
+    });
+  }
+
   /** The Claude glyph on a Session's row; present on Claude Sessions only. */
   claudeGlyph(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {
@@ -443,6 +497,11 @@ export interface Kbench {
    * go). Works while the server is stopped too.
    */
   ringBell(sessionName: string): Promise<void>;
+  /**
+   * Opens the named Claude Agent's socket like a device would, with no browser involved, to
+   * send it prompts (a long conversation, say) while the page shows nothing of it yet.
+   */
+  openAgent(sessionName: string): Promise<AgentClient>;
 }
 
 interface Fixtures {
@@ -472,6 +531,10 @@ export const test = base.extend<Fixtures>({
           });
           typeIntoSession(socket, id, "printf '\\a'");
         },
+        openAgent: (sessionName) =>
+          AgentClient.open(server.baseUrl, sessionIdNamed(instance, sessionName), {
+            "Tailscale-User-Login": LOGIN,
+          }),
         stopServer: () => server.stop(),
         startServer: async () => {
           server = await instance.start({ webDir: WEB_DIR });

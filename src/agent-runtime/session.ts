@@ -1,5 +1,6 @@
 import {
   type CanUseTool,
+  type PermissionMode,
   type Query,
   query,
   type SDKMessage,
@@ -86,6 +87,9 @@ export class ClaudeSession {
         enableFileCheckpointing: true,
         extraArgs: { "replay-user-messages": null },
         canUseTool,
+        // The owner's own environment, plus a request that Claude Code report when a turn
+        // starts and ends (`session_state_changed`), which `Activity` believes when it comes.
+        env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1" },
         ...(conversation.resume
           ? { resume: conversation.id }
           : { sessionId: conversation.id }),
@@ -106,6 +110,18 @@ export class ClaudeSession {
   async claudeVersion(): Promise<string> {
     const init = await this.query.initializationResult();
     return init.claude_code_version ?? "unknown";
+  }
+
+  /** The mode Claude Code started in (the owner's settings decide it), from the same first reply. */
+  async permissionMode(): Promise<unknown> {
+    const init = await this.query.initializationResult();
+    // Not in the SDK's types, but in what `claude` answers; the caller checks it.
+    return (init as { current_permission_mode?: unknown }).current_permission_mode;
+  }
+
+  /** Switches Claude Code's permission mode. Rejects if Claude Code refuses. */
+  setPermissionMode(mode: PermissionMode): Promise<void> {
+    return this.query.setPermissionMode(mode);
   }
 
   /**
@@ -136,6 +152,17 @@ export class ClaudeSession {
       message: { role: "user", content: text },
       parent_tool_use_id: null,
       uuid: id as SDKUserMessage["uuid"],
+    });
+  }
+
+  /**
+   * Stops the turn that is running. Prompts waiting are left to run after it, in order (the
+   * SDK's plain interrupt does not cancel them). With nothing running it does nothing, so
+   * it is always safe to send.
+   */
+  interrupt(): void {
+    this.query.interrupt().catch(() => {
+      // Claude Code is gone or refused: `ended` reports the first, and a refusal changes nothing.
     });
   }
 

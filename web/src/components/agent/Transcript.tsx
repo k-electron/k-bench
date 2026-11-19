@@ -1,6 +1,8 @@
 import { memo } from "react";
+import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
 import { Markdown } from "./Markdown";
+import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
 import { ToolCall } from "./ToolCall";
 
 /**
@@ -12,15 +14,28 @@ import { ToolCall } from "./ToolCall";
  * below fails to compile until it has one. The glyphs are `aria-hidden`: they are the
  * terminal's way of saying what the accessible names and roles say.
  */
-export function Transcript({ items }: { items: readonly TranscriptItem[] }) {
+export function Transcript({
+  items,
+  entries,
+  rawView,
+}: {
+  items: readonly TranscriptItem[];
+  /** The log's entries, for the raw JSON of the message an item comes from (#137). */
+  entries: readonly LogEntry[];
+  rawView: RawView;
+}) {
   return (
     // `break-words` is inherited: a path or output line with no space in it wraps at the edge
     // of the screen instead of widening the page.
-    <div className="font-mono text-[13px] leading-relaxed break-words">
-      {items.map((item) => (
-        <TranscriptItemView key={item.key} item={item} />
-      ))}
-    </div>
+    <ShowRawProvider value={rawView.show}>
+      <div className="font-mono text-[13px] leading-relaxed break-words">
+        {items.map((item) => (
+          <RawMessage key={item.key} seq={item.seq} entries={entries} rawView={rawView}>
+            <TranscriptItemView item={item} />
+          </RawMessage>
+        ))}
+      </div>
+    </ShowRawProvider>
   );
 }
 
@@ -46,7 +61,10 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           className="my-2 flex gap-2 rounded bg-white/[0.07] px-2 py-1"
         >
           <Gutter className="text-muted-foreground">&gt;</Gutter>
-          <span className="min-w-0 break-words whitespace-pre-wrap">{item.text}</span>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            {item.text}
+            {item.queued && <span className="text-muted-foreground"> (queued)</span>}
+          </span>
         </article>
       );
     case "assistant":

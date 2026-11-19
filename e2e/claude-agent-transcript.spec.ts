@@ -67,12 +67,12 @@ test("a turn reads like Claude TUI: the prompt, thinking, prose, tool calls with
   const prompt = region.getByRole("article", { name: "Your prompt" });
   await expect(prompt).toContainText("tidy the project");
 
-  // While Claude waits on the permission it is working: the status line says what and for how
-  // long, and the tool call is a spinner.
+  // While Claude waits on the permission the status line says so and for how long, and the
+  // tool call is a spinner.
   const rm = region.getByRole("article", { name: "Bash(rm -rf build)", exact: true });
   await expect(rm.getByRole("img", { name: "Running" })).toBeVisible();
-  const working = region.getByRole("status", { name: "Claude is working" });
-  await expect(working).toContainText("Running Bash…");
+  const working = region.getByRole("status", { name: "Claude status" });
+  await expect(working).toContainText("Waiting for you");
   await expect(working).toContainText(/\(\d+s\)/);
   await expect(header).toContainText(`claude 9.8.7 · fake-model · ${folder}`);
 
@@ -82,7 +82,7 @@ test("a turn reads like Claude TUI: the prompt, thinking, prose, tool calls with
   // The turn is held open with the last call still running.
   const sleep = region.getByRole("article", { name: "Bash(sleep 99)", exact: true });
   await expect(sleep.getByRole("img", { name: "Running" })).toBeVisible();
-  await expect(working).toBeVisible();
+  await expect(working).toContainText("Running Bash…");
   fakeClaude.release("finish");
 
   await expect(region.getByRole("log")).toContainText("all done");

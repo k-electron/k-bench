@@ -21,11 +21,15 @@ function useNow(active: boolean): number {
  */
 export function StatusLine({
   working,
+  waiting,
   activity,
   turnStartedAt,
   contextLeft,
 }: {
+  /** A turn is running (Working, or Waiting for you). */
   working: boolean;
+  /** An Allow/Deny ask is open: the line says so instead of what Claude was doing. */
+  waiting: boolean;
   /** What Claude is doing now: "Thinking", "Running Bash". */
   activity: string;
   /** When the turn began (the runtime's clock), for the seconds. */
@@ -38,11 +42,11 @@ export function StatusLine({
   return (
     <div className="flex shrink-0 flex-wrap justify-between gap-x-4 px-3 pb-1 font-mono text-xs text-muted-foreground">
       {working && (
-        <div role="status" aria-label="Claude is working">
+        <div role="status" aria-label="Claude status">
           <span aria-hidden className="inline-block animate-spin">
             ✻
           </span>{" "}
-          {activity}…
+          {waiting ? "Waiting for you" : `${activity}…`}
           {turnStartedAt !== undefined && ` (${elapsedSeconds(turnStartedAt, now)}s)`}
         </div>
       )}

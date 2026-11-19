@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { PermissionMode } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 import type { TerminalClient } from "./terminal.ts";
 
@@ -52,12 +53,16 @@ export type FakeStep =
   | {
       tool: { name: string; input?: Record<string, unknown>; id?: string };
       ask?: true | { suggestions?: unknown[]; description?: string; extra?: object };
+      /** The tool keeps running until the test calls `release(name)`; an interrupt ends the turn with it unanswered. */
+      hold?: string;
       result?: string;
       isError?: boolean;
       toolUseResult?: unknown;
     }
   /** Waits until the test calls `release(name)`, or the turn is interrupted. */
   | { hold: string }
+  /** Claude Code changes its own permission mode (as leaving plan mode does) and says so. */
+  | { mode: PermissionMode }
   /** Sends this message as it is: a type the browser does not know, for instance. */
   | { raw: Record<string, unknown> }
   /** Sends a `system` message of this subtype (`api_retry`, `compact_boundary`, ...). */
@@ -87,6 +92,8 @@ export interface FakeClaudeConfig {
   contextUsage?: Record<string, unknown> | null;
   /** More fields for every `system/init`. */
   initFields?: Record<string, unknown>;
+  /** Whether it sends `system/session_state_changed` (default true); false, as a Claude Code that does not. */
+  sessionStateMessages?: boolean;
 }
 
 /** What the fake wrote to `received.jsonl`: `kind` says which. */

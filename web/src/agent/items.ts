@@ -1,4 +1,5 @@
 import type { LogEntry } from "../../../src/shared/agent-protocol.ts";
+import { queuedPromptIds } from "./prompts";
 import {
   contentLines,
   type DiffLine,
@@ -17,7 +18,9 @@ import {
  * 1. add its interface here, with a `kind`, and to the `TranscriptItem` union;
  * 2. make it in `buildItems` below, from the entry it comes from (`readSdkMessage` for an SDK
  *    message, the switch in `buildItems` for the other kinds of entry), and carry the entry's
- *    `seq` so that the Raw view (#137) can show the message it came from;
+ *    `seq` so that the Raw view (#137) can show the message it came from (text still streaming
+ *    in has no entry yet, so no `seq`); a row built from several entries sets the one the owner
+ *    would call "the message";
  * 3. give it a component, and a case in `TranscriptItemView` (TypeScript says where: the
  *    `never` check there fails until the case exists).
  */
@@ -33,6 +36,11 @@ interface ItemBase {
 export interface PromptItem extends ItemBase {
   kind: "prompt";
   text: string;
+  /**
+   * Claude Code has not picked it up yet: it was sent during a turn (or an instant ago) and
+   * waits its turn (`prompts.ts`, #138).
+   */
+  queued: boolean;
 }
 
 /** Claude's prose (`⏺`), markdown. Complete, or still streaming in. */
@@ -124,18 +132,23 @@ interface BuildState {
   tools: Map<string, OpenTool>;
   /** The ids of the prompts k-bench sent: their echoes are the same prompt. */
   promptIds: Set<string>;
+  /** The prompts Claude Code has not picked up yet. */
+  queued: ReadonlySet<string>;
   /** Which tool call each ask is about, by request id. */
   askTool: Map<string, string>;
   /** The tool calls the owner denied. */
   denied: Set<string>;
 }
 
-/** Tool calls still without a result when their turn ends, or the runtime does, never got one. */
+/**
+ * Tool calls still without a result when their turn ends, or the runtime does, never got one:
+ * they are red, with no result line of their own (the `Interrupted` line that follows an
+ * interrupt says it once).
+ */
 function interruptRunningTools(state: BuildState): void {
   for (const { item } of state.tools.values()) {
     if (item.status === "running") {
       item.status = "interrupted";
-      item.result = { summary: "Interrupted", lines: [] };
     }
   }
 }
@@ -184,7 +197,6 @@ function resolveTool(
     item.result = { summary: "Denied", lines: [] };
   } else if ((lines[0] ?? "").startsWith("[Request interrupted by user")) {
     item.status = "interrupted";
-    item.result = { summary: "Interrupted", lines: [] };
   } else {
     item.status = "failed";
     item.result = { lines };
@@ -278,6 +290,7 @@ function readSdkMessage(
             key: `entry-${entry.seq}`,
             seq: entry.seq,
             text,
+            queued: false,
           });
         }
       } else if (textOf(inner.content).startsWith("[Request interrupted by user")) {
@@ -308,6 +321,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     items: [],
     tools: new Map(),
     promptIds: new Set(),
+    queued: queuedPromptIds(entries),
     askTool: new Map(),
     denied: new Set(),
   };
@@ -320,6 +334,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
           key: `entry-${entry.seq}`,
           seq: entry.seq,
           text: entry.text,
+          queued: state.queued.has(entry.id),
         });
         break;
       case "sdk":

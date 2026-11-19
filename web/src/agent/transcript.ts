@@ -1,4 +1,6 @@
 import {
+  type AgentPage,
+  type AgentReplay,
   type AgentServerMessage,
   type AgentSnapshot,
   type LogEntry,
@@ -13,8 +15,8 @@ export type { TranscriptItem } from "./items";
  * functions that take messages in. This is where SDK messages are kept; `items.ts` is where
  * they become something to display (`buildItems`), so a display fix lands with the next page
  * load (ADR-0008). Pure: no React, no DOM. `transcriptItems(state)` is the conversation to
- * show: what the log makes, then what is still streaming in. How to add a new kind of item is
- * at the top of `items.ts`.
+ * show: what the log makes, then what is still streaming in. How to add a new kind of item,
+ * and the raw-message seam (#137) every kind must keep, are at the top of `items.ts`.
  */
 
 /** Text streaming in for the SDK message now being written. */
@@ -37,14 +39,27 @@ export interface TranscriptState {
   entries: readonly LogEntry[];
   /** The newest `seq` in `entries`: anything not above it is already held. */
   lastSeq: number;
+  /**
+   * Where the log is held from: every entry from here to `lastSeq` is in `entries`, and
+   * nothing earlier is, except the asks that were open when the page opened (`replay`).
+   * Undefined until the first replay. A fresh page holds only the latest turns, and
+   * scrolling up lowers this with `page` answers, until it is 1.
+   */
+  earliestSeq: number | undefined;
   live: LiveMessage | undefined;
 }
 
 export const emptyTranscript: TranscriptState = {
   entries: [],
   lastSeq: 0,
+  earliestSeq: undefined,
   live: undefined,
 };
+
+/** Whether the log has entries older than the ones held, which a `page` request fetches. */
+export function hasEarlier(state: TranscriptState): boolean {
+  return state.earliestSeq !== undefined && state.earliestSeq > 1;
+}
 
 interface StreamEvent {
   type?: string;
@@ -81,9 +96,37 @@ function addEntries(
     }
   }
   return {
+    ...state,
     entries: [...state.entries, ...fresh],
     lastSeq: fresh[fresh.length - 1]?.seq ?? state.lastSeq,
     live,
+  };
+}
+
+/**
+ * Takes in a replay: its entries come after what is held, and the first one tells where the
+ * log is held from. A replay after a reconnect asks for everything after `lastSeq`, so it
+ * leaves that alone.
+ */
+function addReplay(state: TranscriptState, replay: AgentReplay): TranscriptState {
+  const earliestSeq = state.earliestSeq ?? replay.from ?? 1;
+  return addEntries({ ...state, earliestSeq, live: undefined }, replay.entries);
+}
+
+/**
+ * Takes in the page of older entries that was asked for, ahead of what is held. The page ends
+ * where the held entries begin, so nothing is missing; an entry already held (an ask that was
+ * open when the page opened, carried from before) is not added twice. A page that reaches no
+ * further back than what is held (a repeated answer) changes nothing.
+ */
+function addPage(state: TranscriptState, page: AgentPage): TranscriptState {
+  if (state.earliestSeq === undefined || page.from >= state.earliestSeq) return state;
+  const held = new Set(state.entries.map((entry) => entry.seq));
+  const older = page.entries.filter((entry) => !held.has(entry.seq));
+  return {
+    ...state,
+    earliestSeq: page.from,
+    entries: [...older, ...state.entries].sort((a, b) => a.seq - b.seq),
   };
 }
 
@@ -163,7 +206,9 @@ export function applyServerMessage(
     case "replay":
       // Text streamed before a drop is stale: if a message is still streaming, a snapshot
       // follows this replay, and if not, the entries replayed hold what it became.
-      return addEntries({ ...state, live: undefined }, message.entries);
+      return addReplay(state, message);
+    case "page":
+      return addPage(state, message);
     case "snapshot":
       return addSnapshot(state, message);
     case "entry":

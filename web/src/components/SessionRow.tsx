@@ -11,6 +11,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
+import { AGENT_STATE_LABEL, agentDisplayState } from "../agentState";
 import { ClaudeGlyph } from "./ClaudeGlyph";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
@@ -42,19 +43,33 @@ export function SessionRow({
   const actions = useActions();
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // Pulsing means only "needs you". A Bell is the one reason today.
+  // Pulsing means "needs you": a Bell, in blue, or a Claude Agent Waiting for you, in orange.
   const pulsing = session.bell;
+  // A Claude Agent shows what it is doing; anything else just whether it runs.
+  const agentState = agentDisplayState(session);
+  const waiting = agentState === "waiting";
 
   return (
-    <div className={cn("group flex items-center rounded-md", pulsing && "row-pulse")}>
+    <div
+      className={cn(
+        "group flex items-center rounded-md",
+        agentState && `row-agent-${agentState}`,
+        pulsing && "row-pulse",
+        waiting && "row-waiting",
+      )}
+    >
       <span
         role="img"
-        aria-label={`${session.name} ${session.status}`}
+        aria-label={`${session.name} ${agentState ? AGENT_STATE_LABEL[agentState].toLowerCase() : session.status}`}
         className={cn(
           "ml-4 size-2 shrink-0 rounded-full",
-          session.status === "running"
-            ? "bg-emerald-500"
-            : "border border-muted-foreground",
+          (agentState ?? session.status) === "stopped" &&
+            "border border-muted-foreground",
+          (agentState === "idle" || (!agentState && session.status === "running")) &&
+            "bg-emerald-500",
+          agentState === "working" &&
+            "animate-spin border-2 border-emerald-500 border-t-transparent motion-reduce:animate-none",
+          waiting && "animate-pulse bg-orange-500 motion-reduce:animate-none",
         )}
       />
       <Button
@@ -80,6 +95,11 @@ export function SessionRow({
       {/* The pulse is visual; this says it to a screen reader and to tests. */}
       {pulsing && (
         <span role="status" className="sr-only">{`${session.name} needs you`}</span>
+      )}
+      {waiting && (
+        <span role="status" className="sr-only">
+          {`${session.name} is waiting for you`}
+        </span>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
