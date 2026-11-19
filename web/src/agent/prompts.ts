@@ -65,7 +65,8 @@ export function queuedPromptIds(entries: readonly LogEntry[]): ReadonlySet<strin
 export function promptHistory(entries: readonly LogEntry[]): string[] {
   const history: string[] = [];
   for (const entry of entries) {
-    if (entry.kind === "prompt" && history.at(-1) !== entry.text) {
+    // A prompt of only images has no text to recall.
+    if (entry.kind === "prompt" && entry.text !== "" && history.at(-1) !== entry.text) {
       history.push(entry.text);
     }
   }

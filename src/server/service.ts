@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import type { ImageMediaType } from "../shared/agent-images.ts";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { ClaudeInterface, NewSessionKind, State } from "../shared/state-protocol.ts";
+import { ImageError, readAgentImage, storeAgentImage } from "./agent-images.ts";
 import type { AgentStatuses } from "./agent-status.ts";
 import { type AgentRuntimes, AgentStartError } from "./agents.ts";
 import type { ClaudeLaunch } from "./claude.ts";
@@ -424,6 +426,39 @@ export class Service {
     if (!session || session.interface === "agent") return false;
     const live = await this.tmux.listSessions();
     return live.some((s) => s.id === sessionId);
+  }
+
+  /** The Agent's folder, or the error that says the Session is not a Claude Agent. */
+  private agentFolderOf(sessionId: string): string {
+    if (this.store.getSession(sessionId)?.interface !== "agent") {
+      throw new ServiceError("not_found", "Unknown Claude Agent");
+    }
+    return this.agents.folder(sessionId);
+  }
+
+  /** Keeps an image for the Agent's next prompt and returns the name the prompt uses. */
+  saveAgentImage(sessionId: string, mediaType: unknown, base64: unknown): string {
+    const folder = this.agentFolderOf(sessionId);
+    try {
+      return storeAgentImage(folder, mediaType, base64);
+    } catch (error) {
+      if (error instanceof ImageError) throw new ServiceError("invalid", error.message);
+      // The Agent's folder went with its Session, between the check and the write.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new ServiceError("not_found", "Unknown Claude Agent");
+      }
+      throw error;
+    }
+  }
+
+  /** An image an Agent's prompt carried, for showing it again. */
+  agentImage(
+    sessionId: string,
+    name: string,
+  ): { bytes: Buffer; mediaType: ImageMediaType } {
+    const image = readAgentImage(this.agentFolderOf(sessionId), name);
+    if (!image) throw new ServiceError("not_found", "Unknown image");
+    return image;
   }
 
   /** Whether the agent WebSocket has a runtime to relay to: a known Claude Agent that is running. */

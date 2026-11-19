@@ -468,6 +468,44 @@ test("a Claude Agent on the phone has no Extra keys, Return starts a new line an
   await expect(input).toHaveValue("");
 });
 
+test("on a phone, an image picked from the photo library shows as a thumbnail and goes to Claude with Send", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const region = app.agentRegion("session 1");
+
+  const [chooser] = await Promise.all([
+    app.page.waitForEvent("filechooser"),
+    region.getByRole("button", { name: "Attach image" }).tap(),
+  ]);
+  await chooser.setFiles({
+    name: "photo.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  });
+  const thumbnail = region.getByRole("img", { name: "Attached: photo.png" });
+  await expect(thumbnail).toBeVisible();
+  // It fits the screen: the page does not scroll sideways for it.
+  const box = await thumbnail.boundingBox();
+  expect(
+    box && box.x >= 0 && box.x + box.width <= (app.page.viewportSize()?.width ?? 0),
+  ).toBe(true);
+
+  // An image alone is a message.
+  await region.getByRole("button", { name: "Send", exact: true }).tap();
+  await expect(region.getByRole("img", { name: "Your attachment" })).toBeVisible();
+  await expect(region.getByRole("list", { name: "Attached images" })).toHaveCount(0);
+  await expect
+    .poll(() => kbench.instance.fakeClaude.prompts()[0]?.content)
+    .toEqual([expect.objectContaining({ type: "image" })]);
+});
+
 test("on a phone, a long-press on a Claude Agent's message shows its raw JSON, and a quick tap does not", async ({
   app,
   kbench,
