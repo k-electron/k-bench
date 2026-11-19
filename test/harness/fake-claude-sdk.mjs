@@ -406,6 +406,28 @@ async function runTool(turn, step) {
   system("status", { status: "requesting" });
 }
 
+/** An MCP server asks the owner for input: Claude Code sends the request and waits for the answer. */
+async function runElicitation(options) {
+  const requestId = randomUUID();
+  send({
+    type: "control_request",
+    request_id: requestId,
+    request: {
+      subtype: "elicitation",
+      mcp_server_name: options.serverName ?? "docs",
+      message: options.message ?? "Which workspace should I use?",
+      mode: "form",
+      requested_schema: options.requestedSchema ?? {
+        type: "object",
+        properties: { workspace: { type: "string" } },
+      },
+    },
+  });
+  await until(() => interrupted || answers.has(requestId));
+  mark();
+  answers.delete(requestId);
+}
+
 async function runStep(turn, step) {
   mark();
   if (step.text !== undefined) {
@@ -428,6 +450,8 @@ async function runStep(turn, step) {
   } else if (step.system) {
     const { subtype, ...fields } = step.system;
     system(subtype, fields);
+  } else if (step.elicit) {
+    await runElicitation(step.elicit);
   } else if (step.reset) {
     reset(turn);
   } else if (step.result) {
@@ -469,6 +493,15 @@ async function runTurn(prompt, scripted) {
     });
   }
   const text = promptText(prompt);
+  // Like the real one, `/advisor <model>` saves the model as the owner's default: in the user
+  // settings file the test named. Nothing else here ever writes it.
+  const advisorCommand = /^\/advisor\s+(\S+)/.exec(text);
+  if (advisorCommand && config.userSettingsFile) {
+    writeFileSync(
+      config.userSettingsFile,
+      JSON.stringify({ advisorModel: advisorCommand[1] }),
+    );
+  }
   const clearing = isClear(prompt);
   if (!clearing) {
     sendInit(config);

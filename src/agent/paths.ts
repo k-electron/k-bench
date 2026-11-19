@@ -27,6 +27,11 @@ export function agentSocketFile(folder: string): string {
   return join(folder, "agent.sock");
 }
 
+/** The images uploaded for the Agent's prompts: `<agent folder>/images/`. Created by the server. */
+export function agentImagesFolder(folder: string): string {
+  return join(folder, "images");
+}
+
 /** Why the runtime ended, written on its way out (`writeExitRecord`). */
 export function agentExitFile(folder: string): string {
   return join(folder, "exit.json");

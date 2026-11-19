@@ -26,6 +26,7 @@ import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { AgentBell } from "./bell.ts";
 import { ClientHub } from "./hub.ts";
+import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
 import { PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
@@ -144,6 +145,7 @@ const claude = new ClaudeSession(
       resume: args.mode === "resume" && log.hasPrompt(),
     },
     canUseTool: asks.canUseTool,
+    launch: args.launch,
   },
   {
     message(message) {
@@ -165,6 +167,9 @@ const claude = new ClaudeSession(
         void refreshContext();
       }
     },
+    elicitationDeclined(request) {
+      record({ kind: "declined", what: "elicitation", request: { ...request } });
+    },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";
       void finish(why.slice(0, 1000), 1);
@@ -174,13 +179,21 @@ const claude = new ClaudeSession(
 
 async function command(message: AgentClientMessage): Promise<void> {
   if (message.type === "prompt") {
-    record({ kind: "prompt", id: message.id, text: message.text });
+    // Built before anything is logged or counted: nothing that goes wrong with an image may
+    // leave a prompt logged that Claude never got.
+    const content = promptContent(args.agentDir, message.text, message.images);
+    record({
+      kind: "prompt",
+      id: message.id,
+      text: message.text,
+      ...(message.images && { images: message.images }),
+    });
     activity.prompt();
-    claude.prompt(message.id, message.text);
+    claude.prompt(message.id, content);
   } else if (message.type === "interrupt") {
     claude.interrupt();
   } else if (message.type === "answer") {
-    asks.answer(message.requestId, message.decision);
+    asks.answer(message.requestId, message);
   } else if (message.type === "set_permission_mode") {
     try {
       await claude.setPermissionMode(message.mode);

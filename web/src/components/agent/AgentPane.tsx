@@ -69,7 +69,13 @@ export function AgentPane({
         {rawView.all ? (
           <RawTranscript entries={entries} />
         ) : (
-          <Transcript items={items} entries={entries} rawView={rawView} />
+          <Transcript
+            sessionId={session.id}
+            items={items}
+            entries={entries}
+            rawView={rawView}
+            focusView={conversation.focusView}
+          />
         )}
       </div>
       {conversation.loadingEarlier && (

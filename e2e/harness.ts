@@ -380,8 +380,11 @@ export class AppPage {
     await expect(this.newSessionDialog).toBeHidden();
   }
 
-  /** Creates a Claude Agent Session through the New Session dialog. */
-  async createClaudeAgent(workspaceName: string, options: { name?: string } = {}) {
+  /** Creates a Claude Agent Session through the New Session dialog, with these Launch options. */
+  async createClaudeAgent(
+    workspaceName: string,
+    options: Omit<Parameters<AppPage["createInDialog"]>[0], "kind"> = {},
+  ) {
     await this.openNewSessionDialog(workspaceName);
     await this.createInDialog({ ...options, kind: "Claude Agent (WIP)" });
     await expect(this.newSessionDialog).toBeHidden();
@@ -414,7 +417,7 @@ export class AppPage {
     return this.agentRegion(sessionName).getByRole("textbox", { name: "Message Claude" });
   }
 
-  /** The Allow/Deny card that takes over the named Claude Agent's input while Claude waits on an ask. */
+  /** The permission panel that takes over the named Claude Agent's input while Claude waits on an ask. */
   permissionPrompt(sessionName: string): Locator {
     return this.agentRegion(sessionName).getByRole("region", {
       name: "Permission prompt",

@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import type { ImageMediaType } from "../shared/agent-images.ts";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { ClaudeInterface, NewSessionKind, State } from "../shared/state-protocol.ts";
+import { ImageError, readAgentImage, storeAgentImage } from "./agent-images.ts";
 import type { AgentStatuses } from "./agent-status.ts";
 import { type AgentRuntimes, AgentStartError } from "./agents.ts";
 import type { ClaudeLaunch } from "./claude.ts";
@@ -204,6 +206,7 @@ export class Service {
             workspaceFolder: workspace.folder,
             conversationId: claude.conversationId,
             mode: "start",
+            options: claude.options,
           });
         } else {
           await this.tmux.createSession(id, workspace.folder, claude);
@@ -231,12 +234,12 @@ export class Service {
     });
     if (agent) await this.finishStartingAgent(id, "create");
     // Remembered for the next New Session dialog, on any device. A shell leaves the Launch
-    // options as they were, so switching the dialog back to Claude finds them; so does a
-    // Claude Agent, which takes none yet.
+    // options as they were, so switching the dialog back to Claude finds them; a Claude TUI
+    // and a Claude Agent share them.
     this.store.setLastSessionKind(
       !request ? "shell" : request.interface === "agent" ? "claude-agent" : "claude",
     );
-    if (request && !agent) this.store.setLastLaunchOptions(request.options);
+    if (request) this.store.setLastLaunchOptions(request.options);
     return { id, name };
   }
 
@@ -378,7 +381,7 @@ export class Service {
       throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
     }
     if (session.interface === "agent" && session.conversationId !== null) {
-      const { id, folder, conversationId } = session;
+      const { id, folder, conversationId, launchOptions } = session;
       await this.reconciler.whileStarting(id, async () => {
         try {
           await this.agents.launch({
@@ -386,6 +389,8 @@ export class Service {
             workspaceFolder: folder,
             conversationId,
             mode: "resume",
+            // Every Launch option is passed again each time (ADR-0005).
+            options: launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
           });
         } catch (error) {
           throw error instanceof AgentStartError
@@ -424,6 +429,39 @@ export class Service {
     if (!session || session.interface === "agent") return false;
     const live = await this.tmux.listSessions();
     return live.some((s) => s.id === sessionId);
+  }
+
+  /** The Agent's folder, or the error that says the Session is not a Claude Agent. */
+  private agentFolderOf(sessionId: string): string {
+    if (this.store.getSession(sessionId)?.interface !== "agent") {
+      throw new ServiceError("not_found", "Unknown Claude Agent");
+    }
+    return this.agents.folder(sessionId);
+  }
+
+  /** Keeps an image for the Agent's next prompt and returns the name the prompt uses. */
+  saveAgentImage(sessionId: string, mediaType: unknown, base64: unknown): string {
+    const folder = this.agentFolderOf(sessionId);
+    try {
+      return storeAgentImage(folder, mediaType, base64);
+    } catch (error) {
+      if (error instanceof ImageError) throw new ServiceError("invalid", error.message);
+      // The Agent's folder went with its Session, between the check and the write.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new ServiceError("not_found", "Unknown Claude Agent");
+      }
+      throw error;
+    }
+  }
+
+  /** An image an Agent's prompt carried, for showing it again. */
+  agentImage(
+    sessionId: string,
+    name: string,
+  ): { bytes: Buffer; mediaType: ImageMediaType } {
+    const image = readAgentImage(this.agentFolderOf(sessionId), name);
+    if (!image) throw new ServiceError("not_found", "Unknown image");
+    return image;
   }
 
   /** Whether the agent WebSocket has a runtime to relay to: a known Claude Agent that is running. */

@@ -250,12 +250,13 @@ describe("a Claude Agent", () => {
     }
   });
 
-  it("shows as a Claude Session in the Agent interface, which the New Session dialog remembers without changing the Launch options", async () => {
+  it("shows as a Claude Session in the Agent interface, which the New Session dialog remembers with its Launch options", async () => {
     const { server, workspace } = await boot();
     const options = { model: "opus", effort: "high", advisor: "off", focusView: true };
     await server.createClaudeSession(workspace.id, { name: "tui", claude: options });
     await server.createSession(workspace.id, "shell");
-    await server.createClaudeAgent(workspace.id, { name: "agent" });
+    const agentOptions = { model: "sonnet", effort: "low", advisor: "opus" };
+    await server.createClaudeAgent(workspace.id, { name: "agent", claude: agentOptions });
 
     const state = await server.state();
     const sessions = state.workspaces[0]?.sessions.map((s) => [
@@ -269,7 +270,10 @@ describe("a Claude Agent", () => {
       ["agent", "claude", "agent"],
     ]);
     const last = await (await server.request("/api/new-session/last")).json();
-    expect(last).toEqual({ kind: "claude-agent", claude: options });
+    expect(last).toEqual({
+      kind: "claude-agent",
+      claude: { ...agentOptions, focusView: false },
+    });
   });
 
   it("is reachable only with the owner's login and from the app's own origin", async () => {

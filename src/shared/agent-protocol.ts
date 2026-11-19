@@ -11,8 +11,11 @@
  * it. A change that cannot be made that way bumps `AGENT_PROTOCOL_VERSION`, and the browser
  * speaks only the current number (ADR-0008).
  *
- * Imported by the browser too, so this file has no imports and no Node APIs.
+ * Imported by the browser too, so this file has no Node APIs and imports only its sibling
+ * `agent-images.ts`, which has none either.
  */
+
+import { MAX_PROMPT_IMAGES, STORED_IMAGE_NAME } from "./agent-images.ts";
 
 /** The protocol's number. A client that sees another number in `hello` must not carry on. */
 export const AGENT_PROTOCOL_VERSION = 1;
@@ -58,9 +61,22 @@ export type LogEntry =
    * A prompt k-bench sent to Claude Code. Logged before it is sent, because no echo of it
    * exists until Claude Code picks it up. `id` is the client-set ID the SDK echoes back.
    */
-  | (LogEntryBase & { kind: "prompt"; id: string; text: string })
+  | (LogEntryBase & { kind: "prompt"; id: string; text: string; images?: string[] })
   /** Written by the runtime itself: when it started and why it stopped. */
   | (LogEntryBase & { kind: "runtime"; event: "started" | "stopped"; reason?: string })
+  /**
+   * Something Claude Code asked of k-bench that the runtime declined, because a Claude Agent
+   * has no way to answer it (#153). The browser shows it as an Unsupported row where it
+   * happened. `request` is what Claude Code sent, as the SDK handed it over, so the log holds
+   * what was asked even for fields no row shows yet. A reader that does not know `what`
+   * shows nothing.
+   */
+  | (LogEntryBase & {
+      kind: "declined";
+      /** What was declined: `elicitation`, an MCP server asking the owner for input. */
+      what: "elicitation";
+      request: Record<string, unknown>;
+    })
   /**
    * An Allow/Deny that Claude Code is waiting on: written when it asks, and open until a
    * `permission_answered` with the same `requestId` follows (see `openPermissionAsks`).
@@ -107,16 +123,27 @@ export type LogEntry =
     });
 
 /**
+ * The owner's reply to an ask, as a client sends it and as the log records it:
+ * - `allow`, with `alwaysAllow` for "Yes, don't ask again": Claude Code's own suggested rule
+ *   changes are saved with it. The log records it only when the runtime did apply them (the
+ *   ask had suggestions and did not suppress the choice), so the log says what happened.
+ * - `deny`, with `message` for "No, and tell Claude what to do differently": what the owner
+ *   wrote, which Claude reads as the reason.
+ */
+export type PermissionReply =
+  | { decision: "allow"; alwaysAllow?: true }
+  | { decision: "deny"; message?: string };
+
+/**
  * How an ask ended. `allow` and `deny` are the owner's answer, from whichever device came
  * first. The others were nobody's answer: `cancelled` is Claude Code withdrawing the ask (the
  * turn was interrupted, the tool call gone), and `interrupted` is the runtime ending, or
  * finding at its next start that the previous one ended, while the ask was open: it could
  * never be answered ("not answered, the Agent stopped"). Later tickets add fields to `allow`
- * and `deny` (#146, #147), never new meanings to a `decision`.
+ * and `deny` (#147), never new meanings to a `decision`.
  */
 export type PermissionAnswer =
-  | { decision: "allow" }
-  | { decision: "deny" }
+  | PermissionReply
   | { decision: "cancelled" }
   | { decision: "interrupted" };
 
@@ -372,16 +399,21 @@ export type AgentClientMessage =
    * A prompt to send to Claude Code as typed. `id` is a UUID chosen by the client; it goes
    * to Claude Code as the message's `uuid`, which Claude Code echoes back when it takes the
    * message up. Prompts are never marked as composed by the client, so `@path` works.
+   * `images` names images already uploaded to the Agent (`POST .../agent/images`), which go
+   * to Claude as image blocks before the text; `text` may then be empty. The log keeps the
+   * names, never the bytes.
    */
-  | { type: "prompt"; id: string; text: string }
+  | { type: "prompt"; id: string; text: string; images?: string[] }
   /**
-   * The owner's answer to an open ask. The runtime builds what Claude Code is sent from the
-   * ask it holds, so a client says only which: it can never change the tool's input or the
-   * rules to save. The first answer for a `requestId` wins; one for an ask that is no longer
-   * open (answered on another device, withdrawn, never asked) is ignored, with no error.
-   * What came of it arrives as the ask's `permission_answered` entry, to every device.
+   * The owner's answer to an open ask (see `PermissionReply`). The runtime builds what Claude
+   * Code is sent from the ask it holds, so a client says only which choice: it can never change
+   * the tool's input or the rules to save (`alwaysAllow` saves Claude Code's own suggestion,
+   * and only if the ask offered it). The first answer for a `requestId` wins; one for an ask
+   * that is no longer open (answered on another device, withdrawn, never asked) is ignored,
+   * with no error. What came of it arrives as the ask's `permission_answered` entry, to every
+   * device.
    */
-  | { type: "answer"; requestId: string; decision: "allow" | "deny" }
+  | ({ type: "answer"; requestId: string } & PermissionReply)
   /**
    * Switches Claude Code to this permission mode. A target, not a "next": two devices that
    * both tap at once ask for the same mode, and it is set once. Only the modes of
@@ -431,6 +463,19 @@ export const MAX_PROMPT_CHARACTERS = 1_000_000;
 export const MAX_REQUEST_ID_CHARACTERS = 200;
 
 /**
+ * The image names of a prompt (none when absent), or undefined when they are not a short list
+ * of valid stored names: a name is a file the runtime reads, so nothing else may pass.
+ */
+function decodeImageNames(value: unknown): string[] | undefined {
+  if (value === undefined) return [];
+  return Array.isArray(value) &&
+    value.length <= MAX_PROMPT_IMAGES &&
+    value.every((name) => typeof name === "string" && STORED_IMAGE_NAME.test(name))
+    ? (value as string[])
+    : undefined;
+}
+
+/**
  * The message a client's text holds, or undefined when it is not a valid one. The runtime
  * checks every message it receives with this, so nothing a client sends reaches Claude Code
  * unchecked.
@@ -461,21 +506,55 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         isCount(message.limit, 1, MAX_TURNS_PER_REQUEST)
         ? { type: "page", beforeSeq: message.beforeSeq, limit: message.limit }
         : undefined;
-    case "prompt":
+    case "prompt": {
+      const images = decodeImageNames(message.images);
       return typeof message.id === "string" &&
         UUID.test(message.id) &&
         typeof message.text === "string" &&
-        message.text.trim() !== "" &&
+        images !== undefined &&
+        (message.text.trim() !== "" || images.length > 0) &&
         message.text.length <= MAX_PROMPT_CHARACTERS
-        ? { type: "prompt", id: message.id, text: message.text }
+        ? {
+            type: "prompt",
+            id: message.id,
+            text: message.text,
+            ...(images.length > 0 && { images }),
+          }
         : undefined;
-    case "answer":
-      return typeof message.requestId === "string" &&
-        message.requestId !== "" &&
-        message.requestId.length <= MAX_REQUEST_ID_CHARACTERS &&
-        (message.decision === "allow" || message.decision === "deny")
-        ? { type: "answer", requestId: message.requestId, decision: message.decision }
-        : undefined;
+    }
+    case "answer": {
+      if (
+        typeof message.requestId !== "string" ||
+        message.requestId === "" ||
+        message.requestId.length > MAX_REQUEST_ID_CHARACTERS
+      ) {
+        return undefined;
+      }
+      const { requestId } = message;
+      if (message.decision === "allow") {
+        if (message.message !== undefined) return undefined;
+        if (message.alwaysAllow === undefined || message.alwaysAllow === false) {
+          return { type: "answer", requestId, decision: "allow" };
+        }
+        return message.alwaysAllow === true
+          ? { type: "answer", requestId, decision: "allow", alwaysAllow: true }
+          : undefined;
+      }
+      if (message.decision === "deny") {
+        if (message.alwaysAllow !== undefined) return undefined;
+        if (message.message === undefined) {
+          return { type: "answer", requestId, decision: "deny" };
+        }
+        if (typeof message.message !== "string") return undefined;
+        const reply = message.message.trim();
+        if (reply.length > MAX_PROMPT_CHARACTERS) return undefined;
+        // An empty reply is a plain "No".
+        return reply === ""
+          ? { type: "answer", requestId, decision: "deny" }
+          : { type: "answer", requestId, decision: "deny", message: reply };
+      }
+      return undefined;
+    }
     case "set_permission_mode":
       return isPermissionMode(message.mode) &&
         PERMISSION_MODE_CYCLE.includes(message.mode)

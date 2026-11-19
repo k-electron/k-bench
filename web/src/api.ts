@@ -107,6 +107,9 @@ export const api = {
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
+  /** Stores an image (base64, inside JSON) for a Claude Agent's next prompt; answers its name. */
+  uploadAgentImage: (sessionId: string, image: { mediaType: string; data: string }) =>
+    send<{ name: string }>("POST", `/api/sessions/${sessionId}/agent/images`, image),
   restartSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
 };
