@@ -257,10 +257,18 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
   return state.live ? [...items, ...liveItems(state.live)] : items;
 }
 
-/** What the header knows from the log: the model and folder of the latest turn. */
-export function transcriptInfo(state: TranscriptState): { model?: string; cwd?: string } {
-  const { model, cwd } = builtTranscript(state);
+/**
+ * What the header and the Transcript know from the log: the model and folder of the latest
+ * turn, and whether Claude Code is in Focus view.
+ */
+export function transcriptInfo(state: TranscriptState): {
+  model?: string;
+  cwd?: string;
+  focusView: boolean;
+} {
+  const { model, cwd, focusView } = builtTranscript(state);
   return {
+    focusView,
     ...(model === undefined ? {} : { model }),
     ...(cwd === undefined ? {} : { cwd }),
   };

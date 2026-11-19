@@ -145,6 +145,7 @@ const claude = new ClaudeSession(
       resume: args.mode === "resume" && log.hasPrompt(),
     },
     canUseTool: asks.canUseTool,
+    launch: args.launch,
   },
   {
     message(message) {
@@ -165,6 +166,9 @@ const claude = new ClaudeSession(
         live.turnEnded();
         void refreshContext();
       }
+    },
+    elicitationDeclined(request) {
+      record({ kind: "declined", what: "elicitation", request: { ...request } });
     },
     ended(error) {
       const why = error instanceof Error ? error.message : "Claude Code exited";

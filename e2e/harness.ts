@@ -380,8 +380,11 @@ export class AppPage {
     await expect(this.newSessionDialog).toBeHidden();
   }
 
-  /** Creates a Claude Agent Session through the New Session dialog. */
-  async createClaudeAgent(workspaceName: string, options: { name?: string } = {}) {
+  /** Creates a Claude Agent Session through the New Session dialog, with these Launch options. */
+  async createClaudeAgent(
+    workspaceName: string,
+    options: Omit<Parameters<AppPage["createInDialog"]>[0], "kind"> = {},
+  ) {
     await this.openNewSessionDialog(workspaceName);
     await this.createInDialog({ ...options, kind: "Claude Agent (WIP)" });
     await expect(this.newSessionDialog).toBeHidden();

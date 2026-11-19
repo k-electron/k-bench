@@ -67,6 +67,11 @@ export type FakeStep =
   | { raw: Record<string, unknown> }
   /** Sends a `system` message of this subtype (`api_retry`, `compact_boundary`, ...). */
   | { system: { subtype: string } & Record<string, unknown> }
+  /**
+   * An MCP server asks the owner for input (an elicitation): Claude Code sends the request and
+   * the turn waits for the SDK's answer, which `received()` then holds as a `control_response`.
+   */
+  | { elicit: { serverName?: string; message?: string; requestedSchema?: object } }
   /** `/clear`: the conversation resets and the next `init` carries a new session id. */
   | { reset: true }
   /** Changes fields of the turn's final `result` message (`is_error`, `subtype`, ...). */
@@ -94,6 +99,11 @@ export interface FakeClaudeConfig {
   initFields?: Record<string, unknown>;
   /** Whether it sends `system/session_state_changed` (default true); false, as a Claude Code that does not. */
   sessionStateMessages?: boolean;
+  /**
+   * The test's stand-in for the owner's Claude Code user settings file: a prompt `/advisor
+   * <model>` writes `{advisorModel}` to it, as the real command saves the owner's default.
+   */
+  userSettingsFile?: string;
 }
 
 /** What the fake wrote to `received.jsonl`: `kind` says which. */

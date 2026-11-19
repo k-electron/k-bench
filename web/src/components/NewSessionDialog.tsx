@@ -25,8 +25,8 @@ import { Select } from "./ui/select";
 /**
  * The kinds of Session the dialog offers, in the order shown. Adding a kind is one entry
  * here (and its handling on the server): `launchOptions` says whether it takes Launch options,
- * and `interface` is sent for a Claude Session that is not a Claude TUI. Claude Agent takes no
- * Launch options until ticket #143.
+ * and `interface` is sent for a Claude Session that is not a Claude TUI. Claude TUI and
+ * Claude Agent take the same Launch options, with the same meaning, and share the remembered ones.
  */
 const KINDS: {
   kind: NewSessionKind;
@@ -39,7 +39,7 @@ const KINDS: {
   {
     kind: "claude-agent",
     label: "Claude Agent (WIP)",
-    launchOptions: false,
+    launchOptions: true,
     interface: "agent",
   },
 ];
@@ -137,10 +137,10 @@ export function NewSessionDialog({
           <DialogHeader>
             <DialogTitle>New Session</DialogTitle>
             <DialogDescription>
-              {kind?.launchOptions
-                ? `Runs Claude Code in the folder of ${workspace.name}. Default leaves a setting to your own Claude Code configuration.`
-                : kind?.interface === "agent"
-                  ? `Runs Claude Code in the folder of ${workspace.name} as a conversation you can follow from any device, not a terminal. Work in progress.`
+              {kind?.interface === "agent"
+                ? `Runs Claude Code in the folder of ${workspace.name} as a conversation you can follow from any device, not a terminal. Default leaves a setting to your own Claude Code configuration. Work in progress.`
+                : kind?.launchOptions
+                  ? `Runs Claude Code in the folder of ${workspace.name}. Default leaves a setting to your own Claude Code configuration.`
                   : `Starts your shell in the folder of ${workspace.name}.`}
             </DialogDescription>
           </DialogHeader>
