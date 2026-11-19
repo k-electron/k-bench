@@ -840,6 +840,7 @@ const midturnSend: Check = {
     const from = noteOf<number>(cap, "from") ?? 0;
     const msgs = session.msgs.slice(from);
     const results = msgs.filter(isResult).length;
+    const completed = noteOf<number>(cap, "completed") ?? 0;
     const lifecycle = msgs
       .filter((m) => m.type === "command_lifecycle" && m.command_uuid === ids.second)
       .map((m) => String(m.state));
@@ -866,14 +867,15 @@ const midturnSend: Check = {
     const { prompts } = await webModules();
     const queued = prompts.queuedPromptIds(logOf(session.events));
     const facts = [
-      `results: ${results} of 2`,
+      `results: ${results} (a prompt folded into the running turn shares its result), prompts completed: ${completed} of 2`,
       `command_lifecycle states for the second prompt: ${lifecycle.join(", ") || "none"}`,
       `its replayed echo came: ${yesNo(echoIndex >= 0)}`,
       `user_message_uuids named it on a frame: ${yesNo(stamped.length > 0)}${stamped.length > 0 ? ` (${[...new Set(stamped.map(carrier))].join(", ")})` : ""}`,
       `folded into the running turn (picked up before the first result): ${yesNo(pickupAt >= 0 && firstResult >= 0 && pickupAt < firstResult)}`,
       `still shown (queued) afterwards: ${yesNo(queued.has(ids.second))}`,
     ];
-    if (results < 2) return notProvoked("the second turn did not finish in time", facts);
+    if (completed < 2)
+      return notProvoked("the second prompt did not complete in time", facts);
     return queued.size === 0
       ? pass("some signal clears (queued) for a prompt sent mid-turn", facts)
       : fail(
@@ -1065,10 +1067,10 @@ const tasks: Check = {
   name: "tasks",
   row: "A3",
   title:
-    "A foreground subagent is_backgrounded:false and absent from background_tasks_changed; stopTask; what Interrupt does with perTaskStopAffordance",
+    "Subagent and background task messages: is_backgrounded and background_tasks_changed agree, a background task shows until Claude Code says it ended; stopTask; what Interrupt does with perTaskStopAffordance",
   scenario: "tasks",
   assumption:
-    "src/agent-runtime/tasks.ts TaskTracker; src/agent-runtime/session.ts perTaskStopAffordance",
+    "src/agent-runtime/tasks.ts TaskTracker; web/src/agent/tasks.ts TaskBuilder; src/agent-runtime/session.ts perTaskStopAffordance",
   evaluate({ cap }) {
     const session = sessionOf(cap);
     if (!session) return notProvoked("the session did not run");
@@ -1086,34 +1088,75 @@ const tasks: Check = {
             .join(", ") || "none"
         }`,
       ]);
-    const level = session.msgs.filter((m) => isSystem(m, "background_tasks_changed"));
-    const inLevel = level.some(
+    const idsOf = (m: Msg) =>
+      Array.isArray(m.tasks)
+        ? m.tasks.flatMap((t) =>
+            isObject(t) && typeof t.task_id === "string" ? [t.task_id] : [],
+          )
+        : [];
+    const inLevel = session.msgs.some(
       (m) =>
-        Array.isArray(m.tasks) &&
-        m.tasks.some((t) => isObject(t) && t.task_id === started.task_id),
+        isSystem(m, "background_tasks_changed") &&
+        idsOf(m).includes(String(started.task_id)),
     );
+    const launchedAsync = fg.some(
+      (m) =>
+        m.type === "user" &&
+        isObject(m.tool_use_result) &&
+        (m.tool_use_result.isAsync === true ||
+          m.tool_use_result.status === "async_launched"),
+    );
+    // What Claude Code's messages say is alive at each `result`, from the messages alone: a
+    // backgrounded task stays until a notification (or a terminal update) ends it, and
+    // `background_tasks_changed` is the whole list. TaskTracker must say the same.
     const tracker = new TaskTracker();
-    let afterForeground = -1;
-    session.msgs.forEach((m, index) => {
+    const alive = new Set<string>();
+    let results = 0;
+    let disagreed = 0;
+    for (const m of session.msgs) {
       tracker.observe(m as never);
-      if (index === fgTo - 1) afterForeground = tracker.list.length;
-    });
+      if (isSystem(m, "background_tasks_changed")) {
+        alive.clear();
+        for (const id of idsOf(m)) alive.add(id);
+      } else if (isSystem(m, "task_started") && m.is_backgrounded === true) {
+        alive.add(String(m.task_id));
+      } else if (isSystem(m, "task_notification")) {
+        alive.delete(String(m.task_id));
+      } else if (
+        isSystem(m, "task_updated") &&
+        isObject(m.patch) &&
+        ["completed", "failed", "killed"].includes(String(m.patch.status))
+      ) {
+        alive.delete(String(m.task_id));
+      } else if (isResult(m)) {
+        results += 1;
+        const got = tracker.list
+          .map((task) => task.id)
+          .sort()
+          .join(",");
+        if (got !== [...alive].sort().join(",")) disagreed += 1;
+      }
+    }
+    const resultAt = session.msgs.findIndex((m, i) => i >= fgFrom && isResult(m));
+    const endedBeforeResult = session.msgs.findIndex(
+      (m) => isSystem(m, "task_notification") && m.task_id === started.task_id,
+    );
     const facts = [
-      `foreground subagent: is_backgrounded = ${String(started.is_backgrounded)}`,
-      `it appears in background_tasks_changed: ${yesNo(inLevel)}`,
-      `TaskTracker lists it once its turn is over: ${yesNo(afterForeground > 0)}`,
+      `the subagent's task_started says is_backgrounded = ${String(started.is_backgrounded)}`,
+      `the Agent tool's result says it launched asynchronously: ${yesNo(launchedAsync)}`,
+      `it is listed in background_tasks_changed: ${yesNo(inLevel)}`,
+      `its task_notification came ${endedBeforeResult >= 0 && endedBeforeResult < resultAt ? "before" : "after"} the turn's result`,
+      `TaskTracker agreed with the messages at ${results - disagreed} of ${results} results`,
     ];
     let outcome: Outcome | undefined;
-    if (started.is_backgrounded !== false)
-      outcome = fail("a foreground subagent does not say is_backgrounded: false", facts);
-    else if (inLevel)
+    if ((started.is_backgrounded === true) !== inLevel)
       outcome = fail(
-        "a foreground subagent is listed in background_tasks_changed",
+        "is_backgrounded and background_tasks_changed disagree about the subagent",
         facts,
       );
-    else if (afterForeground > 0)
+    else if (disagreed > 0)
       outcome = fail(
-        "TaskTracker still lists a foreground subagent after its turn",
+        "TaskTracker's list differs from what the messages say is still running",
         facts,
       );
     // The background command.

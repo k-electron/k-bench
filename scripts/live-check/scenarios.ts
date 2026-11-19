@@ -295,10 +295,18 @@ const tasks: Scenario = {
           name: "Agent",
           input: { subagent_type: "kb-probe", description: "probe", prompt: "Reply hi" },
         },
-        task: { id: "task-fg-1", description: "probe", subagentType: "kb-probe" },
-        result: "hi",
+        // As recorded from a real Claude Code (#161): the Agent tool launches asynchronously, the
+        // task is backgrounded, and it ends before the turn's result.
+        task: {
+          id: "task-agent-1",
+          description: "probe",
+          subagentType: "kb-probe",
+          background: true,
+        },
+        result: "Async agent launched",
         ask: true,
       },
+      { taskEnd: { id: "task-agent-1" } },
       { text: "It said hi." },
     ]);
     cap.notes.foregroundFrom = s.msgs.length;
@@ -307,6 +315,8 @@ const tasks: Scenario = {
       { timeoutMs: 150_000 },
     );
     cap.notes.foregroundTo = s.msgs.length;
+    // A finished task can start a turn nobody sent (it tells Claude): let that end first.
+    await s.settled(30_000);
     if (!run.settings.bashCovered) {
       script(ctx, [
         {
@@ -400,7 +410,9 @@ const midturn: Scenario = {
     s.send("After that, reply with only the word: second", second);
     run.fakeClaude?.release("gate");
     // Both turns end, whether the second was folded into the first or ran after it.
-    await s.waitForResults(from, 2, 150_000);
+    // (A second prompt folded into the running turn gives one `result`, so the end of each
+    // prompt is Claude Code's `command_lifecycle` `completed`, not a `result` apiece.)
+    cap.notes.completed = await s.waitForCompleted([first, second], from, 150_000);
     cap.notes.from = from;
     await s.close();
   },

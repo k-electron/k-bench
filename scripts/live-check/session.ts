@@ -417,22 +417,6 @@ export class LiveSession {
     });
   }
 
-  /** Waits until `count` results have arrived after `from`; returns how many did (fewer after `timeoutMs`). */
-  async waitForResults(from: number, count: number, timeoutMs: number): Promise<number> {
-    const deadline = Date.now() + timeoutMs;
-    let cursor = from;
-    let seen = 0;
-    while (seen < count) {
-      const left = deadline - Date.now();
-      if (left <= 0) break;
-      const found = await this.next(isResult, left, cursor);
-      if (!found) break;
-      seen += 1;
-      cursor = this.msgs.indexOf(found) + 1;
-    }
-    return seen;
-  }
-
   /** Sends a prompt as k-bench does (`uuid` set by the client). Books one turn first; throws `BudgetExhausted` if it does not fit. Returns the index to wait from. */
   send(text: string, uuid: string = randomUUID()): number {
     if (this.run.abort.signal.aborted)
