@@ -281,6 +281,11 @@ export class LiveSession {
       });
     const readOut = tap("out");
     const readIn = tap("in");
+    // A write to a process that has gone, or a read cut short, is the SDK's to hear of through
+    // its exit, not an error that ends the script.
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      stream?.on("error", () => {});
+    }
     const stdout = new Transform({
       transform(chunk: Buffer, _encoding, done) {
         readOut(chunk);
@@ -297,6 +302,8 @@ export class LiveSession {
         (child.stdin as Writable).end(done);
       },
     });
+    stdin.on("error", () => {});
+    stdout.on("error", () => {});
     (child.stderr as Readable).on("data", (chunk: Buffer) => {
       this.stderrTail = `${this.stderrTail}${chunk.toString("utf8")}`.slice(-2000);
     });

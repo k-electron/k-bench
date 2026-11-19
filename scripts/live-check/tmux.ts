@@ -2,6 +2,8 @@
 // configuration file), driven by keystrokes and read by polling the pane for text. Never the
 // owner's `k-bench` socket. Killed when the check ends, or aborts.
 import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { killGroup } from "./session.ts";
 
 const PANE = "t";
@@ -110,6 +112,13 @@ export class Tmux {
       // Already gone.
     }
     for (const pid of this.pids) killGroup(pid);
+    // A server that ended by itself can leave its socket file: this one's own name only.
+    rmSync(
+      join(process.env.TMUX_TMPDIR ?? "/tmp", `tmux-${process.getuid?.()}`, this.socket),
+      {
+        force: true,
+      },
+    );
     this.started = false;
   }
 }

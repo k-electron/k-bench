@@ -54,6 +54,8 @@ A Claude Agent test drives a real k-bench server, which starts the **real Agent 
 - `ExitPlanMode` and `AskUserQuestion` are ordinary `can_use_tool` requests; an `AskUserQuestion` answer reaches the tool as `input.answers`.
 - `terminal_slash_commands` and `plugins` are on `system/init` only; the `initialize` reply has `commands`.
 
+**Checking a real `claude` against the fake's assumptions.** `pnpm live-check` ([The live check](live-check.md)) runs the real `claude` by hand, on Haiku, and says which of the shapes the fake and the Agent were built on, rather than recorded, hold. `--fake` rehearses it against this fake.
+
 **Re-recording.** Only the owner does this, by hand, never in CI: it runs the real `claude` on the owner's login and spends a few short Haiku turns (cents).
 
 1. `node scripts/record-fake-claude.ts record <out-dir>` runs the SDK against `scripts/tee-claude.mjs`, which runs the real `claude` (`~/.local/bin/claude`, or the path given after `<out-dir>`) and copies every line each way into `<out-dir>/<scenario>.jsonl`: the scenarios are `text`, `permission`, `ask-question`, `plan`, `mid-turn` and `clear` (name some after the path to record only those). Denied asks mean nothing runs; the work folder is a throwaway inside `<out-dir>`, which belongs outside the repository (or in the ignored `.scratch/`, as in `.scratch/fake-claude-recording`).
