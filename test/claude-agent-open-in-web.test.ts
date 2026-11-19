@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { LogEntry } from "../src/shared/agent-protocol.ts";
 import { isResult } from "./harness/agent.ts";
@@ -167,6 +170,47 @@ describe("Open in web", () => {
       "claude-stub heard: after compacting",
       "--- Back in web ---",
     ]);
+  });
+
+  it("says so when the terminal's turns cannot be matched to the Agent's, instead of importing nothing silently", async () => {
+    const { instance, server, workspace } = await boot();
+    const session = await server.createClaudeAgent(workspace.id);
+    const agent = await server.openAgent(session.id);
+    await agent.sync();
+    agent.prompt("before");
+    await agent.waitForEntry(isResult, "the answer");
+    await server.post(`/api/sessions/${session.id}/open-in-terminal`);
+    const terminal = await server.openTerminal(session.id);
+    await terminal.waitForOutput("claude-stub ready");
+    terminal.run("from the terminal");
+    await terminal.waitForOutput("claude-stub heard: from the terminal");
+    // Claude Code rewrote the saved chain, so that none of the IDs k-bench holds is in it.
+    const projects = join(instance.config.claudeConfigDir as string, "projects");
+    for (const folder of readdirSync(projects)) {
+      for (const file of readdirSync(join(projects, folder))) {
+        const path = join(projects, folder, file);
+        const ids = new Map<string, string>();
+        writeFileSync(
+          path,
+          readFileSync(path, "utf8").replace(
+            /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+            (id) => {
+              if (id === file.replace(/\.jsonl$/, "")) return id;
+              if (!ids.has(id)) ids.set(id, randomUUID());
+              return ids.get(id) as string;
+            },
+          ),
+        );
+      }
+    }
+
+    const response = await server.post(`/api/sessions/${session.id}/open-in-web`);
+
+    expect(response.status).toBe(200);
+    const shown = transcript(await loggedIn(server, session.id));
+    expect(shown.slice(0, 2)).toEqual(["> before", "fake claude heard: before"]);
+    expect(shown.join("\n")).toMatch(/--- The terminal's turns could not be matched/);
+    expect(shown.join("\n")).not.toContain("claude-stub heard");
   });
 
   it("takes the whole conversation of a Session that began as a Claude TUI, also from a Stopped one, and the Agent resumes it", async () => {
