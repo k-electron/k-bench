@@ -17,7 +17,8 @@ function useNow(active: boolean): number {
  * The line under the conversation. While Claude works it says what Claude is doing and for how
  * long (`✻ Running Bash… (12s)`), and it goes when the turn ends. When Claude Code has reported
  * it, it also says how much context is left until Claude Code compacts by itself, as the terminal
- * does; that stays, because it is what the owner glances at between turns.
+ * does, and which model Claude is on; those stay, because they are what the owner glances at
+ * between turns.
  */
 export function StatusLine({
   working,
@@ -25,6 +26,7 @@ export function StatusLine({
   activity,
   turnStartedAt,
   contextLeft,
+  model,
 }: {
   /** A turn is running (Working, or Waiting for you). */
   working: boolean;
@@ -36,9 +38,11 @@ export function StatusLine({
   turnStartedAt: number | undefined;
   /** Percent of context left until auto-compact, when Claude Code has said. */
   contextLeft: number | undefined;
+  /** Claude Code's name for the model it is on (`Opus 5.5`), once known. */
+  model: string | undefined;
 }) {
   const now = useNow(working && turnStartedAt !== undefined);
-  if (!working && contextLeft === undefined) return null;
+  if (!working && contextLeft === undefined && model === undefined) return null;
   return (
     <div className="flex shrink-0 flex-wrap justify-between gap-x-4 px-3 pb-1 font-mono text-xs text-muted-foreground">
       {working && (
@@ -50,9 +54,19 @@ export function StatusLine({
           {turnStartedAt !== undefined && ` (${elapsedSeconds(turnStartedAt, now)}s)`}
         </div>
       )}
-      {contextLeft !== undefined && (
-        <div role="note" aria-label="Context left" className="ml-auto">
-          Context left until auto-compact: {contextLeft}%
+      {(model !== undefined || contextLeft !== undefined) && (
+        <div className="ml-auto flex gap-x-2">
+          {model !== undefined && (
+            <div role="note" aria-label="Model">
+              {model}
+            </div>
+          )}
+          {model !== undefined && contextLeft !== undefined && <span aria-hidden>·</span>}
+          {contextLeft !== undefined && (
+            <div role="note" aria-label="Context left">
+              Context left until auto-compact: {contextLeft}%
+            </div>
+          )}
         </div>
       )}
     </div>
