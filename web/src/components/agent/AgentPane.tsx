@@ -45,17 +45,26 @@ export function AgentPane({
             scrollHeight - scrollTop - clientHeight <= STICK_TO_BOTTOM_PX;
         }}
       >
-        {items.map((item) => (
-          <p
-            key={item.key}
-            className={cn(
-              "break-words whitespace-pre-wrap",
-              item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-            )}
-          >
-            {item.text}
-          </p>
-        ))}
+        {items.map((item) =>
+          item.kind === "interrupted" ? (
+            <p key={item.key} className="text-xs text-muted-foreground">
+              Interrupted
+            </p>
+          ) : (
+            <p
+              key={item.key}
+              className={cn(
+                "break-words whitespace-pre-wrap",
+                item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
+              )}
+            >
+              {item.text}
+              {item.kind === "prompt" && item.queued && (
+                <span className="text-muted-foreground"> (queued)</span>
+              )}
+            </p>
+          ),
+        )}
       </div>
       {conversation.state === "working" && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">

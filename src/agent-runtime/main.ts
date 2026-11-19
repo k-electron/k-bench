@@ -124,6 +124,8 @@ async function command(message: AgentClientMessage): Promise<void> {
     pendingTurns += 1;
     publishStatus();
     claude.prompt(message.id, message.text);
+  } else if (message.type === "interrupt") {
+    claude.interrupt();
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message.decision);
   } else if (message.type === "shutdown") {

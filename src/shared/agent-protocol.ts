@@ -245,6 +245,13 @@ export type AgentClientMessage =
    * What came of it arrives as the ask's `permission_answered` entry, to every device.
    */
   | { type: "answer"; requestId: string; decision: "allow" | "deny" }
+  /**
+   * Stops the turn that is running, as Esc does in a terminal: its text so far is kept, its
+   * running tool ends unanswered, and the turn's `result` is an error. Prompts already sent
+   * and waiting are not taken back: they run next, in the order sent. Harmless when nothing
+   * is running.
+   */
+  | { type: "interrupt" }
   /** Ends the Agent: the turn is interrupted, the log finished, Claude Code closed. */
   | { type: "shutdown" };
 
@@ -294,6 +301,8 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
         (message.decision === "allow" || message.decision === "deny")
         ? { type: "answer", requestId: message.requestId, decision: message.decision }
         : undefined;
+    case "interrupt":
+      return { type: "interrupt" };
     case "shutdown":
       return { type: "shutdown" };
     default:

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { AgentHello, AgentStatus } from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
 import { retryWhenAwake } from "../retryWhenAwake";
+import { promptHistory } from "./prompts";
 import {
   applyServerMessage,
   emptyTranscript,
@@ -55,6 +56,17 @@ export interface AgentConversation {
    * that came second is ignored without a word.
    */
   answer(requestId: string, decision: "allow" | "deny"): boolean;
+  /**
+   * Stops the turn that is running. False when nothing runs, when it could not be sent
+   * (reconnecting: dropped, never queued), or when an interrupt is already on its way: a
+   * second one would land on the next waiting prompt's turn, which the owner did not mean to
+   * stop (holding Esc repeats).
+   */
+  interrupt(): boolean;
+  /** An interrupt has been sent and the turn it stops has not ended yet. */
+  interrupting: boolean;
+  /** The prompts typed in this Agent, oldest first: what Up and Down in the input step through. */
+  history: string[];
 }
 
 interface Model {
@@ -63,14 +75,27 @@ interface Model {
   state: AgentStatus["state"] | undefined;
   ended: boolean;
   reconnecting: boolean;
+  /** How many turns had ended when the owner last interrupted. */
+  interruptedAt: number | undefined;
 }
 
 type Event =
   | { type: "message"; message: Parameters<typeof applyServerMessage>[1] }
   | { type: "reconnecting"; on: boolean }
-  | { type: "ended" };
+  | { type: "ended" }
+  | { type: "interrupted" };
+
+/** How many turns the log shows ended (each ends with a `result`). */
+function turnsEnded(transcript: Model["transcript"]): number {
+  return transcript.entries.filter(
+    (entry) => entry.kind === "sdk" && entry.message.type === "result",
+  ).length;
+}
 
 function reduce(model: Model, event: Event): Model {
+  if (event.type === "interrupted") {
+    return { ...model, interruptedAt: turnsEnded(model.transcript) };
+  }
   if (event.type === "ended") return { ...model, ended: true, reconnecting: false };
   if (event.type === "reconnecting") return { ...model, reconnecting: event.on };
   const { message } = event;
@@ -87,6 +112,7 @@ const initial: Model = {
   state: undefined,
   ended: false,
   reconnecting: false,
+  interruptedAt: undefined,
 };
 
 /** Connects to a Claude Agent for as long as the component is mounted. */
@@ -125,6 +151,21 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     [],
   );
 
+  const interrupting =
+    model.interruptedAt !== undefined &&
+    model.interruptedAt === turnsEnded(model.transcript);
+
+  const interrupt = useCallback(() => {
+    if (model.ended || model.state !== "working" || interrupting) return false;
+    if (!connection.current?.send({ type: "interrupt" })) return false;
+    dispatch({ type: "interrupted" });
+    return true;
+  }, [model.ended, model.state, interrupting]);
+
+  const history = useMemo(
+    () => promptHistory(model.transcript.entries),
+    [model.transcript],
+  );
   const items = useMemo(() => transcriptItems(model.transcript), [model.transcript]);
   const allAsks = useMemo(() => permissionAsks(model.transcript), [model.transcript]);
   return {
@@ -136,5 +177,8 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     reconnecting: model.reconnecting,
     send,
     answer,
+    interrupt,
+    interrupting,
+    history,
   };
 }

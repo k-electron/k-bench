@@ -33,6 +33,10 @@ export function PromptDock({
           disabled={conversation.ended}
           offline={conversation.reconnecting}
           autoFocus={focused && ask === undefined}
+          history={conversation.history}
+          working={conversation.state === "working"}
+          interrupting={conversation.interrupting}
+          onInterrupt={conversation.interrupt}
         />
       </div>
     </>

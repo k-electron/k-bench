@@ -52,6 +52,8 @@ export type FakeStep =
   | {
       tool: { name: string; input?: Record<string, unknown>; id?: string };
       ask?: true | { suggestions?: unknown[]; description?: string; extra?: object };
+      /** The tool keeps running until the test calls `release(name)`; an interrupt ends the turn with it unanswered. */
+      hold?: string;
       result?: string;
       isError?: boolean;
       toolUseResult?: unknown;

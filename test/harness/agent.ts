@@ -138,6 +138,11 @@ export class AgentClient {
     this.send({ type: "answer", requestId, decision });
   }
 
+  /** Interrupts the turn that is running, as a Pane's Interrupt button or Esc does. */
+  interrupt(): void {
+    this.send({ type: "interrupt" });
+  }
+
   /** Sends a prompt and returns the ID it was sent with. */
   prompt(text: string, id: string = randomUUID()): string {
     this.send({ type: "prompt", id, text });

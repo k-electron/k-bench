@@ -10,6 +10,7 @@ A Claude Agent shows the conversation as a **Transcript** in the Pane instead of
 
 - Claude's replies stream in, with prose in a reading font and real markdown. Tool output collapses, edits show as coloured diffs, and thinking is one muted line.
 - You type into an ordinary input box. On a phone there are no Extra keys, and the keyboard's own typing aids work.
+- While Claude works you can keep typing: each message goes straight to Claude Code and shows "(queued)" until Claude picks it up. You can't take a queued message back. An **Interrupt** button by the input (and Esc on a desktop) stops the turn, as Esc does in the terminal; messages already queued then run, in the order you sent them. In an empty input, Up and Down step through the prompts you sent before, on any device.
 - When Claude needs an answer, an Allow/Deny, a question or a plan to approve takes over the input, so you answer with one tap.
 - Each Claude Agent's row in the sidebar shows whether it is **Idle**, **Working** or **Waiting for you**, and pulses when something happened that you haven't seen.
 - It keeps going when you close the browser, lock your phone or restart k-bench, and every device is an equal view of the same conversation.
