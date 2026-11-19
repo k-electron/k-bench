@@ -242,9 +242,30 @@ export interface AgentStatus {
   bell?: boolean;
 }
 
-/** Entries the client asked for with `sync`, in order. */
+/**
+ * Entries the client asked for with `sync`, in order. `from` is the first `seq` of the
+ * contiguous range the replay covers, through to the newest entry: the whole log when it is 1.
+ * What a `sync` with `tailTurns` leaves out is earlier than `from`, to be fetched with `page`.
+ * Entries below `from` can also be here, first: the permission asks still open
+ * (`openPermissionAsks`) that were made before it, so that an open ask is always known. A
+ * replay without `from` (a runtime built before paging existed) covers everything after the
+ * `afterSeq` asked.
+ */
 export interface AgentReplay {
   type: "replay";
+  entries: LogEntry[];
+  from?: number;
+}
+
+/**
+ * The answer to a `page` request: the entries from `from` up to, but not including,
+ * `beforeSeq` (which the request named, so a stale answer can be told), in order, with none
+ * missing. `from` is 1 when the page reaches the start of the log.
+ */
+export interface AgentPage {
+  type: "page";
+  beforeSeq: number;
+  from: number;
   entries: LogEntry[];
 }
 
@@ -289,6 +310,7 @@ export type AgentServerMessage =
   | AgentHello
   | AgentStatus
   | AgentReplay
+  | AgentPage
   | AgentEntry
   | AgentPartial
   | AgentSnapshot
@@ -303,8 +325,20 @@ export type AgentClientMessage =
    * connection every `entry` and `partial` from the same moment on, with no gap and no
    * repeat. A connection that never syncs receives `hello` and `status` only.
    * Once per connection.
+   *
+   * `tailTurns`, for a client that holds nothing (`afterSeq` 0; ignored otherwise, since a
+   * client that holds entries needs everything after them), limits the replay to the last
+   * that many turns (see `AgentLog.readTail`) plus the permission asks still open from
+   * before them. The replay says where it begins (`from`), and `page` fetches what is
+   * earlier. A runtime that does not know `tailTurns` replays everything, with no `from`.
    */
-  | { type: "sync"; afterSeq: number }
+  | { type: "sync"; afterSeq: number; tailTurns?: number }
+  /**
+   * Asks for the `limit` turns before `beforeSeq` (the `from` of what the client holds):
+   * answered to this connection alone with a `page`. Entries before `beforeSeq` never
+   * change, so a page needs no sync and cannot race the live entries.
+   */
+  | { type: "page"; beforeSeq: number; limit: number }
   /**
    * A prompt to send to Claude Code as typed. `id` is a UUID chosen by the client; it goes
    * to Claude Code as the message's `uuid`, which Claude Code echoes back when it takes the
@@ -347,6 +381,20 @@ export type AgentClientMessage =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** The most turns a `sync`'s `tailTurns` or a `page`'s `limit` may ask for. */
+export const MAX_TURNS_PER_REQUEST = 200;
+
+/** Whether `value` is an integer from `min` up to `max`. */
+function isCount(
+  value: unknown,
+  min: number,
+  max = Number.MAX_SAFE_INTEGER,
+): value is number {
+  return (
+    typeof value === "number" && Number.isInteger(value) && value >= min && value <= max
+  );
+}
+
 /** Longest `text` a prompt may carry. */
 export const MAX_PROMPT_CHARACTERS = 1_000_000;
 
@@ -370,11 +418,19 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
     return undefined;
   }
   switch (message.type) {
-    case "sync":
-      return typeof message.afterSeq === "number" &&
-        Number.isInteger(message.afterSeq) &&
-        message.afterSeq >= 0
-        ? { type: "sync", afterSeq: message.afterSeq }
+    case "sync": {
+      if (!isCount(message.afterSeq, 0)) return undefined;
+      if (message.tailTurns === undefined) {
+        return { type: "sync", afterSeq: message.afterSeq };
+      }
+      return isCount(message.tailTurns, 1, MAX_TURNS_PER_REQUEST)
+        ? { type: "sync", afterSeq: message.afterSeq, tailTurns: message.tailTurns }
+        : undefined;
+    }
+    case "page":
+      return isCount(message.beforeSeq, 1) &&
+        isCount(message.limit, 1, MAX_TURNS_PER_REQUEST)
+        ? { type: "page", beforeSeq: message.beforeSeq, limit: message.limit }
         : undefined;
     case "prompt":
       return typeof message.id === "string" &&
@@ -421,6 +477,7 @@ const SERVER_TYPES: readonly string[] = [
   "hello",
   "status",
   "replay",
+  "page",
   "entry",
   "partial",
   "snapshot",

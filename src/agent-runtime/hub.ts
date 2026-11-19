@@ -46,7 +46,7 @@ export class ClientHub {
     hello: () => AgentHello;
     /** The text so far of the message streaming now, for a connection that joins mid-message. */
     snapshot: () => AgentSnapshot | undefined;
-    /** Called with every valid message except `sync` and `view`, which the hub answers itself. */
+    /** Called with every valid message except `sync`, `page` and `view`, which the hub answers itself. */
     onCommand: (message: AgentClientMessage) => void;
     /** Called when a connection says its page now shows the Agent. */
     onViewed: () => void;
@@ -135,13 +135,25 @@ export class ClientHub {
       }
       // The replay, the snapshot of the text streaming now and the join happen in one turn
       // of the event loop, so no entry or fragment falls between them and none is sent twice.
-      this.send(client, {
-        type: "replay",
-        entries: this.log.readAfter(message.afterSeq),
-      });
+      if (message.tailTurns !== undefined && message.afterSeq === 0) {
+        this.send(client, { type: "replay", ...this.log.readTail(message.tailTurns) });
+      } else {
+        this.send(client, {
+          type: "replay",
+          from: message.afterSeq + 1,
+          entries: this.log.readAfter(message.afterSeq),
+        });
+      }
       const live = this.snapshot();
       if (live) this.send(client, live);
       client.synced = true;
+    } else if (message.type === "page") {
+      // Entries before `beforeSeq` never change: no need to be synced, or to be quick about it.
+      this.send(client, {
+        type: "page",
+        beforeSeq: message.beforeSeq,
+        ...this.log.readPage(message.beforeSeq, message.limit),
+      });
     } else if (message.type === "view") {
       client.visible = message.visible;
       if (message.visible) this.onViewed();

@@ -2,6 +2,7 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { Store } from "../src/server/store.ts";
+import { AgentClient } from "../test/harness/agent.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
 import { pollUntil } from "../test/harness/poll.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
@@ -510,6 +511,11 @@ export interface Kbench {
    * go). Works while the server is stopped too.
    */
   ringBell(sessionName: string): Promise<void>;
+  /**
+   * Opens the named Claude Agent's socket like a device would, with no browser involved, to
+   * send it prompts (a long conversation, say) while the page shows nothing of it yet.
+   */
+  openAgent(sessionName: string): Promise<AgentClient>;
 }
 
 interface Fixtures {
@@ -539,6 +545,10 @@ export const test = base.extend<Fixtures>({
           });
           typeIntoSession(socket, id, "printf '\\a'");
         },
+        openAgent: (sessionName) =>
+          AgentClient.open(server.baseUrl, sessionIdNamed(instance, sessionName), {
+            "Tailscale-User-Login": LOGIN,
+          }),
         stopServer: () => server.stop(),
         startServer: async () => {
           server = await instance.start({ webDir: WEB_DIR });

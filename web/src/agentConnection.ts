@@ -29,6 +29,8 @@ const OPEN = 1;
 
 const DEFAULT_RETRY_FIRST_MS = 500;
 const DEFAULT_RETRY_MAX_MS = 5000;
+/** How many of the latest turns a page that holds nothing asks for: the rest comes by scrolling up. */
+const DEFAULT_TAIL_TURNS = 5;
 
 export interface AgentConnectionOptions {
   sessionId: string;
@@ -53,6 +55,8 @@ export interface AgentConnectionOptions {
   retryFirstMs?: number;
   /** The longest retry delay. Defaults to 5000. */
   retryMaxMs?: number;
+  /** How many of the latest turns to open with, when nothing is held yet. Defaults to 5. */
+  tailTurns?: number;
 }
 
 /** What a connection reports. */
@@ -106,9 +110,13 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
     viewing,
     retryFirstMs = DEFAULT_RETRY_FIRST_MS,
     retryMaxMs = DEFAULT_RETRY_MAX_MS,
+    tailTurns = DEFAULT_TAIL_TURNS,
   } = options;
   const listeners = new Set<Partial<AgentListener>>();
-  /** The newest log entry this connection has had: every socket syncs from it. */
+  /**
+   * The newest log entry this connection has had: every socket syncs from it. A `page` answer
+   * is older than this, so it never moves it.
+   */
   let lastSeq = 0;
   let socket: AgentSocket | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -132,8 +140,16 @@ export function createAgentConnection(options: AgentConnectionOptions): AgentCon
     socket = ws;
     ws.onopen = () => {
       attempts = 0;
-      // The sync goes first: whatever is sent after it is in order after the replay.
-      ws.send(encodeAgentClientMessage({ type: "sync", afterSeq: lastSeq }));
+      // The sync goes first: whatever is sent after it is in order after the replay. A
+      // connection that holds nothing opens with the latest turns (older ones come by `page`);
+      // one that holds entries asks for everything after them, so it never has a gap.
+      ws.send(
+        encodeAgentClientMessage(
+          lastSeq === 0
+            ? { type: "sync", afterSeq: 0, tailTurns }
+            : { type: "sync", afterSeq: lastSeq },
+        ),
+      );
       // Each socket is a new connection to the runtime, which has forgotten what the last said.
       if (viewing) {
         ws.send(encodeAgentClientMessage({ type: "view", visible: viewing.visible() }));
