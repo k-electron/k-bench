@@ -355,6 +355,33 @@ export interface AgentSnapshot {
   blocks: Array<{ index: number; type: string; text: string }>;
 }
 
+/**
+ * One entry of the `/` menu: a command, or a skill, as Claude Code lists it (the SDK's
+ * `SlashCommand`: its own, the owner's, a project's, a plugin's or an MCP server's).
+ */
+export interface AgentCommand {
+  /** Without the leading slash. */
+  name: string;
+  description: string;
+  /** What follows the name (`<file>`); empty when it takes nothing. */
+  argumentHint: string;
+  /** Other names that run it (`/cost` and `/stats` for `/usage`). */
+  aliases?: string[];
+}
+
+/**
+ * What the `/` menu offers, whole: the commands and skills Claude Code lists, **without the
+ * ones it marks as bound to a terminal** (`exit`, `statusline`...). Sent to a connection right
+ * after its `replay`, and again to every synced connection whenever it changes (Claude Code
+ * found skills as the work moved on, a plugin came, or a turn's `init` said which commands are
+ * terminal-only). Each one replaces the last. Never logged: it describes the Claude Code now
+ * running, not the conversation.
+ */
+export interface AgentCommands {
+  type: "commands";
+  commands: AgentCommand[];
+}
+
 /** A message the runtime refused, or a request it could not carry out. */
 export interface AgentError {
   type: "error";
@@ -370,6 +397,7 @@ export type AgentServerMessage =
   | AgentEntry
   | AgentPartial
   | AgentSnapshot
+  | AgentCommands
   | AgentError;
 
 // ---- Client to runtime -------------------------------------------------------------------
@@ -589,6 +617,7 @@ const SERVER_TYPES: readonly string[] = [
   "entry",
   "partial",
   "snapshot",
+  "commands",
   "error",
 ] satisfies AgentServerMessage["type"][];
 

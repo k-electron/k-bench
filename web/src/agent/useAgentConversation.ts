@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
+  type AgentCommand,
   type AgentContextUsage,
   type AgentHello,
   type AgentStatus,
@@ -121,6 +122,8 @@ export interface AgentConversation {
   interrupting: boolean;
   /** The prompts typed in this Agent, oldest first: what Up and Down in the input step through. */
   history: string[];
+  /** What the `/` menu offers (#150), as the runtime last said; empty until it has. */
+  commands: readonly AgentCommand[];
 }
 
 interface Model {
@@ -130,6 +133,7 @@ interface Model {
   mode: PermissionMode | undefined;
   turnStartedAt: number | undefined;
   context: AgentContextUsage | undefined;
+  commands: readonly AgentCommand[];
   ended: boolean;
   reconnecting: boolean;
   /** The `beforeSeq` of the page request waiting for its answer, if one is. */
@@ -165,6 +169,7 @@ function reduce(model: Model, event: Event): Model {
     return { ...model, requestedBefore: event.before };
   const { message } = event;
   if (message.type === "hello") return { ...model, hello: message };
+  if (message.type === "commands") return { ...model, commands: message.commands };
   if (message.type === "status") {
     return {
       ...model,
@@ -178,6 +183,7 @@ function reduce(model: Model, event: Event): Model {
 }
 
 const NO_ASKS: PermissionAsk[] = [];
+const NO_COMMANDS: readonly AgentCommand[] = [];
 
 const initial: Model = {
   transcript: emptyTranscript,
@@ -186,6 +192,7 @@ const initial: Model = {
   mode: undefined,
   turnStartedAt: undefined,
   context: undefined,
+  commands: NO_COMMANDS,
   ended: false,
   reconnecting: false,
   requestedBefore: undefined,
@@ -312,5 +319,6 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     interrupt,
     interrupting,
     history,
+    commands: model.commands,
   };
 }

@@ -98,6 +98,15 @@ export interface InterruptedItem extends ItemBase {
 }
 
 /**
+ * What a command typed in the input answered (`system/local_command_output`: `/context`,
+ * `/usage`, `/model opus`...), under the `⎿` as a muted block of lines (#150).
+ */
+export interface CommandOutputItem extends ItemBase {
+  kind: "command_output";
+  text: string;
+}
+
+/**
  * `⎿ permission: allowed`: how an ask the owner answered ended, left in the Transcript where
  * the answer came. Not made for an ask nobody answered (withdrawn, or the Agent stopped): the
  * tool's own red mark says that.
@@ -125,7 +134,8 @@ export type TranscriptItem =
   | InterruptedItem
   | PermissionItem
   | UnsupportedItem
-  | UncommonItem;
+  | UncommonItem
+  | CommandOutputItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -158,6 +168,21 @@ function textOf(content: unknown): string {
         : "",
     )
     .join("\n");
+}
+
+/**
+ * What a command printed, to show: without the `<local-command-stdout>` wrapper Claude Code
+ * puts round it in its own transcripts, or the colour codes a terminal would have drawn.
+ */
+function commandOutputText(content: unknown): string {
+  if (typeof content !== "string") return "";
+  return (
+    content
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is removed
+      .replace(/\u001b\[[0-9;]*[A-Za-z]/g, "")
+      .replace(/<\/?local-command-std(?:out|err)>/g, "")
+      .trim()
+  );
 }
 
 /** A tool call as the builder holds it until its result arrives. */
@@ -283,12 +308,8 @@ function readSdkMessage(
 ): void {
   const { message } = entry;
   // What k-bench does not know shows wherever it came from, a subagent's included.
-  addUnsupported(
-    state,
-    entry.seq,
-    `${entry.seq}-unsupported`,
-    unsupportedInMessage(message),
-  );
+  const unsupported = unsupportedInMessage(message);
+  addUnsupported(state, entry.seq, `${entry.seq}-unsupported`, unsupported);
   // A subagent's messages (#149 shows them) are not the conversation's own.
   if (message.parent_tool_use_id != null) return;
   // The less common messages (#148) have their own reader; it says whether it handled one.
@@ -309,6 +330,18 @@ function readSdkMessage(
           addUnsupported(state, entry.seq, `${entry.seq}-terminal`, [terminalOnly]);
         }
         state.focusView = message.view_mode === "focus";
+      } else if (message.subtype === "local_command_output") {
+        const text = commandOutputText(message.content);
+        // A reply saying the command isn't available here is an Unsupported row (#153) already.
+        const answeredUnsupported = unsupported.some((one) => one.what === "command");
+        if (text !== "" && !answeredUnsupported) {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
       }
       return;
     case "assistant": {
