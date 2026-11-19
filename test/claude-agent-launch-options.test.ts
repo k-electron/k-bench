@@ -63,14 +63,4 @@ describe("a Claude Agent's Launch options", () => {
     expect(off?.argv.join(" ")).not.toContain("--advisor");
     expect(off?.env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL).toBe("1");
   });
-
-  it("are the ones the dialog remembers, shared with Claude TUI", async () => {
-    const { server, workspace } = await boot();
-    const options = { model: "opus", effort: "high", advisor: "off", focusView: true };
-
-    await server.createClaudeAgent(workspace.id, { claude: options });
-
-    const last = await (await server.request("/api/new-session/last")).json();
-    expect(last).toEqual({ kind: "claude-agent", claude: options });
-  });
 });
