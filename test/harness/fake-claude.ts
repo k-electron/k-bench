@@ -38,6 +38,22 @@ export function installFakeClaude(root: string): string {
   return program;
 }
 
+/**
+ * A subagent or background task the fake starts (#149), as Claude Code reports one
+ * (`task_started`, and `background_tasks_changed` for a background one). Shapes come from the
+ * SDK's types: they were not recorded from a real Claude Code.
+ */
+export interface FakeTask {
+  /** The task's ID: what `stop_task` and `FakeClaude.endTask` name. */
+  id: string;
+  description?: string;
+  /** A subagent (default) or a background shell command. */
+  type?: "agent" | "bash";
+  subagentType?: string;
+  /** Goes on after the turn ends, and is listed in `background_tasks_changed`. Otherwise it blocks its tool call. */
+  background?: boolean;
+}
+
 /** One thing a scripted turn does, in order. See `FakeClaude.script`. */
 export type FakeStep =
   /** Streams a text block: a sentence (sent word by word) or its fragments, which may include `{ hold }`. */
@@ -55,12 +71,33 @@ export type FakeStep =
       ask?: true | { suggestions?: unknown[]; description?: string; extra?: object };
       /** The tool keeps running until the test calls `release(name)`; an interrupt ends the turn with it unanswered. */
       hold?: string;
+      /**
+       * The tool is a subagent (`Agent`) or a background command (`Bash`): its task starts with
+       * the tool call, sharing its `tool_use_id`. A foreground task ends before the tool's
+       * result; a `background` one goes on (the result then only says it started).
+       */
+      task?: FakeTask;
       result?: string;
       isError?: boolean;
       toolUseResult?: unknown;
     }
   /** Waits until the test calls `release(name)`, or the turn is interrupted. */
   | { hold: string }
+  /** Starts a task that has no tool call of its own (a standalone line in the Transcript). */
+  | { task: FakeTask }
+  /** Progress of a running task, as `task_progress` reports it. */
+  | {
+      taskProgress: {
+        id: string;
+        toolUses?: number;
+        tokens?: number;
+        durationMs?: number;
+        lastTool?: string;
+        summary?: string;
+      };
+    }
+  /** Ends a running task from inside the turn. */
+  | { taskEnd: { id: string; status?: "completed" | "failed" | "stopped" } }
   /** Claude Code changes its own permission mode (as leaving plan mode does) and says so. */
   | { mode: PermissionMode }
   /** Sends this message as it is: a type the browser does not know, for instance. */
@@ -160,6 +197,25 @@ export class FakeClaude {
   /** Lets a turn waiting at `{ hold: name }` carry on. */
   release(name: string): void {
     this.write(join(this.folder, "script", `release-${name}`), {});
+  }
+
+  /**
+   * Ends a running task from outside any turn, as a background task finishes by itself: the
+   * fake says so as `task_updated`, `task_notification` and a new `background_tasks_changed`.
+   * Does nothing if no such task is running.
+   */
+  endTask(id: string, status: "completed" | "failed" = "completed"): void {
+    this.write(join(this.folder, "tasks", `end-${id}.json`), { id, status });
+  }
+
+  /**
+   * Sends this message as it is, outside any turn: what a background task's own messages
+   * look like when they arrive after the turn that started it has ended.
+   */
+  say(message: Record<string, unknown>): void {
+    this.written += 1;
+    const name = `say-${Date.now()}-${String(this.written).padStart(6, "0")}.json`;
+    this.write(join(this.folder, "tasks", name), message);
   }
 
   /** Everything the fake has received, in order (several runs of it add to the same list). */

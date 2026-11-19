@@ -181,6 +181,16 @@ export class AgentClient {
     this.send({ type: "set_permission_mode", mode });
   }
 
+  /** Stops one subagent or background task, as the Stop on its line in the Transcript does. */
+  stopTask(taskId: string): void {
+    this.send({ type: "stop_task", taskId });
+  }
+
+  /** The IDs of the tasks the newest `status` says are running, in the order they started. */
+  get taskIds(): string[] {
+    return (this.status?.tasks ?? []).map((task) => task.id);
+  }
+
   /** Answers an ask as a Pane's Allow or Deny button does. */
   answer(requestId: string, decision: "allow" | "deny"): void {
     this.send({ type: "answer", requestId, decision });

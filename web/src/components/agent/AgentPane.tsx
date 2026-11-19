@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { contextLeftPercent, currentActivity } from "@/agent/activity";
 import { useAgentConversation } from "@/agent/useAgentConversation";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
@@ -6,6 +6,7 @@ import { AgentHeader } from "./AgentHeader";
 import { PromptDock } from "./PromptDock";
 import { RawSwitch, RawTranscript, useRawView } from "./RawView";
 import { StatusLine } from "./StatusLine";
+import { StopTaskProvider } from "./TaskLine";
 import { Transcript } from "./Transcript";
 import { useScrollBack } from "./useScrollBack";
 
@@ -29,6 +30,12 @@ export function AgentPane({
   const atBottom = useRef(true);
   const { items, entries } = conversation;
   const rawView = useRawView();
+  const { stopTask: stop, reconnecting, ended } = conversation;
+  // One value until the connection changes, so streaming text does not redraw every task line.
+  const stopTask = useMemo(
+    () => ({ stop, disabled: reconnecting || ended }),
+    [stop, reconnecting, ended],
+  );
   const sentinel = useScrollBack({
     scroller,
     earliestSeq: conversation.earliestSeq,
@@ -69,7 +76,9 @@ export function AgentPane({
         {rawView.all ? (
           <RawTranscript entries={entries} />
         ) : (
-          <Transcript items={items} entries={entries} rawView={rawView} />
+          <StopTaskProvider value={stopTask}>
+            <Transcript items={items} entries={entries} rawView={rawView} />
+          </StopTaskProvider>
         )}
       </div>
       {conversation.loadingEarlier && (

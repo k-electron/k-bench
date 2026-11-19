@@ -87,6 +87,10 @@ export class ClaudeSession {
         enableFileCheckpointing: true,
         extraArgs: { "replay-user-messages": null },
         canUseTool,
+        // The Transcript gives every subagent and background task a Stop of its own
+        // (`stopTask`), so an interrupt must spare them, as the terminal's Esc does: without
+        // this Claude Code kills them all, leaving no way to keep one.
+        perTaskStopAffordance: true,
         // The owner's own environment, plus a request that Claude Code report when a turn
         // starts and ends (`session_state_changed`), which `Activity` believes when it comes.
         env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1" },
@@ -163,6 +167,17 @@ export class ClaudeSession {
   interrupt(): void {
     this.query.interrupt().catch(() => {
       // Claude Code is gone or refused: `ended` reports the first, and a refusal changes nothing.
+    });
+  }
+
+  /**
+   * Stops one subagent or background task by Claude Code's `task_id`; the turn and the other
+   * tasks go on. Claude Code answers with a `task_notification` of status `stopped`. A task
+   * that is already gone is refused by Claude Code: that changes nothing, so it is not an error.
+   */
+  stopTask(taskId: string): void {
+    this.query.stopTask(taskId).catch(() => {
+      // Already ended, or Claude Code is gone (`ended` reports that).
     });
   }
 

@@ -10,6 +10,8 @@
 //   config.json    what the fake is (account, version, plugins, commands, ...)
 //   script/        turns the test has scripted, taken in order by prompts; `auto` turns
 //                  start by themselves, as /loop's do; `release-<name>` ends a `hold`
+//   tasks/         `end-<id>.json` ends a subagent or background task a turn started;
+//                  `say-<n>.json` is a message to send as it is, outside any turn
 //   received.jsonl everything the fake was started with and received, one JSON per line
 import { randomUUID } from "node:crypto";
 import {
@@ -30,6 +32,8 @@ const scriptDir = join(root, "script");
 const conversations = join(root, "conversations");
 const fixture = JSON.parse(readFileSync(join(root, "fixtures", "messages.json"), "utf8"));
 mkdirSync(conversations, { recursive: true });
+const taskControl = join(root, "tasks");
+mkdirSync(taskControl, { recursive: true });
 
 // ---- What it receives, and the environment it keeps -------------------------------------
 
@@ -142,6 +146,115 @@ function until(check, everyMs = 20) {
     const value = check();
     if (value) done(value);
   });
+}
+
+// ---- Subagents and background tasks -----------------------------------------------------
+// Shapes from the SDK's types (system/task_started, task_progress, task_updated,
+// task_notification, background_tasks_changed), not recorded from a real Claude Code.
+
+/** The tasks running now, by id. A foreground one blocks its tool call; a background one outlives the turn. */
+const tasks = new Map();
+
+/** The full set of live background tasks: it replaces whatever the client held. */
+function sendTasksChanged() {
+  send(
+    make(fixture.backgroundTasksChanged, {
+      tasks: [...tasks.values()]
+        .filter((task) => task.background)
+        .map((task) => ({
+          task_id: task.id,
+          task_type: task.type,
+          description: task.description,
+          ...(task.subagentType ? { subagent_type: task.subagentType } : {}),
+        })),
+    }),
+  );
+}
+
+function startTask(spec) {
+  const bash = spec.type === "bash";
+  const task = {
+    id: spec.id,
+    description: spec.description ?? spec.id,
+    type: bash ? "local_bash" : "local_agent",
+    subagentType: bash ? undefined : (spec.subagentType ?? "general-purpose"),
+    background: spec.background === true,
+    toolUseId: spec.toolUseId,
+  };
+  tasks.set(task.id, task);
+  // A task that starts in the background joins the level before its task_started.
+  if (task.background) sendTasksChanged();
+  system("task_started", {
+    task_id: task.id,
+    description: task.description,
+    task_type: task.type,
+    is_backgrounded: task.background,
+    ...(task.subagentType ? { subagent_type: task.subagentType } : {}),
+    ...(task.toolUseId ? { tool_use_id: task.toolUseId } : {}),
+  });
+}
+
+function progressTask(spec) {
+  const task = tasks.get(spec.id);
+  if (!task) return;
+  system("task_progress", {
+    task_id: task.id,
+    description: task.description,
+    usage: {
+      total_tokens: spec.tokens ?? 0,
+      tool_uses: spec.toolUses ?? 0,
+      duration_ms: spec.durationMs ?? 0,
+    },
+    ...(spec.lastTool ? { last_tool_name: spec.lastTool } : {}),
+    ...(spec.summary ? { summary: spec.summary } : {}),
+    ...(task.toolUseId ? { tool_use_id: task.toolUseId } : {}),
+  });
+}
+
+/** A task ends: `status` is `completed`, `failed` or `stopped`. False when there is no such task. */
+function endTask(id, status = "completed") {
+  const task = tasks.get(id);
+  if (!task) return false;
+  tasks.delete(id);
+  system("task_updated", {
+    task_id: id,
+    patch: {
+      status: { completed: "completed", failed: "failed", stopped: "killed" }[status],
+      end_time: Date.now(),
+    },
+  });
+  system("task_notification", {
+    task_id: id,
+    status,
+    output_file: "",
+    summary: `${task.description} ${status}`,
+    ...(task.toolUseId ? { tool_use_id: task.toolUseId } : {}),
+  });
+  // A finishing task leaves the level after its notification.
+  if (task.background) sendTasksChanged();
+  return true;
+}
+
+/**
+ * Does what a test asked of a task outside any turn: `end-<id>.json` ends it
+ * (`FakeClaude.endTask`), and `say-<n>.json` sends a message as it is (`FakeClaude.say`), as
+ * a background task's own messages come while no turn runs.
+ */
+function runTaskRequests() {
+  for (const name of readdirSync(taskControl).sort()) {
+    if (!name.endsWith(".json")) continue;
+    const file = join(taskControl, name);
+    try {
+      const request = JSON.parse(readFileSync(file, "utf8"));
+      rmSync(file, { force: true });
+      if (name.startsWith("end-")) endTask(request.id, request.status);
+      else if (name.startsWith("say-")) {
+        send({ session_id: sessionId, uuid: randomUUID(), ...request });
+      }
+    } catch {
+      // Being written: read again at the next tick.
+    }
+  }
 }
 
 // ---- Turns ------------------------------------------------------------------------------
@@ -352,6 +465,8 @@ async function runTool(turn, step) {
   stop.event.index = index;
   send(stop);
   closeMessage(turn, "tool_use");
+  // A subagent or background command: its task starts with the tool call.
+  if (step.task) startTask({ ...step.task, toolUseId: id });
   // A tool still running: no result until the test releases it, or the turn is interrupted
   // (which ends the turn with the tool unanswered).
   if (step.hold) await waitForRelease(step.hold);
@@ -383,6 +498,11 @@ async function runTool(turn, step) {
     allowed = answer?.behavior === "allow";
     // Claude Code echoes the decision back before the tool's result.
     send({ type: "control_response", response });
+  }
+  // A foreground task blocks the tool call, so it ends before the result; a background one
+  // goes on, and the result says only that it started.
+  if (step.task && step.task.background !== true) {
+    endTask(step.task.id, allowed ? "completed" : "stopped");
   }
   const failed = !allowed || step.isError === true;
   const content = !allowed
@@ -419,6 +539,12 @@ async function runStep(turn, step) {
     await runTool(turn, step);
   } else if (step.hold) {
     await waitForRelease(step.hold);
+  } else if (step.task) {
+    startTask(step.task);
+  } else if (step.taskProgress) {
+    progressTask(step.taskProgress);
+  } else if (step.taskEnd) {
+    endTask(step.taskEnd.id, step.taskEnd.status);
   } else if (step.mode) {
     // Claude Code changing the mode itself (plan approval leaves plan mode): told in `status`.
     permissionMode = step.mode;
@@ -445,7 +571,8 @@ async function runStep(turn, step) {
 function reset(turn) {
   turn.messageId = undefined;
   send(make(fixture.conversationReset, { new_conversation_id: randomUUID() }));
-  send(make(fixture.backgroundTasksChanged));
+  tasks.clear();
+  sendTasksChanged();
   sessionId = randomUUID();
   sendInit(readConfig());
   turn.cleared = true;
@@ -493,6 +620,10 @@ async function runTurn(prompt, scripted) {
   } catch (error) {
     if (!(error instanceof Interrupted)) throw error;
     result = { ...fixture.resultInterrupted };
+    // A task that blocked the turn ends with it; background tasks go on.
+    for (const task of [...tasks.values()]) {
+      if (!task.background) endTask(task.id, "stopped");
+    }
     if (turn.open) {
       const aborted = make(fixture.assistantAborted);
       aborted.message.content = [{ type: "text", text: turn.open.text }];
@@ -566,7 +697,6 @@ function respond(requestId, response) {
 const ANSWERED_WITH_NOTHING = new Set([
   "set_max_thinking_tokens",
   "background_tasks",
-  "stop_task",
   "rewind_files",
   "apply_flag_settings",
   "mcp_status",
@@ -589,6 +719,22 @@ function onControlRequest(message) {
       respond(message.request_id, reply);
       break;
     }
+    case "stop_task":
+      // Stops that task only; an id that is not running is an error, as a real one answers.
+      if (tasks.has(request.task_id)) {
+        respond(message.request_id, {});
+        endTask(request.task_id, "stopped");
+      } else {
+        send({
+          type: "control_response",
+          response: {
+            subtype: "error",
+            request_id: message.request_id,
+            error: `No task found with ID: ${request.task_id}`,
+          },
+        });
+      }
+      break;
     case "interrupt":
       respond(message.request_id, {});
       received({ kind: "interrupted", busy });
@@ -688,5 +834,6 @@ process.on("SIGTERM", () => {
 
 // Turns nobody sent start by themselves while the fake is idle.
 setInterval(() => {
+  runTaskRequests();
   if (!busy && existsSync(scriptDir)) void pump();
 }, 50);

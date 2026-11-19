@@ -113,6 +113,12 @@ export interface AgentConversation {
   interrupt(): boolean;
   /** An interrupt has been sent and the turn it stops has not ended yet. */
   interrupting: boolean;
+  /**
+   * Stops one subagent or background task (#149), by its `task_id`, and nothing else. False
+   * when it could not be sent (reconnecting: dropped, never queued). True means sent: the
+   * task's line changes when Claude Code says it stopped.
+   */
+  stopTask(taskId: string): boolean;
   /** The prompts typed in this Agent, oldest first: what Up and Down in the input step through. */
   history: string[];
 }
@@ -225,6 +231,11 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     [],
   );
 
+  const stopTask = useCallback(
+    (taskId: string) => connection.current?.send({ type: "stop_task", taskId }) ?? false,
+    [],
+  );
+
   const loadEarlier = useCallback(() => {
     const { transcript, requestedBefore } = latest.current;
     const before = transcript.earliestSeq;
@@ -299,6 +310,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     answer,
     interrupt,
     interrupting,
+    stopTask,
     history,
   };
 }

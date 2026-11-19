@@ -3,6 +3,7 @@ import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
 import { Markdown } from "./Markdown";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
+import { TaskLine } from "./TaskLine";
 import { ToolCall } from "./ToolCall";
 
 /**
@@ -92,6 +93,8 @@ export const TranscriptItemView = memo(function TranscriptItemView({
       );
     case "tool":
       return <ToolCall item={item} />;
+    case "task":
+      return <TaskLine item={item} />;
     case "interrupted":
       return (
         <div className="my-1 flex gap-2 pl-5 text-red-300">
