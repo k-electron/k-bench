@@ -227,6 +227,13 @@ async function play(scenario: (typeof SCENARIO_LIST)[number]): Promise<void> {
   } finally {
     for (const session of cap.sessions) await session.close();
   }
+  const changes = run.settingsWatch.check(scenario.name);
+  run.settingsChanges.push(...changes);
+  for (const change of changes) {
+    say(
+      `  SETTINGS CHANGED: ${change.file}, keys: ${redactText(change.paths.join(", "), run.places)}`,
+    );
+  }
   say(`  turns spent so far: ${run.budget.spent} of ${run.budget.cap}`);
 }
 
@@ -342,6 +349,11 @@ const summary: Summary = {
       }
     : {}),
   settingsChanged: ending?.settingsChanged ?? [],
+  settingsChanges: run.settingsChanges.map((change) => ({
+    scenario: change.scenario,
+    file: change.file,
+    paths: redactText(change.paths.join(", "), run.places),
+  })),
   leftoverProcesses: ending?.survivors ?? 0,
   removed: (ending?.removed ?? []).map((entry) => entry.why),
   notRemoved: (ending?.failed ?? []).map((entry) => entry.why),
@@ -402,6 +414,7 @@ say(`verdicts: ${[...counts].map(([verdict, n]) => `${n} ${verdict}`).join(", ")
 const failed =
   (counts.get("FAIL") ?? 0) > 0 ||
   (ending?.settingsChanged.length ?? 0) > 0 ||
+  run.settingsChanges.length > 0 ||
   run.abortKind === "rail";
 say(failed ? "RESULT: FAILED (see above)" : "RESULT: no check failed");
 process.exit(failed ? 1 : 0);

@@ -8,7 +8,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DENIED_WITH_REPLY } from "../../src/agent-runtime/asks.ts";
 import { PERMISSION_MODE_CYCLE } from "../../src/shared/agent-protocol.ts";
-import { fileFingerprint } from "./rails.ts";
 import {
   assistantText,
   blocks,
@@ -246,7 +245,7 @@ const advisor: Check = {
   scenario: "advisor",
   fakeCannot: "the fake has no advisor tool",
   assumption: "src/agent-runtime/session.ts sdkLaunchOptions (advisor)",
-  evaluate({ run, extras, cap }) {
+  evaluate({ run, cap }) {
     const on = sessionOf(cap, 0);
     const off = sessionOf(cap, 1);
     if (!on?.init || !off?.init) return notProvoked("a session did not start");
@@ -259,13 +258,24 @@ const advisor: Check = {
     const answer = (s: LiveSession) => /^\s*yes/i.test(assistantText(s.msgs));
     const onYes = answer(on) || onTools.length > 0;
     const offYes = answer(off) || offTools.length > 0;
-    const unchanged = ["settings.json", "settings.local.json"].every(
-      (name) => fileFingerprint(join(run.configDir, name)) === extras.fingerprints[name],
+    // Only a change that happened while this scenario ran can be its doing: another running
+    // Claude Code may rewrite a settings file at any time (that is a run-level FAIL line).
+    const mine = run.settingsChanges.filter((change) => change.scenario === "advisor");
+    const elsewhere = run.settingsChanges.filter(
+      (change) => change.scenario !== "advisor",
     );
+    const unchanged = mine.length === 0;
     const facts = [
       `advisor on: tool listed ${yesNo(onTools.length > 0)}, model says it has it ${yesNo(answer(on))}`,
       `advisor with the off switch: tool listed ${yesNo(offTools.length > 0)}, model says it has it ${yesNo(answer(off))}`,
-      `settings files unchanged: ${yesNo(unchanged)}`,
+      `settings files unchanged during this scenario: ${yesNo(unchanged)}${
+        unchanged ? "" : ` (keys: ${mine.flatMap((change) => change.paths).join(", ")})`
+      }`,
+      ...(elsewhere.length > 0
+        ? [
+            `a settings file changed in another scenario (${elsewhere.map((c) => c.scenario).join(", ")}): see the run-level FAIL line`,
+          ]
+        : []),
     ];
     if (!unchanged)
       return fail("a settings file changed: --advisor must be per-session only", facts);

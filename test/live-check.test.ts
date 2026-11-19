@@ -26,6 +26,7 @@ import {
   modelProblem,
   settingsRisk,
 } from "../scripts/live-check/rails.ts";
+import { SettingsWatch } from "../scripts/live-check/settings-watch.ts";
 
 // The rails of the live check (scripts/live-check.ts, docs/internals/live-check.md), which runs
 // the owner's real `claude` by hand and is never run by this suite. The script is exercised
@@ -201,5 +202,45 @@ describe("the live check's rails", () => {
     expect(redacted).toContain("/home/you/project");
     expect(redacted).not.toContain(homedir());
     expect(() => assertNothingPrivate(redacted, "a recording")).not.toThrow();
+  });
+
+  it("attributes a settings change to the scenario it happened in, naming key paths and never values", () => {
+    const config = folder("kb-livecheck-watch-");
+    const settings = join(config, "settings.json");
+    writeFileSync(
+      settings,
+      JSON.stringify({
+        model: "x",
+        modelSettings: { a: { effort: "high" } },
+        permissions: { allow: ["Read"] },
+      }),
+    );
+    const watch = new SettingsWatch(config, ["settings.json", "settings.local.json"]);
+    expect(watch.check("baseline")).toEqual([]);
+    // Another Claude Code saving a default while the plan scenario runs.
+    writeFileSync(
+      settings,
+      JSON.stringify({
+        model: "x",
+        modelSettings: { a: { effort: "low-secret-value" } },
+        permissions: { allow: ["Read"] },
+        advisorModel: "opus",
+      }),
+    );
+    const changes = watch.check("plan");
+    expect(changes).toEqual([
+      {
+        scenario: "plan",
+        file: "settings.json",
+        paths: ["modelSettings.a.effort", "advisorModel"],
+      },
+    ]);
+    expect(JSON.stringify(changes)).not.toContain("low-secret-value");
+    // The look is the new baseline: the same state is not a second change.
+    expect(watch.check("advisor")).toEqual([]);
+    writeFileSync(join(config, "settings.local.json"), "{}");
+    expect(watch.check("advisor")).toEqual([
+      { scenario: "advisor", file: "settings.local.json", paths: ["(file created)"] },
+    ]);
   });
 });

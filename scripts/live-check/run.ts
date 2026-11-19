@@ -18,9 +18,11 @@ import {
   fakeClaudeConfigDir,
   installFakeClaude,
 } from "../../test/harness/fake-claude.ts";
+import { redactText } from "./privacy.ts";
 import { planCleanup, type Removal, runCleanup } from "./provenance.ts";
 import { Budget, changedFiles, fileFingerprint, settingsRisk } from "./rails.ts";
 import { killGroup, type Run } from "./session.ts";
+import { SettingsWatch } from "./settings-watch.ts";
 import type { Tmux } from "./tmux.ts";
 
 export interface RunOptions {
@@ -116,6 +118,8 @@ export function createRun(
     places: { tmp, folder, configDir },
     budget: new Budget(options.budget),
     settings,
+    settingsWatch: new SettingsWatch(configDir, WATCHED),
+    settingsChanges: [],
     abort,
     sessions: new Set(),
     pids: new Set(),
@@ -217,14 +221,21 @@ export async function endRun(
       : `processes: ${leftovers.size} left running and killed (a check left one behind)`,
   );
 
+  // A change after the last scenario is looked for too; every change is named by scenario and key paths.
+  run.settingsChanges.push(...run.settingsWatch.check("after the last scenario"));
   const after: Record<string, string> = {};
   for (const name of WATCHED) after[name] = fileFingerprint(join(run.configDir, name));
   const settingsChanged = changedFiles(extras.fingerprints, after);
-  if (settingsChanged.length > 0) {
+  for (const change of run.settingsChanges) {
     say(
-      `FAIL: the Claude Code settings changed during the run (${settingsChanged.join(", ")}). A per-session option wrote to the owner's own file. Compare it with a backup before using Claude Code again.`,
+      `FAIL: ${change.file} changed during ${change.scenario}: ${redactText(change.paths.join(", "), run.places)}. Only key names are shown. Another running Claude Code may have rewritten it (to save a default, say), or a per-session option of this run wrote to it: compare with a backup before relying on it.`,
     );
-  } else {
+  }
+  if (settingsChanged.length > 0 && run.settingsChanges.length === 0) {
+    say(
+      `FAIL: the Claude Code settings changed during the run (${settingsChanged.join(", ")}), at a moment no scenario saw.`,
+    );
+  } else if (settingsChanged.length === 0) {
     say("settings: the Claude Code settings files are byte-identical to before the run");
   }
 

@@ -29,6 +29,7 @@ import {
   type SettingsRisk,
   type ToolPolicy,
 } from "./rails.ts";
+import type { SettingsChange, SettingsWatch } from "./settings-watch.ts";
 import { sdkLaunchOptions } from "./shipped.ts";
 
 export type Msg = Record<string, unknown>;
@@ -50,6 +51,10 @@ export interface Run {
   claude: string;
   places: Places;
   budget: Budget;
+  /** Watches the owner's settings files, per scenario. */
+  settingsWatch: SettingsWatch;
+  /** Changes it found, with the scenario each happened in. */
+  settingsChanges: SettingsChange[];
   /** What the owner's settings allow (see `settingsRisk`). */
   settings: SettingsRisk;
   /** Aborts the whole run: set when a rail is broken. */

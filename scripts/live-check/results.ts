@@ -17,6 +17,8 @@ export interface Summary {
   turns: { spent: number; cap: number };
   account?: string[];
   settingsChanged: string[];
+  /** Which scenario saw which settings file change, and its key paths (never values). */
+  settingsChanges: Array<{ scenario: string; file: string; paths: string }>;
   leftoverProcesses: number;
   removed: string[];
   notRemoved: string[];
@@ -41,7 +43,13 @@ export function renderResults(results: CheckResult[], summary: Summary): string 
     );
   }
   if (summary.aborted) lines.push(`> **ABORTED:** ${summary.aborted}`, "");
-  if (summary.settingsChanged.length > 0) {
+  for (const change of summary.settingsChanges) {
+    lines.push(
+      `> **FAIL: ${change.file} changed during ${change.scenario}**, keys: ${change.paths} (key names only, never values). Another running Claude Code may be the cause, or a per-session option of this run.`,
+      "",
+    );
+  }
+  if (summary.settingsChanged.length > 0 && summary.settingsChanges.length === 0) {
     lines.push(
       `> **FAIL: the Claude Code settings changed during the run** (${summary.settingsChanged.join(", ")}).`,
       "",
@@ -58,7 +66,7 @@ export function renderResults(results: CheckResult[], summary: Summary): string 
   if (summary.haikuEffort) lines.push(`- ${summary.haikuEffort}`);
   for (const note of summary.settingsNotes) lines.push(`- owner's settings: ${note}`);
   lines.push(
-    `- settings files byte-identical after the run: ${summary.settingsChanged.length === 0 ? "yes" : "NO"}`,
+    `- settings files byte-identical after the run: ${summary.settingsChanged.length === 0 && summary.settingsChanges.length === 0 ? "yes" : "NO"}`,
     `- claude processes left running (killed): ${summary.leftoverProcesses}`,
     `- cleaned up: ${summary.removed.length === 0 ? "nothing" : summary.removed.join("; ")}`,
   );
