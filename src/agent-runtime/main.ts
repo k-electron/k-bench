@@ -23,6 +23,7 @@ import {
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { ClientHub } from "./hub.ts";
+import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
 import { ClaudeSession } from "./session.ts";
 
@@ -120,10 +121,18 @@ const claude = new ClaudeSession(
 
 async function command(message: AgentClientMessage): Promise<void> {
   if (message.type === "prompt") {
-    record({ kind: "prompt", id: message.id, text: message.text });
+    // Built before anything is logged or counted: nothing that goes wrong with an image may
+    // leave a prompt logged that Claude never got.
+    const content = promptContent(args.agentDir, message.text, message.images);
+    record({
+      kind: "prompt",
+      id: message.id,
+      text: message.text,
+      ...(message.images && { images: message.images }),
+    });
     pendingTurns += 1;
     publishStatus();
-    claude.prompt(message.id, message.text);
+    claude.prompt(message.id, content);
   } else if (message.type === "answer") {
     asks.answer(message.requestId, message.decision);
   } else if (message.type === "shutdown") {

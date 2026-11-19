@@ -13,6 +13,7 @@ A Claude Agent shows the conversation as a **Transcript** in the Pane instead of
 - When Claude needs an answer, an Allow/Deny, a question or a plan to approve takes over the input, so you answer with one tap.
 - Each Claude Agent's row in the sidebar shows whether it is **Idle**, **Working** or **Waiting for you**, and pulses when something happened that you haven't seen.
 - If something looks wrong, the raw JSON of any message is one gesture away: long-press it on a phone, or press `</>` beside it on desktop. The **Raw** switch above the conversation turns the whole Transcript into JSON and back.
+- You can show Claude a screenshot or photo: paste it into the input or drop it on it on a desktop, or tap the picture button to choose from the photo library on a phone. A thumbnail shows before you send, and its ✕ takes it off. Claude takes PNG, JPEG, GIF and WebP up to about 3.9 MB (5 MB as base64, which is how Claude counts) and 8000 pixels on the longest side; one over that shows a message and is not attached. Sent images stay in the conversation, and are deleted with the Session.
 - It keeps going when you close the browser, lock your phone or restart k-bench, and every device is an equal view of the same conversation.
 
 It runs your own installed `claude`, with the same `CLAUDE.md`, skills, plugins, hooks, MCP servers and permission rules you have in a terminal. Claude Code's commands are typed, as `/compact`, `/context`, `/usage`, `/model <name>`, `/effort <level>` and `/rename`, and their replies show in the conversation, without panels.

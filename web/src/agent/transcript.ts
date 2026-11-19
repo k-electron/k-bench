@@ -16,7 +16,7 @@ import {
  */
 export type TranscriptItem =
   /** A prompt the owner sent (from any device). */
-  | { kind: "prompt"; key: string; seq?: number; text: string }
+  | { kind: "prompt"; key: string; seq?: number; text: string; images?: string[] }
   /** Text from Claude: complete, or still streaming in. */
   | { kind: "assistant"; key: string; seq?: number; text: string; streaming: boolean };
 
@@ -195,6 +195,7 @@ export function transcriptItems(state: TranscriptState): TranscriptItem[] {
         key: `entry-${entry.seq}`,
         seq: entry.seq,
         text: entry.text,
+        ...(entry.images && { images: entry.images }),
       });
     } else if (
       entry.kind === "sdk" &&

@@ -3,6 +3,7 @@ import { useAgentConversation } from "@/agent/useAgentConversation";
 import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../../src/shared/state-protocol.ts";
 import { PromptDock } from "./PromptDock";
+import { PromptImages } from "./PromptImages";
 import {
   RawMessage,
   RawSwitch,
@@ -67,14 +68,19 @@ export function AgentPane({
                 entries={entries}
                 rawView={rawView}
               >
-                <p
-                  className={cn(
-                    "break-words whitespace-pre-wrap",
-                    item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
-                  )}
-                >
-                  {item.text}
-                </p>
+                {item.kind === "prompt" && (
+                  <PromptImages sessionId={session.id} names={item.images} />
+                )}
+                {(item.text !== "" || item.kind !== "prompt") && (
+                  <p
+                    className={cn(
+                      "break-words whitespace-pre-wrap",
+                      item.kind === "prompt" && "rounded-md bg-muted px-3 py-2",
+                    )}
+                  >
+                    {item.text}
+                  </p>
+                )}
               </RawMessage>
             ))}
           </ShowRawProvider>
