@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
+import { CommandOutput } from "./CommandOutput";
 import { Markdown } from "./Markdown";
 import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
@@ -109,6 +110,8 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           <span>Interrupted</span>
         </div>
       );
+    case "command_output":
+      return <CommandOutput text={item.text} />;
     default: {
       // Every kind of item has a case above: a new kind fails to compile here until it has one.
       const missing: never = item;

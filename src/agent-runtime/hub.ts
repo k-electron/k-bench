@@ -4,6 +4,7 @@ import { LineSplitter } from "../agent/lines.ts";
 import type { AgentLog } from "../agent/log.ts";
 import {
   type AgentClientMessage,
+  type AgentCommand,
   type AgentHello,
   type AgentServerMessage,
   type AgentSnapshot,
@@ -37,6 +38,7 @@ export class ClientHub {
   private readonly hello: () => AgentHello;
   private readonly snapshot: () => AgentSnapshot | undefined;
   private status: AgentStatus = { type: "status", state: "idle" };
+  private commands: readonly AgentCommand[] = [];
   private readonly onCommand: (message: AgentClientMessage) => void;
   private readonly onViewed: () => void;
 
@@ -86,6 +88,15 @@ export class ClientHub {
   setStatus(status: AgentStatus): void {
     this.status = status;
     this.broadcast(status, false);
+  }
+
+  /**
+   * Sends the `/` menu's commands to every connection that has synced, and to each one as it
+   * syncs. Not to one that never syncs (the server's status connection): it has no menu.
+   */
+  setCommands(commands: readonly AgentCommand[]): void {
+    this.commands = commands;
+    this.broadcast({ type: "commands", commands: [...commands] }, true);
   }
 
   /** How many connections have a page showing the Agent now. */
@@ -146,6 +157,9 @@ export class ClientHub {
       }
       const live = this.snapshot();
       if (live) this.send(client, live);
+      if (this.commands.length > 0) {
+        this.send(client, { type: "commands", commands: [...this.commands] });
+      }
       client.synced = true;
     } else if (message.type === "page") {
       // Entries before `beforeSeq` never change: no need to be synced, or to be quick about it.

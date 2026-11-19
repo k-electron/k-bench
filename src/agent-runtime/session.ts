@@ -112,6 +112,14 @@ export class ClaudeSession {
     return init.claude_code_version ?? "unknown";
   }
 
+  /**
+   * The commands and skills Claude Code lists now (the raw rows: `CommandList` reads them).
+   * The SDK keeps the latest list, the first reply's or a later `commands_changed`'s.
+   */
+  commands(): Promise<unknown> {
+    return this.query.supportedCommands();
+  }
+
   /** The mode Claude Code started in (the owner's settings decide it), from the same first reply. */
   async permissionMode(): Promise<unknown> {
     const init = await this.query.initializationResult();

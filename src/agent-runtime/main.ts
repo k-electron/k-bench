@@ -25,6 +25,7 @@ import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
 import { AgentBell } from "./bell.ts";
+import { CommandList, terminalOnlyFrom } from "./commands.ts";
 import { ClientHub } from "./hub.ts";
 import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
@@ -92,6 +93,14 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
 const asks = new PermissionAsks(record);
 
 const permissionMode = new PermissionModeTracker();
+
+// The `/` menu. Which commands are terminal-only is known only from a turn's `init`, so an
+// Agent that has had a turn starts from what its log says (CommandList).
+const commandList = new CommandList(
+  terminalOnlyFrom(
+    log.readAfter(0).flatMap((entry) => (entry.kind === "sdk" ? [entry.message] : [])),
+  ),
+);
 
 /** Sends every connection the status: what the Agent is doing, its mode and its Bell. */
 function publishStatus(): void {
@@ -161,6 +170,9 @@ const claude = new ClaudeSession(
       }
       record({ kind: "sdk", message: message as unknown as Record<string, unknown> });
       if (permissionMode.observe(message)) publishStatus();
+      if (commandList.observe(message as unknown as Record<string, unknown>)) {
+        hub.setCommands(commandList.commands);
+      }
       if (message.type === "result") {
         live.turnEnded();
         void refreshContext();
@@ -241,6 +253,8 @@ process.on("unhandledRejection", (error) => {
 try {
   claudeVersion = await claude.claudeVersion();
   permissionMode.set(await claude.permissionMode());
+  commandList.set(await claude.commands());
+  hub.setCommands(commandList.commands);
   publishStatus();
   await hub.listen();
   void refreshContext();

@@ -84,12 +84,22 @@ export interface InterruptedItem extends ItemBase {
   kind: "interrupted";
 }
 
+/**
+ * What a command typed in the input answered (`system/local_command_output`: `/context`,
+ * `/usage`, `/model opus`...), under the `⎿` as a muted block of lines (#150).
+ */
+export interface CommandOutputItem extends ItemBase {
+  kind: "command_output";
+  text: string;
+}
+
 export type TranscriptItem =
   | PromptItem
   | AssistantItem
   | ThinkingItem
   | ToolItem
-  | InterruptedItem;
+  | InterruptedItem
+  | CommandOutputItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -117,6 +127,21 @@ function textOf(content: unknown): string {
         : "",
     )
     .join("\n");
+}
+
+/**
+ * What a command printed, to show: without the `<local-command-stdout>` wrapper Claude Code
+ * puts round it in its own transcripts, or the colour codes a terminal would have drawn.
+ */
+function commandOutputText(content: unknown): string {
+  if (typeof content !== "string") return "";
+  return (
+    content
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is removed
+      .replace(/\u001b\[[0-9;]*[A-Za-z]/g, "")
+      .replace(/<\/?local-command-std(?:out|err)>/g, "")
+      .trim()
+  );
 }
 
 /** A tool call as the builder holds it until its result arrives. */
@@ -218,6 +243,16 @@ function readSdkMessage(
       if (message.subtype === "init") {
         if (typeof message.model === "string") state.model = message.model;
         if (typeof message.cwd === "string") state.cwd = message.cwd;
+      } else if (message.subtype === "local_command_output") {
+        const text = commandOutputText(message.content);
+        if (text !== "") {
+          state.items.push({
+            kind: "command_output",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            text,
+          });
+        }
       }
       return;
     case "assistant": {
