@@ -140,6 +140,27 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           </span>
         </div>
       );
+    case "goal-set":
+      return (
+        <article aria-label="Goal set" className="my-1.5 flex gap-2">
+          <Gutter className="text-white/70">◎</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            <strong>Goal set:</strong> {item.condition}
+          </span>
+        </article>
+      );
+    case "goal-check-in":
+      return (
+        <article
+          aria-label="Goal check-in"
+          className="my-1 flex gap-2 pl-5 text-muted-foreground"
+        >
+          <Gutter>⎿</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            Goal check-in: {item.feedback}
+          </span>
+        </article>
+      );
     case "unsupported":
       return <UnsupportedRow item={item} />;
     default: {
