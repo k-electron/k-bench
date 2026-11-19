@@ -275,6 +275,13 @@ export class Store {
       .run(claudeInterface, id);
   }
 
+  /** A Claude Agent moved to a new conversation (`/clear`): the one a Restart resumes. */
+  setConversationId(id: string, conversationId: string): void {
+    this.db
+      .prepare("UPDATE sessions SET conversation_id = ? WHERE id = ? AND kind = 'claude'")
+      .run(conversationId, id);
+  }
+
   deleteSession(id: string): void {
     this.db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
   }

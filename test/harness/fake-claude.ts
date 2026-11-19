@@ -136,6 +136,8 @@ export interface FakeClaudeConfig {
   initFields?: Record<string, unknown>;
   /** Whether it sends `system/session_state_changed` (default true); false, as a Claude Code that does not. */
   sessionStateMessages?: boolean;
+  /** How long it takes to notice it is being closed, before it records that and exits. */
+  closeDelayMs?: number;
   /**
    * The test's stand-in for the owner's Claude Code user settings file: a prompt `/advisor
    * <model>` writes `{advisorModel}` to it, as the real command saves the owner's default.

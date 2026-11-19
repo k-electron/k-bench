@@ -33,6 +33,8 @@ export class AgentStatuses {
   private readonly heard = new Map<string, Heard>();
   private readonly watching = new Map<string, { socket?: Socket }>();
   private changed: () => void = () => undefined;
+  private conversationHeard: (sessionId: string, conversationId: string) => void = () =>
+    undefined;
   private stopped = false;
 
   constructor(agents: AgentRuntimes) {
@@ -42,6 +44,15 @@ export class AgentStatuses {
   /** Called whenever what is heard of any Agent changes (the state feed re-reads). */
   onChange(listener: () => void): void {
     this.changed = listener;
+  }
+
+  /**
+   * Called when a runtime first says which Claude conversation its Agent is in, and again
+   * whenever that changes (`/clear`). It is the store's to keep, not this cache's: a Restart
+   * resumes the conversation, and the runtime is not there to ask by then.
+   */
+  onConversation(listener: (sessionId: string, conversationId: string) => void): void {
+    this.conversationHeard = listener;
   }
 
   /** Watches the Agents in `running` that are not watched yet, and stops watching the rest. */
@@ -145,6 +156,13 @@ export class AgentStatuses {
     if (!this.watching.has(id)) return;
     const current = this.heard.get(id) ?? {};
     this.heard.set(id, { ...current, ...update });
+    const conversationId = update.status?.conversationId;
+    if (
+      conversationId !== undefined &&
+      conversationId !== current.status?.conversationId
+    ) {
+      this.conversationHeard(id, conversationId);
+    }
     this.changed();
   }
 

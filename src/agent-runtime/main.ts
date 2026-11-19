@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { conversationOf } from "../agent/conversation.ts";
 import { writeExitRecord } from "../agent/exit.ts";
 import { AgentLog } from "../agent/log.ts";
 import { agentLogFile, agentSocketFile, runtimeBuildId } from "../agent/paths.ts";
@@ -22,6 +23,7 @@ import {
   openPermissionAsks,
   type PermissionMode,
 } from "../shared/agent-protocol.ts";
+import { subscriptionProblem } from "./account.ts";
 import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
@@ -42,6 +44,9 @@ const args = parseRuntimeArgs(process.argv.slice(2));
 // The build ID is the hash of this very file, which a file cannot hold itself.
 const buildId = runtimeBuildId(readFileSync(fileURLToPath(import.meta.url)));
 const log = new AgentLog(agentLogFile(args.agentDir));
+
+/** How long the runtime waits for Claude Code to close before it exits anyway. */
+const CLAUDE_CLOSE_WAIT_MS = 2_000;
 
 let claudeVersion = "unknown";
 let finishing = false;
@@ -81,9 +86,16 @@ const activity = new Activity({
   publish: () => publishStatus(),
 });
 
+// The conversation the Agent is in. The log says (`/clear` moves it on), so a store that
+// missed a move, because k-bench was down or this runtime was killed, is corrected here.
+const conversation = conversationOf(args.conversation, log.readAfter(0));
+
 /** Appends to the log and tells every synced client, in that order. */
 function record(entry: Parameters<AgentLog["append"]>[0]): void {
-  hub.entry(log.append(entry));
+  const written = log.append(entry);
+  hub.entry(written);
+  // The `init` after a `/clear` names the new conversation: tell the server, which keeps it.
+  if (conversation.observe(written)) publishStatus();
   // An ask opening or closing is what turns Working into Waiting for you and back.
   if (entry.kind === "permission_asked" || entry.kind === "permission_answered") {
     // Before the state changes, so that whoever sees Waiting for you sees the Bell with it.
@@ -114,6 +126,7 @@ function publishStatus(): void {
   const running = tasks.list;
   hub.setStatus({
     ...activity.status,
+    conversationId: conversation.id,
     ...(running.length > 0 && { tasks: running }),
     ...(permissionMode.current && { mode: permissionMode.current }),
     ...(bell.isRaised && { bell: true }),
@@ -158,9 +171,11 @@ const claude = new ClaudeSession(
   {
     claude: args.claude,
     folder: args.folder,
+    // The conversation the owner was last in, which after a `/clear` is not the one this
+    // Agent was created with. One nothing was sent in was never saved: start it instead.
     conversation: {
-      id: args.conversation,
-      resume: args.mode === "resume" && log.hasPrompt(),
+      id: conversation.id,
+      resume: args.mode === "resume" && conversation.saved,
     },
     canUseTool: asks.canUseTool,
     launch: args.launch,
@@ -288,6 +303,12 @@ async function finish(
     // Same.
   }
   claude.close();
+  // The runtime's own exit ends its tmux session, which kills whatever still runs in it:
+  // Claude Code is given a moment to close by itself first.
+  await Promise.race([
+    claude.exited,
+    new Promise((resolve) => setTimeout(resolve, CLAUDE_CLOSE_WAIT_MS)),
+  ]);
   await hub.close();
   process.exit(code);
 }
@@ -312,12 +333,20 @@ process.on("unhandledRejection", (error) => {
 // If it dies first, `ended` above has already recorded why.
 try {
   claudeVersion = await claude.claudeVersion();
-  permissionMode.set(await claude.permissionMode());
-  commandList.set(await claude.commands());
-  hub.setCommands(commandList.commands);
-  publishStatus();
-  await hub.listen();
-  void refreshContext();
+  // Before the runtime listens, so before any prompt can reach Claude Code: a login that is
+  // not a Claude subscription (an API key, another provider) never takes a turn. The runtime
+  // ends with the reason, which is what Stopped shows.
+  const notSubscription = subscriptionProblem(await claude.accountInfo());
+  if (notSubscription) {
+    await finish(notSubscription, 1);
+  } else {
+    permissionMode.set(await claude.permissionMode());
+    commandList.set(await claude.commands());
+    hub.setCommands(commandList.commands);
+    publishStatus();
+    await hub.listen();
+    void refreshContext();
+  }
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);
 }

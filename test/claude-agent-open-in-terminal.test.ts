@@ -99,6 +99,40 @@ describe("Open in terminal", () => {
     expect((await fakeClaudeArgs(terminal))[0]).toBe("--resume");
   });
 
+  it("resumes the conversation after a /clear even when nothing was following the Agent, so the stored ID was stale", async () => {
+    const { server, workspace } = await boot();
+    const session = await server.createClaudeAgent(workspace.id);
+    const agent = await server.openAgent(session.id);
+    await agent.sync();
+    // Nobody reads the state, so the server is not following the Agent's status.
+    agent.prompt("before");
+    await agent.waitForEntry(isResult, "the first answer");
+    agent.prompt("/clear");
+    await agent.waitForEntry(
+      (e) => e.kind === "sdk" && e.message.type === "conversation_reset",
+      "the reset",
+    );
+    agent.prompt("after");
+    await pollUntil(() => agent.entries.filter(isResult).length === 3, {
+      description: "the answer after /clear",
+    });
+    const [first, cleared] = [
+      ...new Set(
+        agent.entries.flatMap((e) =>
+          e.kind === "sdk" && e.message.type === "system" && e.message.subtype === "init"
+            ? [e.message.session_id as string]
+            : [],
+        ),
+      ),
+    ];
+    expect(cleared).not.toBe(first);
+
+    await server.post(`/api/sessions/${session.id}/open-in-terminal`);
+
+    const terminal = await server.openTerminal(session.id);
+    expect((await fakeClaudeArgs(terminal)).slice(0, 2)).toEqual(["--resume", cleared]);
+  });
+
   it("is refused for a shell, for a Session already in the terminal, and for an unknown one", async () => {
     const { server, workspace } = await boot();
     const shell = await server.createSession(workspace.id);

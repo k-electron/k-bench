@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { conversationOf } from "../agent/conversation.ts";
 import type { ImageMediaType } from "../shared/agent-images.ts";
 import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
 import type { ClaudeInterface, NewSessionKind, State } from "../shared/state-protocol.ts";
@@ -61,6 +62,12 @@ export class Service {
     this.tmux = tmux;
     this.agents = agents;
     this.statuses = statuses;
+    // `/clear` moves an Agent to a new conversation: a Restart resumes the one it is in.
+    statuses.onConversation((sessionId, conversationId) => {
+      if (this.store.getSession(sessionId)?.conversationId !== conversationId) {
+        this.store.setConversationId(sessionId, conversationId);
+      }
+    });
     this.reconciler = new Reconciler(store, tmux);
   }
 
@@ -391,9 +398,21 @@ export class Service {
 
   private async switchToTerminal(sessionId: string): Promise<void> {
     await this.agents.shutdown(sessionId);
-    // Read after the shutdown: the conversation may have changed (`/clear`) until the runtime ended.
+    // Read after the shutdown: the conversation may have changed (`/clear`) until the runtime
+    // ended. The stored ID is only fresh while the server follows the Agent's status, so the
+    // log, now final, says which conversation the Agent is in.
     const session = this.store.getSession(sessionId);
     if (session?.interface !== "agent") return;
+    if (session.conversationId !== null) {
+      const { id } = conversationOf(
+        session.conversationId,
+        this.agents.readLog(sessionId).readAfter(0),
+      );
+      if (id !== session.conversationId) {
+        this.store.setConversationId(sessionId, id);
+        session.conversationId = id;
+      }
+    }
     // The terminal must not attach to the runtime's hidden tmux session, so the interface
     // changes only once that session is gone.
     this.store.setInterface(sessionId, "tui");
