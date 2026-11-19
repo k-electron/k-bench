@@ -14,6 +14,7 @@ import {
   openPermissionAsks,
   type PermissionAskEntry,
   type PermissionMode,
+  type PermissionReply,
 } from "../../src/shared/agent-protocol.ts";
 import { pollUntil } from "./poll.ts";
 
@@ -191,9 +192,17 @@ export class AgentClient {
     return (this.status?.tasks ?? []).map((task) => task.id);
   }
 
-  /** Answers an ask as a Pane's Allow or Deny button does. */
-  answer(requestId: string, decision: "allow" | "deny"): void {
-    this.send({ type: "answer", requestId, decision });
+  /**
+   * Answers an ask as a Pane's choices do: a reply of `{ decision: "allow" }` (with
+   * `alwaysAllow: true` for "don't ask again") or `{ decision: "deny" }` (with the owner's
+   * `message`); a bare decision is the plain choice.
+   */
+  answer(requestId: string, reply: PermissionReply | PermissionReply["decision"]): void {
+    this.send({
+      type: "answer",
+      requestId,
+      ...(typeof reply === "string" ? { decision: reply } : reply),
+    });
   }
 
   /** Interrupts the turn that is running, as a Pane's Interrupt button or Esc does. */
@@ -206,9 +215,9 @@ export class AgentClient {
     this.send({ type: "view", visible });
   }
 
-  /** Sends a prompt and returns the ID it was sent with. */
-  prompt(text: string, id: string = randomUUID()): string {
-    this.send({ type: "prompt", id, text });
+  /** Sends a prompt, with the names of images already uploaded, and returns the ID it was sent with. */
+  prompt(text: string, id: string = randomUUID(), images?: string[]): string {
+    this.send({ type: "prompt", id, text, ...(images && { images }) });
     return id;
   }
 

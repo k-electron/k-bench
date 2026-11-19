@@ -14,9 +14,16 @@ const COLLAPSED_OUTPUT_LINES = 5;
 /**
  * `⏺ Bash(ls -la)`, and under it what came of it: `⎿` and the result's lines (collapsed to
  * about five, with "+N lines, tap to expand"), and for an edit its diff. Its accessible name
- * is `Bash(ls -la)`.
+ * is `Bash(ls -la)`. `collapsed` (Focus view) leaves it at the one line: the status mark still
+ * says whether it worked, and the raw message has the rest.
  */
-export const ToolCall = memo(function ToolCall({ item }: { item: ToolItem }) {
+export const ToolCall = memo(function ToolCall({
+  item,
+  collapsed = false,
+}: {
+  item: ToolItem;
+  collapsed?: boolean;
+}) {
   const name = toolDisplayName(item.name);
   const { result } = item;
   const failed = item.status === "denied" || item.status === "failed";
@@ -37,7 +44,7 @@ export const ToolCall = memo(function ToolCall({ item }: { item: ToolItem }) {
           <span className="text-muted-foreground">({item.target})</span>
         </span>
       </div>
-      {result && (
+      {result && !collapsed && (
         <div
           className={cn(
             "flex gap-2 pl-5",
@@ -53,7 +60,7 @@ export const ToolCall = memo(function ToolCall({ item }: { item: ToolItem }) {
           </div>
         </div>
       )}
-      {item.diff && item.diff.length > 0 && (
+      {!collapsed && item.diff && item.diff.length > 0 && (
         <Diff lines={item.diff} label={`Diff of ${item.target}`} />
       )}
       {item.task && <TaskDetail task={item.task} />}

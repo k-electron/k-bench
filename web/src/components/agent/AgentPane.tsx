@@ -77,7 +77,13 @@ export function AgentPane({
           <RawTranscript entries={entries} />
         ) : (
           <StopTaskProvider value={stopTask}>
-            <Transcript items={items} entries={entries} rawView={rawView} />
+            <Transcript
+              sessionId={session.id}
+              items={items}
+              entries={entries}
+              rawView={rawView}
+              focusView={conversation.focusView}
+            />
           </StopTaskProvider>
         )}
       </div>

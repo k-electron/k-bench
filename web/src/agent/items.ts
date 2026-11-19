@@ -1,4 +1,4 @@
-import type { LogEntry } from "../../../src/shared/agent-protocol.ts";
+import type { LogEntry, PermissionReply } from "../../../src/shared/agent-protocol.ts";
 import { queuedPromptIds } from "./prompts";
 import { isTaskMessage, TaskBuilder, type TaskItem, type TaskView } from "./tasks";
 import {
@@ -9,6 +9,12 @@ import {
   toolResultView,
   toolTarget,
 } from "./toolDisplay";
+import {
+  terminalOnlyCommand,
+  type Unsupported,
+  unsupportedInMessage,
+  unsupportedOfDeclined,
+} from "./unsupported";
 
 /**
  * What the Transcript shows, in Claude TUI's shape: the items `buildItems` makes from the log's
@@ -42,6 +48,8 @@ export interface PromptItem extends ItemBase {
    * waits its turn (`prompts.ts`, #138).
    */
   queued: boolean;
+  /** The names of the images it carried (`PromptImages`); absent when it carried none. */
+  images?: string[];
 }
 
 /** Claude's prose (`⏺`), markdown. Complete, or still streaming in. */
@@ -85,13 +93,35 @@ export interface InterruptedItem extends ItemBase {
   kind: "interrupted";
 }
 
+/**
+ * `⎿ permission: allowed`: how an ask the owner answered ended, left in the Transcript where
+ * the answer came. Not made for an ask nobody answered (withdrawn, or the Agent stopped): the
+ * tool's own red mark says that.
+ */
+export interface PermissionItem extends ItemBase {
+  kind: "permission";
+  /** What was answered: `allowed`, `allowed, and won't ask again`, `denied: <reply>`. */
+  answer: string;
+}
+
+/**
+ * Something Claude met that k-bench can't show or answer (#153): `⚠ Unsupported`, what Claude
+ * tried in plain words, and a button for the raw view. It raises no Bell. `unsupportedKind`
+ * (`unsupported.ts`) is its kind for the running list (#154).
+ */
+export interface UnsupportedItem extends ItemBase, Unsupported {
+  kind: "unsupported";
+}
+
 export type TranscriptItem =
   | PromptItem
   | AssistantItem
   | ThinkingItem
   | ToolItem
   | InterruptedItem
-  | TaskItem;
+  | TaskItem
+  | PermissionItem
+  | UnsupportedItem;
 
 /** What the entries say beyond the items: the header's model and folder. */
 export interface BuiltTranscript {
@@ -100,6 +130,11 @@ export interface BuiltTranscript {
   model?: string;
   /** Claude Code's working folder (`system/init.cwd`); absent before the first turn. */
   cwd?: string;
+  /**
+   * Whether Claude Code runs in Focus view (`system/init.view_mode` is `focus`), where a tool
+   * call is one collapsed line. Its own report, so it holds however the Agent was launched.
+   */
+  focusView: boolean;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -132,6 +167,7 @@ interface BuildState {
   items: TranscriptItem[];
   model?: string;
   cwd?: string;
+  focusView: boolean;
   /** The tool calls by `tool_use` id, to pair results with. */
   tools: Map<string, OpenTool>;
   /** The ids of the prompts k-bench sent: their echoes are the same prompt. */
@@ -209,12 +245,46 @@ function resolveTool(
   }
 }
 
+/** Unsupported rows (#153) for what the message or entry `seq` holds, where it happened. */
+function addUnsupported(
+  state: BuildState,
+  seq: number,
+  keyPart: string,
+  found: readonly Unsupported[],
+): void {
+  found.forEach((one, index) => {
+    const last = state.items.at(-1);
+    // A terminal-only command that Claude Code also answered "isn't available" is one row.
+    if (
+      one.what === "command" &&
+      last?.kind === "unsupported" &&
+      last.what === "terminal-command" &&
+      last.name === one.name
+    ) {
+      return;
+    }
+    state.items.push({
+      kind: "unsupported",
+      key: `entry-${keyPart}-${index}`,
+      seq,
+      ...one,
+    });
+  });
+}
+
 /** An SDK message that is part of the conversation: its items, if it makes any. */
 function readSdkMessage(
   state: BuildState,
   entry: Extract<LogEntry, { kind: "sdk" }>,
 ): void {
   const { message } = entry;
+  // What k-bench does not know shows wherever it came from, a subagent's included.
+  addUnsupported(
+    state,
+    entry.seq,
+    `${entry.seq}-unsupported`,
+    unsupportedInMessage(message),
+  );
   // A subagent's own messages are not the conversation's: its task line (#149) shows how it goes.
   if (message.parent_tool_use_id != null) return;
   switch (message.type) {
@@ -231,6 +301,17 @@ function readSdkMessage(
       } else if (message.subtype === "init") {
         if (typeof message.model === "string") state.model = message.model;
         if (typeof message.cwd === "string") state.cwd = message.cwd;
+        // Claude Code says which commands only work in a terminal: one just typed is Unsupported.
+        // The row's raw is this `init`, which says it.
+        const last = state.items.at(-1);
+        const terminalOnly =
+          last?.kind === "prompt"
+            ? terminalOnlyCommand(last.text, message.terminal_slash_commands)
+            : undefined;
+        if (terminalOnly) {
+          addUnsupported(state, entry.seq, `${entry.seq}-terminal`, [terminalOnly]);
+        }
+        state.focusView = message.view_mode === "focus";
       }
       return;
     case "assistant": {
@@ -322,10 +403,19 @@ function readSdkMessage(
       state.tasks.turnEnded();
       return;
     default:
-      // Everything else (status, rate limits, hooks, ...) shows nothing yet: the later
-      // tickets (#148, #152, #153) each give their kinds a line.
+      // Everything else that Claude Code sends and k-bench knows (status, rate limits, hooks,
+      // ...) shows nothing yet: the later tickets (#148, #152) each give their kinds a line.
+      // What it does not know is an Unsupported row (above).
       return;
   }
+}
+
+/** How the permission line reads an owner's answer. */
+function permissionAnswerText(answer: PermissionReply): string {
+  if (answer.decision === "allow") {
+    return answer.alwaysAllow ? "allowed, and won't ask again" : "allowed";
+  }
+  return answer.message === undefined ? "denied" : `denied: ${answer.message}`;
 }
 
 /**
@@ -335,6 +425,7 @@ function readSdkMessage(
 export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
   const state: BuildState = {
     items: [],
+    focusView: false,
     tools: new Map(),
     promptIds: new Set(),
     queued: queuedPromptIds(entries),
@@ -351,6 +442,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
           key: `entry-${entry.seq}`,
           seq: entry.seq,
           text: entry.text,
+          ...(entry.images && { images: entry.images }),
           queued: state.queued.has(entry.id),
         });
         break;
@@ -362,9 +454,24 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
         break;
       case "permission_answered": {
         const toolUseId = state.askTool.get(entry.requestId);
-        if (toolUseId && entry.answer.decision === "deny") state.denied.add(toolUseId);
+        const { answer } = entry;
+        if (toolUseId && answer.decision === "deny") state.denied.add(toolUseId);
+        if (answer.decision === "allow" || answer.decision === "deny") {
+          state.items.push({
+            kind: "permission",
+            key: `entry-${entry.seq}`,
+            seq: entry.seq,
+            answer: permissionAnswerText(answer),
+          });
+        }
         break;
       }
+      case "declined":
+        // What the runtime declined for the owner (an MCP elicitation): it happened here.
+        addUnsupported(state, entry.seq, `${entry.seq}-declined`, [
+          unsupportedOfDeclined(entry.request),
+        ]);
+        break;
       case "runtime":
         // A runtime that starts or ends leaves no tool running: Claude Code died with it.
         interruptRunningTools(state);
@@ -376,5 +483,6 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     items: state.items,
     ...(state.model === undefined ? {} : { model: state.model }),
     ...(state.cwd === undefined ? {} : { cwd: state.cwd }),
+    focusView: state.focusView,
   };
 }

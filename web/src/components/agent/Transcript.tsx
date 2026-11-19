@@ -2,9 +2,11 @@ import { memo } from "react";
 import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
 import { Markdown } from "./Markdown";
+import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
 import { TaskLine } from "./TaskLine";
 import { ToolCall } from "./ToolCall";
+import { UnsupportedRow } from "./UnsupportedRow";
 
 /**
  * The conversation in Claude TUI's shape. The scaffolding (`>`, `⏺`, `⎿`, tool names, output)
@@ -16,14 +18,19 @@ import { ToolCall } from "./ToolCall";
  * terminal's way of saying what the accessible names and roles say.
  */
 export function Transcript({
+  sessionId,
   items,
   entries,
   rawView,
+  focusView,
 }: {
+  sessionId: string;
   items: readonly TranscriptItem[];
   /** The log's entries, for the raw JSON of the message an item comes from (#137). */
   entries: readonly LogEntry[];
   rawView: RawView;
+  /** Claude Code is in Focus view: a tool call is one collapsed line. */
+  focusView: boolean;
 }) {
   return (
     // `break-words` is inherited: a path or output line with no space in it wraps at the edge
@@ -32,7 +39,7 @@ export function Transcript({
       <div className="font-mono text-[13px] leading-relaxed break-words">
         {items.map((item) => (
           <RawMessage key={item.key} seq={item.seq} entries={entries} rawView={rawView}>
-            <TranscriptItemView item={item} />
+            <TranscriptItemView sessionId={sessionId} item={item} focusView={focusView} />
           </RawMessage>
         ))}
       </div>
@@ -50,9 +57,13 @@ function Gutter({ children, className }: { children: string; className?: string 
 }
 
 export const TranscriptItemView = memo(function TranscriptItemView({
+  sessionId,
   item,
+  focusView,
 }: {
+  sessionId: string;
   item: TranscriptItem;
+  focusView: boolean;
 }) {
   switch (item.kind) {
     case "prompt":
@@ -62,10 +73,15 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           className="my-2 flex gap-2 rounded bg-white/[0.07] px-2 py-1"
         >
           <Gutter className="text-muted-foreground">&gt;</Gutter>
-          <span className="min-w-0 break-words whitespace-pre-wrap">
-            {item.text}
-            {item.queued && <span className="text-muted-foreground"> (queued)</span>}
-          </span>
+          <div className="min-w-0">
+            <PromptImages sessionId={sessionId} names={item.images} />
+            {(item.text !== "" || item.queued) && (
+              <span className="break-words whitespace-pre-wrap">
+                {item.text}
+                {item.queued && <span className="text-muted-foreground"> (queued)</span>}
+              </span>
+            )}
+          </div>
         </article>
       );
     case "assistant":
@@ -92,7 +108,7 @@ export const TranscriptItemView = memo(function TranscriptItemView({
         </article>
       );
     case "tool":
-      return <ToolCall item={item} />;
+      return <ToolCall item={item} collapsed={focusView} />;
     case "task":
       return <TaskLine item={item} />;
     case "interrupted":
@@ -102,6 +118,17 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           <span>Interrupted</span>
         </div>
       );
+    case "permission":
+      return (
+        <div className="my-0.5 flex gap-2 pl-5 text-xs text-muted-foreground">
+          <Gutter>⎿</Gutter>
+          <span className="min-w-0 break-words whitespace-pre-wrap">
+            permission: {item.answer}
+          </span>
+        </div>
+      );
+    case "unsupported":
+      return <UnsupportedRow item={item} />;
     default: {
       // Every kind of item has a case above: a new kind fails to compile here until it has one.
       const missing: never = item;

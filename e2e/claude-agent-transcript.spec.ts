@@ -76,7 +76,9 @@ test("a turn reads like Claude TUI: the prompt, thinking, prose, tool calls with
   await expect(working).toContainText(/\(\d+s\)/);
   await expect(header).toContainText(`claude 9.8.7 · fake-model · ${folder}`);
 
-  await app.permissionPrompt("session 1").getByRole("button", { name: "Deny" }).click();
+  const panel = app.permissionPrompt("session 1");
+  await panel.getByRole("button", { name: /^\d\. No, and tell Claude/ }).click();
+  await panel.getByRole("button", { name: "Deny without a reply" }).click();
   await expect(rm.getByRole("img", { name: "Denied" })).toBeVisible();
 
   // The turn is held open with the last call still running.
