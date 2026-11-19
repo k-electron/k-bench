@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useId, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import type { AgentCommand } from "../../../../src/shared/agent-protocol.ts";
 import { commandQuery, matchCommands } from "../../agent/slashCommands";
 import { type PickerOption, pickerOptionId } from "./PickerMenu";
@@ -45,6 +45,10 @@ export function useCommandMenu({
     index: 0,
   });
   const [dismissedFor, setDismissedFor] = useState<string | undefined>(undefined);
+  // Escape closes the menu only until the text changes: the same text typed again opens it.
+  useEffect(() => {
+    setDismissedFor((was) => (was === text ? was : undefined));
+  }, [text]);
   const open = query !== undefined && matches.length > 0 && dismissedFor !== text;
   const active = chosen.text === text ? Math.min(chosen.index, matches.length - 1) : 0;
   const options: PickerOption[] = useMemo(
