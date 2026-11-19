@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { AgentHello, AgentStatus } from "../../../src/shared/agent-protocol.ts";
+import type {
+  AgentHello,
+  AgentStatus,
+  LogEntry,
+} from "../../../src/shared/agent-protocol.ts";
 import { type AgentConnection, createAgentConnection } from "../agentConnection";
 import { retryWhenAwake } from "../retryWhenAwake";
 import {
@@ -32,6 +36,8 @@ function newPromptId(): string {
 export interface AgentConversation {
   /** The conversation so far, in order. */
   items: TranscriptItem[];
+  /** The log entries received, in order: what the raw view (#137) shows. */
+  entries: readonly LogEntry[];
   /** The runtime's hello, once it has come: its versions. */
   hello: AgentHello | undefined;
   /** What the Agent is doing, once the runtime has said. */
@@ -129,6 +135,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   const allAsks = useMemo(() => permissionAsks(model.transcript), [model.transcript]);
   return {
     items,
+    entries: model.transcript.entries,
     asks: model.ended ? NO_ASKS : allAsks,
     hello: model.hello,
     state: model.state,
