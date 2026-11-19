@@ -206,6 +206,7 @@ export class Service {
             workspaceFolder: workspace.folder,
             conversationId: claude.conversationId,
             mode: "start",
+            options: claude.options,
           });
         } else {
           await this.tmux.createSession(id, workspace.folder, claude);
@@ -233,12 +234,12 @@ export class Service {
     });
     if (agent) await this.finishStartingAgent(id, "create");
     // Remembered for the next New Session dialog, on any device. A shell leaves the Launch
-    // options as they were, so switching the dialog back to Claude finds them; so does a
-    // Claude Agent, which takes none yet.
+    // options as they were, so switching the dialog back to Claude finds them; a Claude TUI
+    // and a Claude Agent share them.
     this.store.setLastSessionKind(
       !request ? "shell" : request.interface === "agent" ? "claude-agent" : "claude",
     );
-    if (request && !agent) this.store.setLastLaunchOptions(request.options);
+    if (request) this.store.setLastLaunchOptions(request.options);
     return { id, name };
   }
 
@@ -380,7 +381,7 @@ export class Service {
       throw new ServiceError("invalid", `Folder does not exist: ${session.folder}`);
     }
     if (session.interface === "agent" && session.conversationId !== null) {
-      const { id, folder, conversationId } = session;
+      const { id, folder, conversationId, launchOptions } = session;
       await this.reconciler.whileStarting(id, async () => {
         try {
           await this.agents.launch({
@@ -388,6 +389,8 @@ export class Service {
             workspaceFolder: folder,
             conversationId,
             mode: "resume",
+            // Every Launch option is passed again each time (ADR-0005).
+            options: launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
           });
         } catch (error) {
           throw error instanceof AgentStartError

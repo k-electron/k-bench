@@ -166,11 +166,11 @@ export class TestServer {
   /**
    * Creates a Claude Agent (a Claude Session in the Claude Agent interface) and waits, as the
    * server does, until its runtime is up; fails unless it is created. Launch options are all
-   * Default: a Claude Agent takes none yet.
+   * Default unless `claude` says otherwise (fields left out are Default).
    */
   async createClaudeAgent(
     workspaceId: string,
-    input: { name?: string } = {},
+    input: { name?: string; claude?: ClaudeLaunch } = {},
   ): Promise<SessionInfo> {
     const response = await this.post(`/api/workspaces/${workspaceId}/sessions`, {
       ...input,

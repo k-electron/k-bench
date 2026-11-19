@@ -1,4 +1,9 @@
 import { parseArgs } from "node:util";
+import {
+  DEFAULT_LAUNCH_OPTIONS,
+  LAUNCH_CHOICES,
+  type LaunchOptions,
+} from "../shared/launch-options.ts";
 
 /**
  * What the server's launcher passes the runtime (`agentCommand` in src/server/claude.ts).
@@ -20,6 +25,8 @@ export interface RuntimeArgs {
    * conversation only after its first message.
    */
   mode: "start" | "resume";
+  /** The Session's Launch options; a flag left out is Default (`agentLaunchArguments`). */
+  launch: LaunchOptions;
 }
 
 /** Reads the runtime's command line; throws a plain message for one that is not valid. */
@@ -32,6 +39,10 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
       claude: { type: "string" },
       conversation: { type: "string" },
       mode: { type: "string" },
+      model: { type: "string" },
+      effort: { type: "string" },
+      advisor: { type: "string" },
+      "focus-view": { type: "boolean" },
     },
     strict: true,
   });
@@ -41,10 +52,25 @@ export function parseRuntimeArgs(argv: string[]): RuntimeArgs {
   const conversation = values.conversation;
   const mode = values.mode;
   if (!agentDir || !folder || !claude || !conversation) {
-    throw new Error("Usage: --agent-dir --folder --claude --conversation --mode");
+    throw new Error(
+      "Usage: --agent-dir --folder --claude --conversation --mode [--model --effort --advisor --focus-view]",
+    );
   }
   if (mode !== "start" && mode !== "resume") {
     throw new Error('--mode must be "start" or "resume"');
   }
-  return { agentDir, folder, claude, conversation, mode };
+  const launch: LaunchOptions = {
+    ...DEFAULT_LAUNCH_OPTIONS,
+    focusView: values["focus-view"] === true,
+  };
+  for (const field of ["model", "effort", "advisor"] as const) {
+    const choice = values[field];
+    if (choice === undefined) continue;
+    const choices: readonly string[] = LAUNCH_CHOICES[field];
+    if (!choices.includes(choice)) {
+      throw new Error(`--${field} must be one of ${choices.join(", ")}`);
+    }
+    (launch as unknown as Record<string, string>)[field] = choice;
+  }
+  return { agentDir, folder, claude, conversation, mode, launch };
 }

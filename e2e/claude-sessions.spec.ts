@@ -15,7 +15,7 @@ test("the + button opens one dialog offering Shell, Claude TUI and Claude Agent,
     app.newSessionDialog.getByRole("radio", { name: "Claude Agent (WIP)" }),
   ).toBeVisible();
   await expect(app.newSessionDialog.getByRole("radio", { name: "Shell" })).toBeChecked();
-  // Launch options belong to Claude TUI only.
+  // A shell takes no Launch options.
   await expect(app.newSessionDialog.getByLabel("Model", { exact: true })).toBeHidden();
   await expect(
     app.newSessionDialog.getByRole("checkbox", { name: "Focus view" }),

@@ -114,6 +114,11 @@ export interface BuiltTranscript {
   model?: string;
   /** Claude Code's working folder (`system/init.cwd`); absent before the first turn. */
   cwd?: string;
+  /**
+   * Whether Claude Code runs in Focus view (`system/init.view_mode` is `focus`), where a tool
+   * call is one collapsed line. Its own report, so it holds however the Agent was launched.
+   */
+  focusView: boolean;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -146,6 +151,7 @@ interface BuildState {
   items: TranscriptItem[];
   model?: string;
   cwd?: string;
+  focusView: boolean;
   /** The tool calls by `tool_use` id, to pair results with. */
   tools: Map<string, OpenTool>;
   /** The ids of the prompts k-bench sent: their echoes are the same prompt. */
@@ -278,6 +284,7 @@ function readSdkMessage(
         if (terminalOnly) {
           addUnsupported(state, entry.seq, `${entry.seq}-terminal`, [terminalOnly]);
         }
+        state.focusView = message.view_mode === "focus";
       }
       return;
     case "assistant": {
@@ -382,6 +389,7 @@ function readSdkMessage(
 export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
   const state: BuildState = {
     items: [],
+    focusView: false,
     tools: new Map(),
     promptIds: new Set(),
     queued: queuedPromptIds(entries),
@@ -428,5 +436,6 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     items: state.items,
     ...(state.model === undefined ? {} : { model: state.model }),
     ...(state.cwd === undefined ? {} : { cwd: state.cwd }),
+    focusView: state.focusView,
   };
 }

@@ -493,6 +493,15 @@ async function runTurn(prompt, scripted) {
     });
   }
   const text = promptText(prompt);
+  // Like the real one, `/advisor <model>` saves the model as the owner's default: in the user
+  // settings file the test named. Nothing else here ever writes it.
+  const advisorCommand = /^\/advisor\s+(\S+)/.exec(text);
+  if (advisorCommand && config.userSettingsFile) {
+    writeFileSync(
+      config.userSettingsFile,
+      JSON.stringify({ advisorModel: advisorCommand[1] }),
+    );
+  }
   const clearing = isClear(prompt);
   if (!clearing) {
     sendInit(config);

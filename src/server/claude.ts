@@ -197,12 +197,29 @@ export interface AgentLaunch {
   claudeProgram: string;
   conversationId: string;
   mode: "start" | "resume";
+  /** The Session's Launch options, passed again at every start (ADR-0005). */
+  options: LaunchOptions;
+}
+
+/**
+ * The runtime's flags for Launch options: Default adds nothing, and Advisor Off is passed as
+ * `--advisor off` (the runtime sets the environment variable; see `sdkLaunchOptions`).
+ */
+export function agentLaunchArguments(options: LaunchOptions): string[] {
+  const { model, effort, advisor, focusView } = options;
+  return [
+    ...(model === "default" ? [] : ["--model", model]),
+    ...(effort === "default" ? [] : ["--effort", effort]),
+    ...(advisor === "default" ? [] : ["--advisor", advisor]),
+    ...(focusView ? ["--focus-view"] : []),
+  ];
 }
 
 /**
  * Starts the Agent Runtime and, when it ends, notes it if the runtime did not. Arguments,
  * never script text, in this order: the Workspace folder, Node, the runtime file, the
- * Agent's folder, the `claude` program, the mode, the conversation ID. It is POSIX `sh` too.
+ * Agent's folder, the `claude` program, the mode, the conversation ID, then the runtime's
+ * Launch option flags (`agentLaunchArguments`). It is POSIX `sh` too.
  *
  * It resolves `claude` with `command -v` inside the login shell, so the Agent gets the same
  * `claude` a terminal on the Host would (the SDK needs an absolute path), and without one it
@@ -221,6 +238,7 @@ dir=$4
 program=$5
 mode=$6
 conversation=$7
+shift 7
 cd -- "$folder"
 rm -f "$dir/exit.json"
 case $program in
@@ -231,7 +249,7 @@ if [ -z "$claude" ]; then
   printf '{"reason":"Claude Code was not found. Is it installed for your login shell?","at":"%s"}\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/exit.json"
   exit 127
 fi
-"$node" "$runtime" --agent-dir "$dir" --folder "$folder" --claude "$claude" --conversation "$conversation" --mode "$mode"
+"$node" "$runtime" --agent-dir "$dir" --folder "$folder" --claude "$claude" --conversation "$conversation" --mode "$mode" "$@"
 status=$?
 if [ ! -e "$dir/exit.json" ]; then
   signal=null
@@ -262,5 +280,6 @@ export function agentCommand(input: {
     launch.claudeProgram,
     launch.mode,
     launch.conversationId,
+    ...agentLaunchArguments(launch.options),
   ]);
 }
