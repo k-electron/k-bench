@@ -45,7 +45,7 @@ The model, effort, advisor and Focus view a Claude Session starts with. k-bench 
 _Avoid_: settings, config, flags
 
 **Stopped**:
-The state of a Session whose program no longer exists, because it exited, or the owner logged out of the Host or restarted it. A Stopped Session can be restarted in the same folder: a shell starts fresh, and a Claude Session resumes its Claude conversation.
+The state of a Session whose program no longer exists, because it exited, or the owner logged out of the Host or restarted it. A Stopped Session can be restarted in the same folder: a shell starts fresh, and a Claude Session resumes its Claude conversation. A Stopped Claude Agent also shows its whole Transcript read-only, with why it stopped; the owner can stop one on purpose (Stop), and one that ends by itself stays Stopped until the owner restarts it.
 _Avoid_: dead, closed, killed
 
 **History**:

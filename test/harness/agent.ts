@@ -7,6 +7,7 @@ import {
   type AgentServerMessage,
   type AgentSnapshot,
   type AgentStatus,
+  type AgentStopped,
   agentPath,
   decodeAgentServerMessage,
   encodeAgentClientMessage,
@@ -62,6 +63,14 @@ export class AgentClient {
   /** The runtime's hello, once it has come. */
   get hello(): AgentHello | undefined {
     return this.messages.find((m): m is AgentHello => m.type === "hello");
+  }
+
+  /**
+   * Why the Agent is Stopped, once the server has said so: it serves a Stopped Agent's log
+   * from disk and ends a `sync` with this, so there is no hello and no status.
+   */
+  get stoppedReason(): string | undefined {
+    return this.messages.find((m): m is AgentStopped => m.type === "stopped")?.reason;
   }
 
   /** The newest status received: what the Agent is doing, and what it has reported. */

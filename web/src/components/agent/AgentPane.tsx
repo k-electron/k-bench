@@ -6,6 +6,7 @@ import { AgentHeader } from "./AgentHeader";
 import { PromptDock } from "./PromptDock";
 import { RawSwitch, RawTranscript, useRawView } from "./RawView";
 import { StatusLine } from "./StatusLine";
+import { StoppedBar } from "./StoppedBar";
 import { Transcript } from "./Transcript";
 import { useScrollBack } from "./useScrollBack";
 
@@ -95,12 +96,22 @@ export function AgentPane({
           Reconnecting…
         </p>
       )}
-      {conversation.ended && (
-        <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
-          This Session has ended.
-        </p>
+      {conversation.stoppedReason === undefined ? (
+        <>
+          {conversation.ended && (
+            <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">
+              This Session has ended.
+            </p>
+          )}
+          <PromptDock
+            sessionId={session.id}
+            conversation={conversation}
+            focused={focused}
+          />
+        </>
+      ) : (
+        <StoppedBar sessionId={session.id} reason={conversation.stoppedReason} />
       )}
-      <PromptDock sessionId={session.id} conversation={conversation} focused={focused} />
     </div>
   );
 }

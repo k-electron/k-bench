@@ -13,13 +13,10 @@ export function Pane({ session, focused }: PaneProps) {
   if (session.kind === "claude" && session.interface === "agent") {
     return (
       <section aria-label={`Claude Agent ${session.name}`} className="h-full min-h-0">
-        {session.status === "running" ? (
-          <AgentPane session={session} focused={focused} />
-        ) : (
-          <p className="p-4 text-sm text-muted-foreground">
-            This Session is Stopped. Restart it from the sidebar.
-          </p>
-        )}
+        {/* Stopped or running, the Pane shows the whole conversation: a Stopped Agent's is
+            read-only, served from its log. The key opens a new connection when the status
+            changes (Stop, Restart, a crash), so each is the right kind of connection. */}
+        <AgentPane key={session.status} session={session} focused={focused} />
       </section>
     );
   }

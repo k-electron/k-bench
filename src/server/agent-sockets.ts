@@ -3,7 +3,14 @@ import type { Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import { LineSplitter } from "../agent/lines.ts";
-import { CLOSE_AGENT_SESSION_ENDED, parseAgentPath } from "../shared/agent-protocol.ts";
+import { answerPage, answerSync } from "../agent/replay.ts";
+import {
+  type AgentServerMessage,
+  CLOSE_AGENT_SESSION_ENDED,
+  decodeAgentClientMessage,
+  encodeAgentServerMessage,
+  parseAgentPath,
+} from "../shared/agent-protocol.ts";
 import { CLOSE_INTERNAL_ERROR } from "../shared/terminal-protocol.ts";
 import type { AgentRuntimes } from "./agents.ts";
 
@@ -16,6 +23,8 @@ const ENDED_WAIT_MS = 2_000;
 export interface AgentSessions {
   /** A known Session that is a Claude Agent and is running. */
   hasRunningAgent(sessionId: string): Promise<boolean>;
+  /** A known Session that is a Claude Agent, running or Stopped. */
+  isAgent(sessionId: string): boolean;
 }
 
 /**
@@ -59,20 +68,31 @@ export class AgentSockets {
     // Whatever the browser sends before the runtime is reached is kept, in order.
     const early: string[] = [];
     let upstream: Socket | undefined;
+    // Set when the Agent turns out to be Stopped: answers a message from the log on disk.
+    let stopped: ((text: string) => void) | undefined;
     ws.on("message", (raw: RawData, isBinary: boolean) => {
       if (isBinary) return;
       const text = raw.toString();
       if (upstream) upstream.write(`${text}\n`);
+      else if (stopped) stopped(text);
       else early.push(text);
     });
+    const serveStoppedOrEnd = () => {
+      if (!this.sessions.isAgent(sessionId)) {
+        return ws.close(CLOSE_AGENT_SESSION_ENDED, "Session ended");
+      }
+      const answer = this.stoppedAnswers(ws, sessionId);
+      stopped = answer;
+      for (const text of early.splice(0)) answer(text);
+    };
     ws.on("error", () => ws.terminate());
     // `ws` closing for any reason hangs up on the runtime, which then forgets this client.
     ws.on("close", () => upstream?.destroy());
 
     try {
-      // Not a Claude Agent, or not running: nothing to relay to.
+      // Not running: a Stopped Agent is served from its log, anything else has ended.
       if (!(await this.sessions.hasRunningAgent(sessionId))) {
-        return ws.close(CLOSE_AGENT_SESSION_ENDED, "Session ended");
+        return serveStoppedOrEnd();
       }
       // A runtime that was just started is not listening yet: this waits for it.
       upstream = await this.agents.connect(sessionId, () =>
@@ -81,7 +101,8 @@ export class AgentSockets {
     } catch {
       return ws.close(CLOSE_INTERNAL_ERROR, "The Agent did not answer");
     }
-    if (!upstream) return ws.close(CLOSE_AGENT_SESSION_ENDED, "Session ended");
+    // It stopped while this waited for it.
+    if (!upstream) return serveStoppedOrEnd();
     if (ws.readyState !== ws.OPEN) {
       upstream.destroy();
       return;
@@ -103,6 +124,33 @@ export class AgentSockets {
       if (!this.stopping) void this.runtimeGone(ws, sessionId);
     });
     for (const text of early.splice(0)) runtime.write(`${text}\n`);
+  }
+
+  /**
+   * Serves a Stopped Agent read-only from its log on disk, with the same replay code the
+   * runtime uses (`answerSync`, `answerPage`): returns what answers each message the browser
+   * sends. A `sync` is answered with its `replay` and then `stopped` with the reason; a
+   * `page` with its `page`; every other message (a prompt, an answer, `view`) is ignored, as
+   * nothing is there to hear it. Reads the files afresh for each, so nothing is held open.
+   */
+  private stoppedAnswers(ws: WebSocket, sessionId: string): (text: string) => void {
+    const send = (message: AgentServerMessage) => {
+      if (ws.readyState === ws.OPEN) ws.send(encodeAgentServerMessage(message));
+    };
+    return (text) => {
+      const message = decodeAgentClientMessage(text);
+      try {
+        if (message?.type === "sync") {
+          send(answerSync(this.agents.readLog(sessionId), message));
+          send({ type: "stopped", reason: this.agents.stoppedReason(sessionId) });
+        } else if (message?.type === "page") {
+          send(answerPage(this.agents.readLog(sessionId), message));
+        }
+      } catch {
+        // The Agent's folder went with its Session: this socket is about to be dropped.
+        ws.close(CLOSE_AGENT_SESSION_ENDED, "Session ended");
+      }
+    };
   }
 
   /**

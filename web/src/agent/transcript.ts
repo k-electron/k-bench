@@ -47,6 +47,11 @@ export interface TranscriptState {
    */
   earliestSeq: number | undefined;
   live: LiveMessage | undefined;
+  /**
+   * Why the Agent is Stopped, once the server has said (`stopped`): the log is then final, so
+   * what it leaves open stays open for ever and is shown as not done (`buildItems`).
+   */
+  stoppedReason: string | undefined;
 }
 
 export const emptyTranscript: TranscriptState = {
@@ -54,6 +59,7 @@ export const emptyTranscript: TranscriptState = {
   lastSeq: 0,
   earliestSeq: undefined,
   live: undefined,
+  stoppedReason: undefined,
 };
 
 /** Whether the log has entries older than the ones held, which a `page` request fetches. */
@@ -215,6 +221,8 @@ export function applyServerMessage(
       return addEntries(state, [message.entry]);
     case "partial":
       return addFragment(state, message.message);
+    case "stopped":
+      return { ...state, live: undefined, stoppedReason: message.reason };
     default:
       return state;
   }
@@ -225,15 +233,20 @@ export function applyServerMessage(
  * replaced only when entries arrive, so a stream of fragments does not rebuild the whole
  * history (nor re-render it: the items keep their identity).
  */
-const built = new WeakMap<readonly LogEntry[], BuiltTranscript>();
+const built = new WeakMap<
+  readonly LogEntry[],
+  { stopped: boolean; result: BuiltTranscript }
+>();
 
 function builtTranscript(state: TranscriptState): BuiltTranscript {
-  let result = built.get(state.entries);
-  if (!result) {
-    result = buildItems(state.entries);
-    built.set(state.entries, result);
+  const stopped = state.stoppedReason !== undefined;
+  let cached = built.get(state.entries);
+  // The `stopped` message changes how the same entries read, without new entries.
+  if (!cached || cached.stopped !== stopped) {
+    cached = { stopped, result: buildItems(state.entries, { stopped }) };
+    built.set(state.entries, cached);
   }
-  return result;
+  return cached.result;
 }
 
 /** The text still streaming in, as the items it will become when its complete message arrives. */

@@ -200,16 +200,38 @@ async function command(message: AgentClientMessage): Promise<void> {
       // every Pane keeps showing the mode that is in force.
     }
   } else if (message.type === "shutdown") {
-    await finish("Stopped by k-bench", 0);
+    // The reason is shown after "Stopped:" in the Pane.
+    await finish("You stopped it", 0, { interruptTurn: true });
   }
 }
 
-/** Records why the runtime ends, ends Claude Code and exits. Only the first call counts. */
-async function finish(reason: string, code: number): Promise<void> {
+/** How long Stop waits for an interrupted turn to end before closing Claude Code anyway. */
+const INTERRUPT_WAIT_MS = 1_500;
+
+/**
+ * Records why the runtime ends, ends Claude Code and exits. Only the first call counts. With
+ * `interruptTurn` (Stop), a turn that is running is interrupted first and given a moment to
+ * end, so the log says it was interrupted and no tool is left looking as if it still runs.
+ */
+async function finish(
+  reason: string,
+  code: number,
+  options: { interruptTurn?: boolean } = {},
+): Promise<void> {
   if (finishing) return;
   finishing = true;
   try {
+    // Before the interrupt: it would otherwise withdraw an open ask as `cancelled`, and the
+    // owner must be told it went unanswered because the Agent stopped.
     asks.interruptAll();
+    const busy = () => activity.status.state !== "idle";
+    if (options.interruptTurn && busy()) {
+      claude.interrupt();
+      const deadline = Date.now() + INTERRUPT_WAIT_MS;
+      while (Date.now() < deadline && busy()) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
     record({ kind: "runtime", event: "stopped", reason });
   } catch {
     // The Agent's folder is gone (the Session was deleted): nothing to record into.
@@ -225,7 +247,10 @@ async function finish(reason: string, code: number): Promise<void> {
 }
 
 for (const signal of ["SIGTERM", "SIGHUP", "SIGINT"] as const) {
-  process.on(signal, () => void finish("Stopped by a signal", 0));
+  process.on(
+    signal,
+    () => void finish("Ended by a signal, as when the Mac shuts down", 0),
+  );
 }
 process.on("uncaughtException", (error) => {
   void finish(`The Agent Runtime failed: ${error.message}`, 1);

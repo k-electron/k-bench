@@ -6,13 +6,22 @@
  * docs/internals/agent.md is the tour.
  */
 
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { connect, type Socket } from "node:net";
 import { dirname } from "node:path";
 import { readExitRecord } from "../agent/exit.ts";
 import { LineSplitter } from "../agent/lines.ts";
+import { AgentLogReader } from "../agent/log.ts";
 import {
   agentFolder,
+  agentLogFile,
   agentSocketFile,
   agentsRoot,
   ensureOwnerOnlyFolder,
@@ -214,6 +223,43 @@ export class AgentRuntimes {
     if (record?.reason) return record.reason;
     if (record) return "The Agent Runtime exited unexpectedly";
     return error instanceof Error ? error.message : "The Agent Runtime did not start";
+  }
+
+  /**
+   * Why a Stopped Agent stopped, in plain words, for the Pane. The runtime records a reason
+   * on every exit it controls (the owner stopped it, Claude Code died, a crash); one that
+   * left none was killed (the launcher still records that it ended), or never got to say
+   * (the Mac went down with it).
+   */
+  stoppedReason(sessionId: string): string {
+    const record = readExitRecord(this.folder(sessionId));
+    if (record?.reason) return record.reason;
+    if (record) return "The Agent Runtime exited unexpectedly";
+    return "The Agent Runtime is gone (the Mac may have restarted)";
+  }
+
+  /** The Agent's log, for reading only: what a Stopped Agent shows (`AgentSockets`). */
+  readLog(sessionId: string): AgentLogReader {
+    return new AgentLogReader(agentLogFile(this.folder(sessionId)));
+  }
+
+  /**
+   * Deletes every Agent folder that `known` does not name a Session for: left behind by a
+   * Session that was deleted while the server was down, or by one whose creation never
+   * finished. For the server's start, before it takes requests: a folder is made before its
+   * Session's row, so run later it could take one being made.
+   */
+  removeStrayFolders(known: (sessionId: string) => boolean): void {
+    const root = agentsRoot(this.dataDir);
+    let names: string[];
+    try {
+      names = readdirSync(root);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (!known(name)) this.removeFolder(name);
+    }
   }
 
   /**
