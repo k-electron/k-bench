@@ -72,6 +72,14 @@ export class AgentStatuses {
     };
   }
 
+  /**
+   * Whether the Agent's Bell is raised, as `SessionState.bell`. The runtime holds it (it alone
+   * knows which pages show the Agent), so an Agent it has not said anything yet has none.
+   */
+  bellOf(sessionId: string): boolean {
+    return this.heard.get(sessionId)?.status?.bell === true;
+  }
+
   /** Resolves once every Agent watched has said its status, or after `timeoutMs`. */
   async settled(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;

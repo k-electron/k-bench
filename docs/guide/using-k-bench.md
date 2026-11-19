@@ -83,6 +83,8 @@ Things to know:
 - A Session raises a Bell only while nothing is viewing it. A browser tab, on any device, that still has the Session open counts as viewing it. If Bells don't appear when you expect them, close the stale tab. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 - A Bell survives a k-bench restart. It is lost only if your Sessions are, which means after a logout or a Mac restart.
 
+A Claude Agent raises a Bell too: when a turn finishes, or when it asks you something, while no page of yours shows it in a Pane. A browser tab in the background doesn't count as showing it. See [Claude Agent](claude-agent.md).
+
 [Using k-bench with Claude Code](claude-code.md) shows how to make Claude Code ring the bell when it needs you.
 
 ## Scrolling, selecting and copying

@@ -65,7 +65,7 @@ The state of a running Claude Agent that can't go on until the owner answers it:
 _Avoid_: blocked, needs input, pending
 
 **Bell**:
-A Session's request for attention, raised while no device is viewing the Session: when its program rings the terminal bell, or, for a Claude Agent, when a turn finishes or it becomes Waiting for you. It is cleared once the owner views that Session on any device. The sidebar shows it as the Session's row pulsing (and a collapsed Workspace's, while any Session in it has one).
+A Session's request for attention, raised while no device is viewing the Session: when its program rings the terminal bell, or, for a Claude Agent, when a turn finishes or it becomes Waiting for you. It is cleared once the owner views that Session on any device. A Claude Agent counts as viewed only while a Pane shows it on a visible page: a background browser tab does not count, so walking away from the desk leaves the pulse for the phone. The sidebar shows it as the Session's row pulsing (and a collapsed Workspace's, while any Session in it has one).
 _Avoid_: notification, alert, activity, unviewed
 
 **Claude conversation**:

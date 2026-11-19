@@ -23,6 +23,7 @@ import {
 import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
+import { AgentBell } from "./bell.ts";
 import { ClientHub } from "./hub.ts";
 import { LiveText } from "./live.ts";
 import { PermissionModeTracker } from "./mode.ts";
@@ -57,6 +58,13 @@ const hub = new ClientHub({
   hello,
   snapshot: () => live.snapshot(),
   onCommand: (message) => void command(message),
+  onViewed: () => bell.viewed(),
+});
+
+// The Agent's Bell: raised by a turn ending or an ask opening while nobody views the Agent.
+const bell = new AgentBell({
+  viewers: () => hub.viewers,
+  changed: () => publishStatus(),
 });
 
 // Idle, Working or Waiting for you: Waiting is an open ask (`asks`, below).
@@ -70,6 +78,8 @@ function record(entry: Parameters<AgentLog["append"]>[0]): void {
   hub.entry(log.append(entry));
   // An ask opening or closing is what turns Working into Waiting for you and back.
   if (entry.kind === "permission_asked" || entry.kind === "permission_answered") {
+    // Before the state changes, so that whoever sees Waiting for you sees the Bell with it.
+    if (entry.kind === "permission_asked") bell.attention();
     activity.asksChanged();
   }
 }
@@ -78,11 +88,12 @@ const asks = new PermissionAsks(record);
 
 const permissionMode = new PermissionModeTracker();
 
-/** Sends every connection the status: what the Agent is doing, and its permission mode. */
+/** Sends every connection the status: what the Agent is doing, its mode and its Bell. */
 function publishStatus(): void {
   hub.setStatus({
     ...activity.status,
     ...(permissionMode.current && { mode: permissionMode.current }),
+    ...(bell.isRaised && { bell: true }),
   });
 }
 
@@ -113,6 +124,9 @@ const claude = new ClaudeSession(
   },
   {
     message(message) {
+      // Any turn's `result` (done, failed or interrupted, sent by the owner or by nobody),
+      // before the state goes Idle so that whoever sees Idle sees the Bell with it.
+      if (message.type === "result") bell.attention();
       activity.message(message);
       if (message.type === "stream_event") {
         // Fragments go live and are never logged; the text so far is kept for late joiners.

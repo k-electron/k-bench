@@ -386,6 +386,20 @@ export class AppPage {
     await expect(this.newSessionDialog).toBeHidden();
   }
 
+  /**
+   * Makes this page report itself hidden (a background tab, a locked phone) or visible again,
+   * as the browser does: `document.visibilityState` and a `visibilitychange` event. The page
+   * keeps running, as a hidden tab does.
+   */
+  async setPageVisible(visible: boolean): Promise<void> {
+    // A string, because the e2e project's types have no DOM.
+    await this.page.evaluate(`(() => {
+      if (${visible}) delete document.visibilityState;
+      else Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    })()`);
+  }
+
   /** The conversation of the named Claude Agent: a region, where a terminal is `terminal(name)`. */
   agentRegion(sessionName: string): Locator {
     return this.page.getByRole("region", {
