@@ -34,10 +34,14 @@ export const DENY_FEEDBACK = "use exactly the content I gave you";
 /** Starts the web's first prompt, so that its line in the `/rewind` menu is found by it. */
 export const WEB_MARKER = "WEBONE";
 
-const IDLE = /\? for shortcuts/;
+// Ready for a prompt: the input line (`❯`) and a footer naming the permission mode (`⏸ manual
+// mode on` in the default mode, as the real TUI draws it; older builds said `? for shortcuts`).
+// The trust question has `❯` too but no such footer.
+const IDLE =
+  /❯[\s\S]*(?:manual mode on|accept edits on|plan mode on|auto mode on|bypass permissions on|\? for shortcuts)/i;
 const WORKING = /esc to interrupt/i;
 const MODE_LABEL =
-  /(accept edits on|plan mode on|auto mode on|auto-accept edits on|bypass permissions on|don't ask on)/i;
+  /(manual mode on|accept edits on|plan mode on|auto mode on|auto-accept edits on|bypass permissions on|don't ask on)/i;
 
 const readTrim = (path: string): string => {
   try {
@@ -252,17 +256,22 @@ async function visitTwo(ctx: Ctx, sid: string): Promise<Visit & { cycle: string[
     await steer(tmux, ctx, sid);
     visit.reached.up = true;
     if (!run.fake) {
-      // Shift+Tab until no mode is named in the footer again: the default has no label. The
-      // labels seen on the way are the cycle.
-      for (let i = 0; i < 8; i++) {
-        tmux.keys("BTab");
-        await sleep(700);
-        const label = MODE_LABEL.exec(footerOf(tmux.capture()))?.[1]?.toLowerCase();
-        if (label === undefined) {
-          visit.reached.cycle = visit.cycle.length > 0;
-          break;
+      // Shift+Tab until the footer names the mode it started in again: the labels seen on the
+      // way are the cycle (the default is labelled too: `manual mode on`).
+      const start = MODE_LABEL.exec(footerOf(tmux.capture()))?.[1]?.toLowerCase();
+      if (start !== undefined) {
+        visit.cycle.push(start);
+        for (let i = 0; i < 8; i++) {
+          tmux.keys("BTab");
+          await sleep(700);
+          const label = MODE_LABEL.exec(footerOf(tmux.capture()))?.[1]?.toLowerCase();
+          if (label === undefined) continue;
+          if (label === start) {
+            visit.reached.cycle = true;
+            break;
+          }
+          visit.cycle.push(label);
         }
-        visit.cycle.push(label);
       }
     }
     run.budget.spendUnobserved("terminal");
