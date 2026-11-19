@@ -70,6 +70,7 @@ export function AgentPane({
           <RawTranscript entries={entries} />
         ) : (
           <Transcript
+            sessionId={session.id}
             items={items}
             entries={entries}
             rawView={rawView}

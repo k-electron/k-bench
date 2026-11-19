@@ -184,10 +184,10 @@ export class ClaudeSession {
    * Sends a prompt as typed. `id` becomes the message's `uuid`, which Claude Code echoes back
    * (the messages are replayed). Never marked as composed by the client, so `@path` expands.
    */
-  prompt(id: string, text: string): void {
+  prompt(id: string, content: SDKUserMessage["message"]["content"]): void {
     this.prompts.push({
       type: "user",
-      message: { role: "user", content: text },
+      message: { role: "user", content },
       parent_tool_use_id: null,
       uuid: id as SDKUserMessage["uuid"],
     });

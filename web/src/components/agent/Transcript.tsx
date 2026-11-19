@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { LogEntry } from "../../../../src/shared/agent-protocol.ts";
 import type { TranscriptItem } from "../../agent/items";
 import { Markdown } from "./Markdown";
+import { PromptImages } from "./PromptImages";
 import { RawMessage, type RawView, ShowRawProvider } from "./RawView";
 import { ToolCall } from "./ToolCall";
 
@@ -15,11 +16,13 @@ import { ToolCall } from "./ToolCall";
  * terminal's way of saying what the accessible names and roles say.
  */
 export function Transcript({
+  sessionId,
   items,
   entries,
   rawView,
   focusView,
 }: {
+  sessionId: string;
   items: readonly TranscriptItem[];
   /** The log's entries, for the raw JSON of the message an item comes from (#137). */
   entries: readonly LogEntry[];
@@ -34,7 +37,7 @@ export function Transcript({
       <div className="font-mono text-[13px] leading-relaxed break-words">
         {items.map((item) => (
           <RawMessage key={item.key} seq={item.seq} entries={entries} rawView={rawView}>
-            <TranscriptItemView item={item} focusView={focusView} />
+            <TranscriptItemView sessionId={sessionId} item={item} focusView={focusView} />
           </RawMessage>
         ))}
       </div>
@@ -52,9 +55,11 @@ function Gutter({ children, className }: { children: string; className?: string 
 }
 
 export const TranscriptItemView = memo(function TranscriptItemView({
+  sessionId,
   item,
   focusView,
 }: {
+  sessionId: string;
   item: TranscriptItem;
   focusView: boolean;
 }) {
@@ -66,10 +71,15 @@ export const TranscriptItemView = memo(function TranscriptItemView({
           className="my-2 flex gap-2 rounded bg-white/[0.07] px-2 py-1"
         >
           <Gutter className="text-muted-foreground">&gt;</Gutter>
-          <span className="min-w-0 break-words whitespace-pre-wrap">
-            {item.text}
-            {item.queued && <span className="text-muted-foreground"> (queued)</span>}
-          </span>
+          <div className="min-w-0">
+            <PromptImages sessionId={sessionId} names={item.images} />
+            {(item.text !== "" || item.queued) && (
+              <span className="break-words whitespace-pre-wrap">
+                {item.text}
+                {item.queued && <span className="text-muted-foreground"> (queued)</span>}
+              </span>
+            )}
+          </div>
         </article>
       );
     case "assistant":

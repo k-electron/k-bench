@@ -196,9 +196,9 @@ export class AgentClient {
     this.send({ type: "view", visible });
   }
 
-  /** Sends a prompt and returns the ID it was sent with. */
-  prompt(text: string, id: string = randomUUID()): string {
-    this.send({ type: "prompt", id, text });
+  /** Sends a prompt, with the names of images already uploaded, and returns the ID it was sent with. */
+  prompt(text: string, id: string = randomUUID(), images?: string[]): string {
+    this.send({ type: "prompt", id, text, ...(images && { images }) });
     return id;
   }
 

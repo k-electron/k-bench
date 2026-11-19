@@ -96,8 +96,11 @@ export interface AgentConversation {
   loadEarlier(): void;
   /** The connection dropped and is retrying: what is shown may be behind, and nothing can be sent. */
   reconnecting: boolean;
-  /** Sends a prompt as typed. False when it could not be sent (reconnecting), so the text should stay. */
-  send(text: string): boolean;
+  /**
+   * Sends a prompt as typed, with the stored names of the images attached to it. False when
+   * it could not be sent (reconnecting), so the text should stay.
+   */
+  send(text: string, images?: string[]): boolean;
   /**
    * Answers an open ask. False when it could not be sent (reconnecting): it is dropped, never
    * queued, so an answer cannot reach Claude after the owner has lost the connection and
@@ -216,8 +219,13 @@ export function useAgentConversation(sessionId: string): AgentConversation {
   }, [sessionId]);
 
   const send = useCallback(
-    (text: string) =>
-      connection.current?.send({ type: "prompt", id: newPromptId(), text }) ?? false,
+    (text: string, images: string[] = []) =>
+      connection.current?.send({
+        type: "prompt",
+        id: newPromptId(),
+        text,
+        ...(images.length > 0 && { images }),
+      }) ?? false,
     [],
   );
 

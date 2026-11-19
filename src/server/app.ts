@@ -150,6 +150,26 @@ export function createApp(
     return c.json(session, 201);
   });
 
+  // Images for a Claude Agent's prompts. The bytes travel as base64 inside JSON, not as a raw
+  // upload, so that `jsonBody`'s `application/json` check still stands behind the Origin check.
+  app.post("/api/sessions/:id/agent/images", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    const name = service.saveAgentImage(c.req.param("id"), body.mediaType, body.data);
+    return c.json({ name }, 201);
+  });
+  app.get("/api/sessions/:id/agent/images/:name", (c) => {
+    const { bytes, mediaType } = service.agentImage(
+      c.req.param("id"),
+      c.req.param("name"),
+    );
+    return c.body(new Uint8Array(bytes), 200, {
+      "content-type": mediaType,
+      // Named by a UUID and never changed.
+      "cache-control": "private, max-age=31536000, immutable",
+      "x-content-type-options": "nosniff",
+    });
+  });
+
   app.get("/api/new-session/last", (c) => c.json(service.lastNewSession()));
 
   app.patch("/api/sessions/:id", async (c) => {
