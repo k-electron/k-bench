@@ -118,11 +118,6 @@ export class AgentLogReader {
   protected readAll(): LogEntry[] {
     return existsSync(this.file) ? parseEntries(readFileSync(this.file, "utf8")) : [];
   }
-
-  /** Whether any prompt was ever sent: Claude Code saves a conversation only after its first message. */
-  hasPrompt(): boolean {
-    return this.readAfter(0).some((entry) => entry.kind === "prompt");
-  }
 }
 
 /** The log as the runtime holds it: everything `AgentLogReader` reads, and `append`. */
