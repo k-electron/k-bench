@@ -170,6 +170,13 @@ export function createApp(
     });
   });
 
+  // The `@` picker's files (#160): those in the Agent's Workspace folder whose path contains `q`.
+  app.get("/api/sessions/:id/files", async (c) =>
+    c.json({
+      files: await service.searchAgentFiles(c.req.param("id"), c.req.query("q") ?? ""),
+    }),
+  );
+
   // The running list of unsupported kinds (#154). A kind holds `:` and `/`, so it travels
   // URL-encoded in the path.
   app.get("/api/unsupported", (c) => c.json({ entries: service.listUnsupported() }));
@@ -201,6 +208,9 @@ export function createApp(
     await service.deleteSession(c.req.param("id"));
     return c.body(null, 204);
   });
+  app.post("/api/sessions/:id/stop", async (c) =>
+    c.json(await service.stopSession(c.req.param("id"))),
+  );
   app.post("/api/sessions/:id/restart", async (c) =>
     c.json(await service.restartSession(c.req.param("id"))),
   );

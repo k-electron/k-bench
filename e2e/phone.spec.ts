@@ -1,4 +1,5 @@
 import { type AppPage, expect, type Kbench, test } from "./harness.ts";
+import { makeRepository } from "./project-files.ts";
 
 // These run on the `phone` project: a touch device narrower than the layout breakpoint.
 
@@ -637,4 +638,94 @@ test("a Claude Agent's Transcript fits the phone: long lines wrap or scroll insi
   await expect(bash.getByText(/^8 x+$/)).toBeVisible();
   expect(await overflow()).toEqual({ page: 0, log: 0 });
   await expect(region.getByRole("log")).toContainText("A reading-width paragraph");
+});
+
+test("on a phone, @ lists the Workspace's files inside the screen and a tap inserts the path", async ({
+  app,
+  kbench,
+}) => {
+  const folder = kbench.instance.makeFolder("project");
+  makeRepository(folder, [
+    "src/app.ts",
+    "src/a/deeply/nested/folder/for/a/long/path/app-routes.ts",
+  ]);
+  await app.openDrawer();
+  await app.createWorkspace(folder);
+  await app.createClaudeAgent("project");
+  const region = app.agentRegion("session 1");
+  const input = app.agentInput("session 1");
+
+  await input.tap();
+  await app.page.keyboard.type("see @app");
+  const picker = region.getByRole("listbox", { name: "Files" });
+  await expect(picker.getByRole("option")).toHaveCount(2);
+  // The long path is cut at the edge, not pushed past it: nothing scrolls sideways.
+  const box = await picker.boundingBox();
+  const width = app.page.viewportSize()?.width ?? 0;
+  expect(box && box.x >= 0 && box.x + box.width <= width).toBe(true);
+  expect(
+    await app.page.evaluate<number>(
+      "document.documentElement.scrollWidth - window.innerWidth",
+    ),
+  ).toBe(0);
+
+  await picker.getByRole("option", { name: /^app\.ts/ }).tap();
+  await expect(input).toHaveValue("see @src/app.ts ");
+  await expect(input).toBeFocused();
+  await expect(picker).toHaveCount(0);
+  await region.getByRole("button", { name: "Send", exact: true }).tap();
+  await expect(region.getByRole("log")).toContainText(
+    "fake claude heard: see @src/app.ts",
+  );
+});
+
+test("on the phone Claude's questions and plan are answered by tapping, with the choices in reach however long the plan is", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createClaudeAgent("project");
+  const { fakeClaude } = kbench.instance;
+  const steps = Array.from({ length: 60 }, (_, i) => `- step ${i + 1}`).join("\n");
+  fakeClaude.script([
+    {
+      tool: {
+        name: "AskUserQuestion",
+        input: {
+          questions: [
+            {
+              question: "Which colour?",
+              header: "Colour",
+              multiSelect: false,
+              options: [
+                { label: "Red", description: "Warm" },
+                { label: "Blue", description: "Cool" },
+              ],
+            },
+          ],
+        },
+      },
+      ask: true,
+    },
+    {
+      tool: { name: "ExitPlanMode", input: { plan: `## The plan\n\n${steps}` } },
+      ask: true,
+    },
+    { text: "all done" },
+  ]);
+  const region = app.agentRegion("session 1");
+  await app.agentInput("session 1").tap();
+  await app.page.keyboard.type("go");
+  await region.getByRole("button", { name: "Send", exact: true }).tap();
+
+  await app.questionPrompt("session 1").getByRole("button", { name: "2. Blue" }).tap();
+  // The plan is longer than the screen: it scrolls inside its panel and the choices stay on it.
+  const yes = app
+    .planPrompt("session 1")
+    .getByRole("button", { name: "1. Yes, proceed" });
+  await expect(yes).toBeInViewport();
+  await yes.tap();
+  await expect(region.getByRole("log")).toContainText("all done");
+  await expect(region.getByRole("log")).toContainText("question: Which colour? → Blue");
 });

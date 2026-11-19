@@ -21,8 +21,10 @@ import { MAX_PROMPT_IMAGES, STORED_IMAGE_NAME } from "./agent-images.ts";
 export const AGENT_PROTOCOL_VERSION = 1;
 
 /**
- * The agent socket was closed because the Session ended (deleted, Stopped, or never was a
- * Claude Agent): reconnecting is pointless. The same code as the terminal socket's.
+ * The agent socket was closed because the Session ended (deleted, or never was a Claude
+ * Agent), or because the runtime it relayed to went away and the Agent is now Stopped:
+ * reconnecting is pointless (a Stopped Agent is read on a new socket, which the server serves
+ * itself, see `AgentStopped`). The same code as the terminal socket's.
  */
 export const CLOSE_AGENT_SESSION_ENDED = 4410;
 
@@ -127,12 +129,24 @@ export type LogEntry =
  * - `allow`, with `alwaysAllow` for "Yes, don't ask again": Claude Code's own suggested rule
  *   changes are saved with it. The log records it only when the runtime did apply them (the
  *   ask had suggestions and did not suppress the choice), so the log says what happened.
+ * - `allow`, with `answers` for an AskUserQuestion ask (#147): the owner's answer to each
+ *   question, by the question's own text: a chosen option's label (several, joined by `, `,
+ *   for a multi-select question) or the owner's own words. The runtime checks it against the
+ *   questions it holds and builds Claude Code's `updatedInput` itself; it is never combined
+ *   with `alwaysAllow`.
  * - `deny`, with `message` for "No, and tell Claude what to do differently": what the owner
- *   wrote, which Claude reads as the reason.
+ *   wrote, which Claude reads as the reason. Rejecting a plan (ExitPlanMode) with feedback is
+ *   this too: the feedback is the `message`.
  */
 export type PermissionReply =
-  | { decision: "allow"; alwaysAllow?: true }
+  | { decision: "allow"; alwaysAllow?: true; answers?: QuestionAnswers }
   | { decision: "deny"; message?: string };
+
+/** The answers to an AskUserQuestion ask: each question's text, to what the owner chose or wrote. */
+export type QuestionAnswers = Record<string, string>;
+
+/** The most questions an `answers` may hold (Claude Code asks one to four). */
+export const MAX_QUESTIONS = 10;
 
 /**
  * How an ask ended. `allow` and `deny` are the owner's answer, from whichever device came
@@ -407,8 +421,21 @@ export interface AgentError {
   message: string;
 }
 
+/**
+ * Sent by the server itself, never by a runtime, to a connection to an Agent that is Stopped:
+ * the log is served read-only from disk (a `sync` is answered with a `replay`, a `page` with a
+ * `page`, and then this), and nothing else is. `reason` is in plain words for the owner: what
+ * the runtime recorded on its way out, or why it left no record. The connection stays open, so
+ * the Transcript can be paged back, and nothing more arrives on it.
+ */
+export interface AgentStopped {
+  type: "stopped";
+  reason: string;
+}
+
 export type AgentServerMessage =
   | AgentHello
+  | AgentStopped
   | AgentStatus
   | AgentReplay
   | AgentPage
@@ -515,6 +542,28 @@ export const MAX_PROMPT_CHARACTERS = 1_000_000;
 /** Longest `requestId` an answer may name. Claude Code's format is not ours to pin down. */
 export const MAX_REQUEST_ID_CHARACTERS = 200;
 
+/** The answers of a reply (a few non-empty texts under their questions), or undefined when they are not. */
+function decodeQuestionAnswers(value: unknown): QuestionAnswers | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value);
+  if (entries.length === 0 || entries.length > MAX_QUESTIONS) return undefined;
+  const answers: QuestionAnswers = {};
+  for (const [question, answer] of entries) {
+    if (
+      typeof answer !== "string" ||
+      answer.trim() === "" ||
+      question.length > MAX_PROMPT_CHARACTERS ||
+      answer.length > MAX_PROMPT_CHARACTERS
+    ) {
+      return undefined;
+    }
+    answers[question] = answer.trim();
+  }
+  return answers;
+}
+
 /**
  * The image names of a prompt (none when absent), or undefined when they are not a short list
  * of valid stored names: a name is a file the runtime reads, so nothing else may pass.
@@ -586,6 +635,12 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
       const { requestId } = message;
       if (message.decision === "allow") {
         if (message.message !== undefined) return undefined;
+        if (message.answers !== undefined) {
+          const answers = decodeQuestionAnswers(message.answers);
+          if (answers === undefined || message.alwaysAllow !== undefined)
+            return undefined;
+          return { type: "answer", requestId, decision: "allow", answers };
+        }
         if (message.alwaysAllow === undefined || message.alwaysAllow === false) {
           return { type: "answer", requestId, decision: "allow" };
         }
@@ -594,7 +649,9 @@ export function decodeAgentClientMessage(text: string): AgentClientMessage | und
           : undefined;
       }
       if (message.decision === "deny") {
-        if (message.alwaysAllow !== undefined) return undefined;
+        if (message.alwaysAllow !== undefined || message.answers !== undefined) {
+          return undefined;
+        }
         if (message.message === undefined) {
           return { type: "answer", requestId, decision: "deny" };
         }
@@ -642,6 +699,7 @@ export function encodeAgentServerMessage(message: AgentServerMessage): string {
 
 const SERVER_TYPES: readonly string[] = [
   "hello",
+  "stopped",
   "status",
   "replay",
   "page",

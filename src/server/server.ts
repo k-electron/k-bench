@@ -53,6 +53,8 @@ export async function startServer(
   const service = new Service(store, tmux, agents, statuses);
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();
+  // The folder of an Agent whose Session is gone goes too.
+  service.removeStrayAgentFolders();
   // A tmux server that outlived the previous k-bench gets this version's hooks.
   await tmux.configure();
   // Agents that kept running through the restart: hear what each is doing before the first

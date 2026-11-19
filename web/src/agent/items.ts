@@ -1,4 +1,13 @@
-import type { LogEntry, PermissionReply } from "../../../src/shared/agent-protocol.ts";
+import {
+  type LogEntry,
+  openPermissionAsks,
+  type PermissionReply,
+} from "../../../src/shared/agent-protocol.ts";
+import {
+  ASK_USER_QUESTION,
+  EXIT_PLAN_MODE,
+} from "../../../src/shared/agent-questions.ts";
+import { type GoalItem, readGoalMessage } from "./goal";
 import { queuedPromptIds } from "./prompts";
 import { isTaskMessage, TaskBuilder, type TaskItem, type TaskView } from "./tasks";
 import {
@@ -116,7 +125,13 @@ export interface CommandOutputItem extends ItemBase {
  */
 export interface PermissionItem extends ItemBase {
   kind: "permission";
-  /** What was answered: `allowed`, `allowed, and won't ask again`, `denied: <reply>`. */
+  /** What was asked: a permission, Claude's questions (#147) or its plan. The line starts with it. */
+  topic: "permission" | "question" | "plan";
+  /**
+   * What was answered: `allowed`, `allowed, and won't ask again`, `denied: <reply>`; for
+   * questions each one with its answer (`Which database? → Postgres`, a line each) or
+   * `skipped`; for a plan `approved`, `rejected` or `rejected: <feedback>`.
+   */
   answer: string;
 }
 
@@ -138,6 +153,7 @@ export type TranscriptItem =
   | TaskItem
   | PermissionItem
   | UnsupportedItem
+  | GoalItem
   | UncommonItem
   | CommandOutputItem;
 
@@ -208,25 +224,39 @@ interface BuildState {
   /** The prompts Claude Code has not picked up yet. */
   queued: ReadonlySet<string>;
   /** Which tool call each ask is about, by request id. */
-  askTool: Map<string, string>;
+  askTool: Map<string, { toolUseId: string; toolName: string }>;
   /** The tool calls the owner denied. */
   denied: Set<string>;
+  /** The tool calls whose ask nobody answered: the Agent stopped while it was open. */
+  unanswered: Set<string>;
   /** The subagents and background tasks (`tasks.ts`, #149). */
   tasks: TaskBuilder;
   /** What the readers of the less common lines (`uncommon.ts`) carry. */
   uncommon: UncommonState;
 }
 
+/** What a tool call whose ask was open when the Agent stopped says, so it never reads as approved. */
+const NOT_ANSWERED = "Not answered, the Agent stopped";
+
 /**
- * Tool calls still without a result when their turn ends, or the runtime does, never got one:
- * they are red, with no result line of their own (the `Interrupted` line that follows an
- * interrupt says it once).
+ * Ends a tool call that never got a result: red. Most say nothing more (the `Interrupted`
+ * line that follows an interrupt says it once), but one whose ask was still open says that
+ * no one answered it.
+ */
+function interruptTool(state: BuildState, item: ToolItem): void {
+  item.status = "interrupted";
+  if (state.unanswered.has(item.toolUseId)) {
+    item.result = { summary: NOT_ANSWERED, lines: [] };
+  }
+}
+
+/**
+ * Tool calls still without a result when their turn ends, or the runtime does, never got one
+ * (see `interruptTool`).
  */
 function interruptRunningTools(state: BuildState): void {
   for (const { item } of state.tools.values()) {
-    if (item.status === "running") {
-      item.status = "interrupted";
-    }
+    if (item.status === "running") interruptTool(state, item);
   }
 }
 
@@ -273,7 +303,7 @@ function resolveTool(
     item.status = "denied";
     item.result = { summary: "Denied", lines: [] };
   } else if ((lines[0] ?? "").startsWith("[Request interrupted by user")) {
-    item.status = "interrupted";
+    interruptTool(state, item);
   } else {
     item.status = "failed";
     item.result = { lines };
@@ -318,6 +348,8 @@ function readSdkMessage(
   addUnsupported(state, entry.seq, `${entry.seq}-unsupported`, unsupported);
   // A subagent's own messages are not the conversation's: its task line (#149) shows how it goes.
   if (message.parent_tool_use_id != null) return;
+  // `/goal`'s lines (#152): its re-prompts are not the owner's, whatever flags they carry.
+  if (readGoalMessage(state, entry)) return;
   // The less common messages (#148) have their own reader; it says whether it handled one.
   if (readUncommonMessage(state, entry)) return;
   switch (message.type) {
@@ -450,24 +482,60 @@ function readSdkMessage(
       return;
     default:
       // Everything else that Claude Code sends and k-bench knows shows nothing yet: the later
-      // tickets (#152) give theirs a line. What it does not know is an Unsupported row (above).
+      // tickets give theirs a line. What it does not know is an Unsupported row (above).
       return;
   }
 }
 
-/** How the permission line reads an owner's answer. */
-function permissionAnswerText(answer: PermissionReply): string {
-  if (answer.decision === "allow") {
-    return answer.alwaysAllow ? "allowed, and won't ask again" : "allowed";
+/** How the line reads an owner's answer to an ask about this tool. */
+function permissionLine(
+  toolName: string,
+  answer: PermissionReply,
+): Pick<PermissionItem, "topic" | "answer"> {
+  if (toolName === ASK_USER_QUESTION) {
+    const chosen =
+      answer.decision === "allow" && answer.answers
+        ? Object.entries(answer.answers).map(
+            ([question, what]) => `${question} → ${what}`,
+          )
+        : [];
+    return {
+      topic: "question",
+      answer: chosen.length > 0 ? chosen.join("\n") : "skipped",
+    };
   }
-  return answer.message === undefined ? "denied" : `denied: ${answer.message}`;
+  if (toolName === EXIT_PLAN_MODE) {
+    if (answer.decision === "allow") return { topic: "plan", answer: "approved" };
+    return {
+      topic: "plan",
+      answer: answer.message === undefined ? "rejected" : `rejected: ${answer.message}`,
+    };
+  }
+  if (answer.decision === "allow") {
+    return {
+      topic: "permission",
+      answer: answer.alwaysAllow ? "allowed, and won't ask again" : "allowed",
+    };
+  }
+  return {
+    topic: "permission",
+    answer: answer.message === undefined ? "denied" : `denied: ${answer.message}`,
+  };
 }
 
 /**
  * The items of the entries, in order. Pure and complete: it reads every entry each time, so
  * a fix here changes how the whole history reads on the next load, as ADR-0008 wants.
  */
-export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
+export function buildItems(
+  entries: readonly LogEntry[],
+  /**
+   * The log is over: the Agent is Stopped (the server said so), so whatever the entries leave
+   * open never will be. A runtime that was killed writes no closing entries, and its last
+   * tool call would otherwise spin for ever and its last ask read as open.
+   */
+  options: { stopped?: boolean } = {},
+): BuiltTranscript {
   const state: BuildState = {
     items: [],
     focusView: false,
@@ -476,6 +544,7 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
     queued: queuedPromptIds(entries),
     askTool: new Map(),
     denied: new Set(),
+    unanswered: new Set(),
     tasks: new TaskBuilder(),
     uncommon: newUncommonState(),
   };
@@ -496,18 +565,24 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
         readSdkMessage(state, entry);
         break;
       case "permission_asked":
-        state.askTool.set(entry.requestId, entry.toolUseId);
+        state.askTool.set(entry.requestId, {
+          toolUseId: entry.toolUseId,
+          toolName: entry.toolName,
+        });
         break;
       case "permission_answered": {
-        const toolUseId = state.askTool.get(entry.requestId);
+        const asked = state.askTool.get(entry.requestId);
         const { answer } = entry;
-        if (toolUseId && answer.decision === "deny") state.denied.add(toolUseId);
+        if (asked && answer.decision === "deny") state.denied.add(asked.toolUseId);
+        if (asked && answer.decision === "interrupted") {
+          state.unanswered.add(asked.toolUseId);
+        }
         if (answer.decision === "allow" || answer.decision === "deny") {
           state.items.push({
             kind: "permission",
             key: `entry-${entry.seq}`,
             seq: entry.seq,
-            answer: permissionAnswerText(answer),
+            ...permissionLine(asked?.toolName ?? "", answer),
           });
         }
         break;
@@ -524,6 +599,11 @@ export function buildItems(entries: readonly LogEntry[]): BuiltTranscript {
         state.tasks.runtimeChanged();
         break;
     }
+  }
+  if (options.stopped) {
+    for (const ask of openPermissionAsks(entries)) state.unanswered.add(ask.toolUseId);
+    interruptRunningTools(state);
+    state.tasks.runtimeChanged();
   }
   return {
     items: state.items,

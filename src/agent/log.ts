@@ -61,34 +61,17 @@ export function turnStarts(entries: readonly LogEntry[]): number[] {
   return starts;
 }
 
-export class AgentLog {
-  private readonly file: string;
-  private lastSeq: number;
+/**
+ * Reads an Agent's log and never writes it. The server reads a Stopped Agent's log with this
+ * (nothing may write to the log of an Agent that is not running); the runtime's `AgentLog`
+ * is the same reading code plus the appending.
+ */
+export class AgentLogReader {
+  protected readonly file: string;
 
   /** Opens the log at `file` (`agentLogFile`), which need not exist yet. */
   constructor(file: string) {
     this.file = file;
-    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
-    this.lastSeq = parseEntries(text).at(-1)?.seq ?? 0;
-    // A write cut short by a crash leaves no newline: start the next entry on its own line.
-    if (text !== "" && !text.endsWith("\n")) appendFileSync(file, "\n");
-  }
-
-  /** The `seq` of the newest entry, 0 for an empty log. */
-  get last(): number {
-    return this.lastSeq;
-  }
-
-  /** Numbers and stamps `entry`, writes it and returns it as written. */
-  append(entry: NewLogEntry): LogEntry {
-    const written = {
-      ...entry,
-      seq: this.lastSeq + 1,
-      t: new Date().toISOString(),
-    } as LogEntry;
-    appendFileSync(this.file, `${JSON.stringify(written)}\n`);
-    this.lastSeq = written.seq;
-    return written;
   }
 
   /** Every entry after `seq` (0 for all of them), in order. */
@@ -132,12 +115,43 @@ export class AgentLog {
     };
   }
 
-  private readAll(): LogEntry[] {
+  protected readAll(): LogEntry[] {
     return existsSync(this.file) ? parseEntries(readFileSync(this.file, "utf8")) : [];
   }
 
   /** Whether any prompt was ever sent: Claude Code saves a conversation only after its first message. */
   hasPrompt(): boolean {
     return this.readAfter(0).some((entry) => entry.kind === "prompt");
+  }
+}
+
+/** The log as the runtime holds it: everything `AgentLogReader` reads, and `append`. */
+export class AgentLog extends AgentLogReader {
+  private lastSeq: number;
+
+  /** Opens the log at `file` (`agentLogFile`), which need not exist yet. */
+  constructor(file: string) {
+    super(file);
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    this.lastSeq = parseEntries(text).at(-1)?.seq ?? 0;
+    // A write cut short by a crash leaves no newline: start the next entry on its own line.
+    if (text !== "" && !text.endsWith("\n")) appendFileSync(file, "\n");
+  }
+
+  /** The `seq` of the newest entry, 0 for an empty log. */
+  get last(): number {
+    return this.lastSeq;
+  }
+
+  /** Numbers and stamps `entry`, writes it and returns it as written. */
+  append(entry: NewLogEntry): LogEntry {
+    const written = {
+      ...entry,
+      seq: this.lastSeq + 1,
+      t: new Date().toISOString(),
+    } as LogEntry;
+    appendFileSync(this.file, `${JSON.stringify(written)}\n`);
+    this.lastSeq = written.seq;
+    return written;
   }
 }

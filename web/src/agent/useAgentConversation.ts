@@ -82,6 +82,12 @@ export interface AgentConversation {
   /** The Session is over (deleted or Stopped): nothing more will arrive or be sent. */
   ended: boolean;
   /**
+   * Why the Agent is Stopped, when this is the read-only Transcript of one that is (served
+   * from its log on disk): the Pane shows it with Restart where the input was. Undefined for
+   * a running Agent.
+   */
+  stoppedReason: string | undefined;
+  /**
    * Where the history held begins (undefined before the first replay). A page opens with only
    * the latest turns; `loadEarlier` brings the rest, lowering this, until `hasEarlier` is false.
    */
@@ -280,16 +286,19 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     [mode],
   );
 
+  const { stoppedReason } = model.transcript;
+  const ended = model.ended || stoppedReason !== undefined;
+
   const interrupting =
     model.interruptedAt !== undefined &&
     model.interruptedAt === turnsEnded(model.transcript);
 
   const interrupt = useCallback(() => {
-    if (model.ended || model.state !== "working" || interrupting) return false;
+    if (ended || model.state !== "working" || interrupting) return false;
     if (!connection.current?.send({ type: "interrupt" })) return false;
     dispatch({ type: "interrupted" });
     return true;
-  }, [model.ended, model.state, interrupting]);
+  }, [ended, model.state, interrupting]);
 
   const history = useMemo(
     () => promptHistory(model.transcript.entries),
@@ -312,12 +321,14 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     turnStartedAt: model.turnStartedAt,
     context: model.context,
     entries: model.transcript.entries,
-    asks: model.ended ? NO_ASKS : allAsks,
+    // A Stopped Agent has no open asks, whatever its log says: nothing can answer them.
+    asks: ended ? NO_ASKS : allAsks,
     hello,
     state: model.state,
     mode,
     cycleMode,
-    ended: model.ended,
+    ended,
+    stoppedReason,
     reconnecting: model.reconnecting,
     earliestSeq: model.transcript.earliestSeq,
     hasEarlier: hasEarlier(model.transcript),

@@ -2,6 +2,7 @@ import { type KeyboardEvent, useId, useMemo, useState } from "react";
 import type { AgentCommand } from "../../../../src/shared/agent-protocol.ts";
 import { commandQuery, matchCommands } from "../../agent/slashCommands";
 import { type PickerOption, pickerOptionId } from "./PickerMenu";
+import { handlePickerKey } from "./pickerKeys";
 
 const namedInFull = (matches: readonly AgentCommand[], query: string | undefined) =>
   matches.some(
@@ -66,24 +67,15 @@ export function useCommandMenu({
   /** Handles the key if the menu wants it (and then it has been `preventDefault`ed). */
   const handleKey = (event: KeyboardEvent): boolean => {
     if (!open || !activeCommand) return false;
-    const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-    if (!plain) return false;
-    const move = (to: number) => {
-      event.preventDefault();
-      setChosen({ text, index: (to + matches.length) % matches.length });
-    };
-    if (event.key === "ArrowDown") move(active + 1);
-    else if (event.key === "ArrowUp") move(active - 1);
-    else if (event.key === "Tab" || event.key === "Enter") {
+    return handlePickerKey(event, {
+      count: matches.length,
+      active,
       // A name (or alias) typed in full is already complete: Enter then sends it.
-      if (event.key === "Enter" && namedInFull(matches, query)) return false;
-      event.preventDefault();
-      onPick(activeCommand);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      setDismissedFor(text);
-    } else return false;
-    return true;
+      enterPicks: !namedInFull(matches, query),
+      move: (index) => setChosen({ text, index }),
+      pick: () => onPick(activeCommand),
+      dismiss: () => setDismissedFor(text),
+    });
   };
 
   return {

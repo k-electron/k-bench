@@ -121,6 +121,19 @@ export const api = {
   /** Stores an image (base64, inside JSON) for a Claude Agent's next prompt; answers its name. */
   uploadAgentImage: (sessionId: string, image: { mediaType: string; data: string }) =>
     send<{ name: string }>("POST", `/api/sessions/${sessionId}/agent/images`, image),
+  /**
+   * The files in a Claude Agent's Workspace folder whose path contains `query`, best first, for
+   * the `@` picker (#160): relative paths, git-ignored ones left out, capped.
+   */
+  searchAgentFiles: async (sessionId: string, query: string) =>
+    (
+      await get<{ files: string[] }>(
+        `/api/sessions/${sessionId}/files?q=${encodeURIComponent(query)}`,
+      )
+    ).files,
+  /** Stops a Claude Agent: the Session stays, Stopped. */
+  stopSession: (sessionId: string) =>
+    send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/stop`, {}),
   /** The running list of unsupported kinds (#154), latest first. */
   unsupportedList: async () =>
     (await get<{ entries: UnsupportedListEntry[] }>("/api/unsupported")).entries,

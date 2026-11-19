@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -60,28 +60,51 @@ export function AskPanel({
   );
 }
 
-/** One numbered, full-width choice: `1. Yes`. */
+/**
+ * One numbered, full-width choice: `1. Yes`. With `selected` it is a toggle (`aria-pressed`), as
+ * the options of a question are; `description` is Claude's note under the option, read as its
+ * description, not as part of its name.
+ */
 export function Choice({
   number,
   disabled,
+  selected,
+  description,
   onClick,
   children,
 }: {
   number: number;
   disabled: boolean;
+  selected?: boolean;
+  description?: string;
   onClick: () => void;
   children: ReactNode;
 }) {
+  const id = useId();
   return (
     <button
       type="button"
       disabled={disabled}
+      aria-pressed={selected}
+      aria-labelledby={`${id}-name`}
+      aria-describedby={description ? `${id}-description` : undefined}
       onClick={onClick}
       className={cn(
-        "flex min-h-11 w-full items-center rounded px-2 py-1.5 text-left hover:bg-white/10 active:bg-white/15 disabled:opacity-50 sm:min-h-9",
+        "flex min-h-11 w-full flex-col items-start justify-center rounded px-2 py-1.5 text-left hover:bg-white/10 active:bg-white/15 disabled:opacity-50 sm:min-h-9",
+        selected && "bg-white/10 ring-1 ring-orange-300/70",
       )}
     >
-      {number}. {children}
+      <span id={`${id}-name`}>
+        {number}. {children}
+      </span>
+      {description && (
+        <span
+          id={`${id}-description`}
+          className="pl-5 text-xs break-words text-muted-foreground"
+        >
+          {description}
+        </span>
+      )}
     </button>
   );
 }

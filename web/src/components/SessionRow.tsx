@@ -4,6 +4,7 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   RotateCcwIcon,
+  SquareIcon,
   TerminalIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import { AGENT_STATE_LABEL, agentDisplayState } from "../agentState";
 import { ClaudeGlyph } from "./ClaudeGlyph";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { RenameSessionDialog } from "./RenameSessionDialog";
+import { StopAgentDialog } from "./StopAgentDialog";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -48,6 +50,8 @@ export function SessionRow({
   // A Claude Agent shows what it is doing; anything else just whether it runs.
   const agentState = agentDisplayState(session);
   const waiting = agentState === "waiting";
+  const midTurn = agentState === "working" || waiting;
+  const [stopping, setStopping] = useState(false);
 
   return (
     <div
@@ -117,6 +121,17 @@ export function SessionRow({
             <ColumnsIcon />
             Open in other pane
           </DropdownMenuItem>
+          {session.interface === "agent" && session.status === "running" && (
+            <DropdownMenuItem
+              onSelect={() =>
+                // Mid-turn it asks first; an Agent that is Idle (or not heard from yet) just stops.
+                midTurn ? setStopping(true) : void actions.stopSession(session.id)
+              }
+            >
+              <SquareIcon />
+              Stop
+            </DropdownMenuItem>
+          )}
           {session.status === "stopped" && (
             <DropdownMenuItem onSelect={() => void actions.restartSession(session.id)}>
               <RotateCcwIcon />
@@ -138,6 +153,11 @@ export function SessionRow({
         onOpenChange={setRenaming}
         currentName={session.name}
         onRename={(name) => actions.renameSession(session.id, name)}
+      />
+      <StopAgentDialog
+        open={stopping}
+        onOpenChange={setStopping}
+        onStop={() => void actions.stopSession(session.id)}
       />
       <DeleteSessionDialog
         open={deleting}
