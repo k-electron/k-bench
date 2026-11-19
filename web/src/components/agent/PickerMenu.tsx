@@ -19,9 +19,9 @@ export function pickerOptionId(menuId: string, key: string): string {
 
 /**
  * A popup list over the input that the owner picks from while the focus stays in the input:
- * the `/` menu (#150) and, later, the `@` file picker (#160). It only draws what it is given
- * and says what was picked; which rows there are, which is active and which keys move it are
- * the caller's (`useCommandMenu` is one). The rows are a `listbox` named `label`, and the
+ * the `/` menu (#150) and the `@` file picker (#160). It only draws what it is given and says
+ * what was picked; which rows there are, which is active and which keys move it are the
+ * caller's (`useCommandMenu` and `useFileMenu`, with `handlePickerKey`). The rows are a `listbox` named `label`, and the
  * active one `aria-selected`.
  *
  * Pressing a row must not take the focus from the input (the keyboard on a phone would go),

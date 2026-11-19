@@ -8,6 +8,7 @@ import { ImageError, readAgentImage, storeAgentImage } from "./agent-images.ts";
 import type { AgentStatuses } from "./agent-status.ts";
 import { type AgentRuntimes, AgentStartError } from "./agents.ts";
 import type { ClaudeLaunch } from "./claude.ts";
+import { searchFiles } from "./file-search.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store, UnsupportedEntry } from "./store.ts";
@@ -507,6 +508,18 @@ export class Service {
     const image = readAgentImage(this.agentFolderOf(sessionId), name);
     if (!image) throw new ServiceError("not_found", "Unknown image");
     return image;
+  }
+
+  /**
+   * The files in a Claude Agent's Workspace folder whose names match, for the `@` picker:
+   * relative paths, git-ignored files left out, capped (`searchFiles`).
+   */
+  async searchAgentFiles(sessionId: string, query: string): Promise<string[]> {
+    const session = this.store.getSession(sessionId);
+    if (session?.interface !== "agent") {
+      throw new ServiceError("not_found", "Unknown Claude Agent");
+    }
+    return searchFiles(session.folder, query);
   }
 
   /** Whether the agent WebSocket has a runtime to relay to: a known Claude Agent that is running. */
