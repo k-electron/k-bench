@@ -122,6 +122,8 @@ class PromptQueue implements AsyncIterable<SDKUserMessage> {
 export class ClaudeSession {
   private readonly prompts = new PromptQueue();
   private readonly query: Query;
+  /** Settles once Claude Code's output has ended: it has exited, or the SDK failed. */
+  readonly exited: Promise<void>;
 
   constructor(options: SessionOptions, handlers: SessionHandlers) {
     const { claude, folder, conversation, canUseTool, launch } = options;
@@ -151,7 +153,7 @@ export class ClaudeSession {
       },
     });
     this.query = claudeQuery;
-    void (async () => {
+    this.exited = (async () => {
       try {
         for await (const message of claudeQuery) handlers.message(message);
         handlers.ended(undefined);

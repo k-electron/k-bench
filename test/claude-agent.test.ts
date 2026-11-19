@@ -331,6 +331,22 @@ describe("a Claude Agent", () => {
     expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
   });
 
+  it("has Claude Code closed down by the time its deletion is answered, even when Claude Code is slow to close", async () => {
+    const { instance, server, workspace } = await boot();
+    instance.fakeClaude.configure({ closeDelayMs: 1000 });
+    const session = await server.createClaudeAgent(workspace.id);
+
+    const response = await server.deleteSession(session.id);
+
+    expect(response.status).toBe(204);
+    // Not polled for: the runtime's tmux session going ends whatever is still running in it.
+    expect(
+      instance.fakeClaude
+        .received()
+        .some((e) => e.kind === "closed" || e.kind === "terminated"),
+    ).toBe(true);
+  });
+
   it("is deleted even when its tmux session ended an instant before, as tmux's server was exiting", async () => {
     // A runtime that exits ends its own tmux session, and with the last one tmux's server
     // exits a moment later: deleting the Agent in that moment must not fail on its own end.
