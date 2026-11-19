@@ -10,6 +10,7 @@ import type { AgentCommand } from "../../../../src/shared/agent-protocol.ts";
 import { AttachButton, AttachmentStrip } from "./Attachments";
 import { PickerMenu } from "./PickerMenu";
 import { useCommandMenu } from "./useCommandMenu";
+import { useFileMenu } from "./useFileMenu";
 
 /**
  * The input box under a Claude Agent's conversation. On desktop, Enter sends and Shift+Enter
@@ -23,8 +24,9 @@ import { useCommandMenu } from "./useCommandMenu";
  * Down goes back, as in a terminal.
  * What is typed and not sent is kept as a draft on this device, per Agent, until it is sent.
  * Images are attached by paste, drop or the Attach button (`useAttachments`).
- * Typing `/` opens the commands menu (`useCommandMenu`), which owns the arrow keys while it is
- * open, and so keeps them from stepping through history.
+ * Typing `/` opens the commands menu (`useCommandMenu`) and `@` the file picker
+ * (`useFileMenu`); each owns the arrow keys while it is open, and so keeps them from stepping
+ * through history.
  */
 export function Composer({
   sessionId,
@@ -72,7 +74,10 @@ export function Composer({
    */
   const [back, setBack] = useState<number | undefined>(undefined);
   const field = useRef<HTMLTextAreaElement>(null);
-  const caretAtEnd = useRef(false);
+  /** Where the caret goes after the next text change that moves it: a place, or the end. */
+  const caretTo = useRef<number | "end" | undefined>(undefined);
+  /** Where the caret is in `text`, for the `@` picker, which opens by the word it is in. */
+  const [caret, setCaret] = useState(text.length);
   const attachments = useAttachments(sessionId);
   const [dropping, setDropping] = useState(false);
   const canSend =
@@ -83,7 +88,7 @@ export function Composer({
 
   const recalled = back === undefined ? undefined : history[history.length - back];
   const recalling = recalled !== undefined && text === recalled;
-  const menu = useCommandMenu({
+  const commandMenu = useCommandMenu({
     text,
     commands,
     suppressed: disabled || recalling,
@@ -91,9 +96,23 @@ export function Composer({
       // Its name and nothing more: the owner carries on from there.
       edit(completion(command));
       setBack(undefined);
-      caretAtEnd.current = true;
+      caretTo.current = "end";
     },
   });
+  const fileMenu = useFileMenu({
+    sessionId,
+    text,
+    caret,
+    suppressed: disabled || recalling,
+    onPick: (picked) => {
+      edit(picked.text);
+      setBack(undefined);
+      caretTo.current = picked.caret;
+    },
+  });
+  // At most one is open: `/` needs the whole text to be the command, `@` a word of its own.
+  const menu = fileMenu.open && !commandMenu.open ? fileMenu : commandMenu;
+  const menuLabel = menu === fileMenu ? "Files" : "Commands";
 
   // The Focused Pane's box takes the keyboard, as its terminal would. Not on a phone, where
   // focusing raises the on-screen keyboard over the conversation.
@@ -104,10 +123,12 @@ export function Composer({
   // A recalled prompt leaves the caret at its end, where the owner carries on from.
   useLayoutEffect(() => {
     const element = field.current;
-    if (caretAtEnd.current && element) {
-      element.setSelectionRange(text.length, text.length);
+    if (caretTo.current !== undefined && element) {
+      const at = caretTo.current === "end" ? text.length : caretTo.current;
+      element.setSelectionRange(at, at);
+      setCaret(at);
     }
-    caretAtEnd.current = false;
+    caretTo.current = undefined;
   }, [text]);
 
   const edit = (next: string) => {
@@ -118,7 +139,7 @@ export function Composer({
   const recall = (next: number | undefined) => {
     setBack(next);
     edit(next === undefined ? "" : (history[history.length - next] ?? ""));
-    caretAtEnd.current = true;
+    caretTo.current = "end";
   };
 
   const send = () => {
@@ -159,7 +180,7 @@ export function Composer({
       {menu.open && (
         <PickerMenu
           id={menu.menuId}
-          label="Commands"
+          label={menuLabel}
           options={menu.options}
           active={menu.active}
           onPick={menu.pick}
@@ -185,7 +206,12 @@ export function Composer({
           aria-activedescendant={menu.activeId}
           // `field-sizing` makes the box as tall as its text, up to the cap.
           className="field-sizing-content max-h-48 min-h-9 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
-          onChange={(event) => edit(event.target.value)}
+          onChange={(event) => {
+            edit(event.target.value);
+            setCaret(event.target.selectionStart);
+          }}
+          // The caret moved without a change (an arrow, a tap): the `@` picker follows it.
+          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
           onPaste={(event) => {
             // A pasted screenshot is attached; pasted text goes in as it always does.
             const files = imageFilesIn(event.clipboardData);
@@ -201,7 +227,7 @@ export function Composer({
             }
             // Not while an input method is composing (its Enter confirms a character).
             if (event.nativeEvent.isComposing) return;
-            if (menu.handleKey(event)) return;
+            if (commandMenu.handleKey(event) || fileMenu.handleKey(event)) return;
             if (!phone && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               send();
