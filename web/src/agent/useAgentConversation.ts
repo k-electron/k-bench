@@ -61,6 +61,12 @@ export interface AgentConversation {
   /** How full Claude Code's context is, once it has reported. */
   context: AgentContextUsage | undefined;
   /**
+   * The model Claude Code is on, by its own name for it (`Opus 5.5`), for the status line: the
+   * runtime's say. Unknown before the first turn of an Agent launched on Default, and while the
+   * Agent is Stopped.
+   */
+  modelName: string | undefined;
+  /**
    * What the header line shows: Claude Code's version (from the runtime's hello), and the
    * model and folder of the latest turn (from its `system/init`, so the model is absent before
    * the first prompt, and the folder then comes from the hello).
@@ -162,6 +168,7 @@ interface Model {
   autoMode: boolean;
   turnStartedAt: number | undefined;
   context: AgentContextUsage | undefined;
+  modelName: string | undefined;
   commands: readonly AgentCommand[];
   ended: boolean;
   reconnecting: boolean;
@@ -207,6 +214,7 @@ function reduce(model: Model, event: Event): Model {
       autoMode: message.autoMode === true,
       turnStartedAt: message.turnStartedAt,
       context: message.context,
+      modelName: message.model,
     };
   }
   return { ...model, transcript: applyServerMessage(model.transcript, message) };
@@ -223,6 +231,7 @@ const initial: Model = {
   autoMode: false,
   turnStartedAt: undefined,
   context: undefined,
+  modelName: undefined,
   commands: NO_COMMANDS,
   ended: false,
   reconnecting: false,
@@ -346,6 +355,7 @@ export function useAgentConversation(sessionId: string): AgentConversation {
     },
     turnStartedAt: model.turnStartedAt,
     context: model.context,
+    modelName: model.ended ? undefined : model.modelName,
     entries: model.transcript.entries,
     // A Stopped Agent has no open asks, whatever its log says: nothing can answer them.
     asks: ended ? NO_ASKS : allAsks,

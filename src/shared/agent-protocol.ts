@@ -354,6 +354,13 @@ export interface AgentStatus {
    */
   context?: AgentContextUsage;
   /**
+   * The model Claude Code is on, by Claude Code's own name for it (`Opus 5.5`), or its ID when
+   * Claude Code does not list it. Before the first turn it is the model the Session was launched
+   * with; absent then for one launched on Default (Claude Code says which model that is only
+   * when a turn starts), and from a runtime older than this field.
+   */
+  model?: string;
+  /**
    * The subagents and background tasks running now, in the order they started; absent when
    * there are none. They outlive turns, so an Idle Agent can have some. This is what Open in
    * terminal lists as "what would stop" (#155).

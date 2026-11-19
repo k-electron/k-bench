@@ -107,6 +107,7 @@ export function AgentPane({
         activity={currentActivity(items)}
         turnStartedAt={conversation.turnStartedAt}
         contextLeft={contextLeftPercent(conversation.context)}
+        model={conversation.modelName}
       />
       {conversation.reconnecting && !conversation.ended && (
         <p role="status" className="shrink-0 px-3 pb-1 text-xs text-muted-foreground">

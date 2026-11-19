@@ -67,23 +67,52 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 /**
- * Whether the model Claude Code is on supports `auto` mode, from the `models` of its first
- * reply (`supportsAutoMode` per model). The model is found by what the latest `system/init`
- * named (a resolved name such as `claude-haiku-5-5`) or, before any turn, by the alias the
- * Session was launched with (`default` when none). A model that is not listed, or a list that
- * is not there, says no: `auto` is only offered where it is known to work.
+ * The row of Claude Code's `models` (from its first reply) for the model it is on: found by
+ * what the latest `system/init` named (a resolved name such as `claude-haiku-5-5`) or, before
+ * any turn, by the alias the Session was launched with (`default` when none).
  */
-export function autoModeSupported(
+function modelEntry(
   models: unknown,
   model: string | undefined,
   launchModel: string,
-): boolean {
-  if (!Array.isArray(models)) return false;
+): Record<string, unknown> | undefined {
+  if (!Array.isArray(models)) return undefined;
   const wanted = model ?? launchModel;
   const entry = models.find(
     (candidate) =>
       isObject(candidate) &&
       (candidate.resolvedModel === wanted || candidate.value === wanted),
   );
-  return isObject(entry) && entry.supportsAutoMode === true;
+  return isObject(entry) ? entry : undefined;
+}
+
+/**
+ * Whether the model Claude Code is on supports `auto` mode (`supportsAutoMode` in its row of
+ * `models`). A model that is not listed, or a list that is not there, says no: `auto` is only
+ * offered where it is known to work.
+ */
+export function autoModeSupported(
+  models: unknown,
+  model: string | undefined,
+  launchModel: string,
+): boolean {
+  return modelEntry(models, model, launchModel)?.supportsAutoMode === true;
+}
+
+/**
+ * What the status line calls the model Claude Code is on: Claude Code's own name for it
+ * (`Opus 5.5`, its row's `displayName`), or the model's ID when it is not listed. Before any
+ * turn it is the launched model; launched on Default it is unknown (undefined) until the first
+ * turn's `init`, because Claude Code's `default` row names the account's default, not the
+ * owner's own setting, which Claude Code reports only when a turn starts.
+ */
+export function modelName(
+  models: unknown,
+  model: string | undefined,
+  launchModel: string,
+): string | undefined {
+  if (model === undefined && launchModel === "default") return undefined;
+  const name = modelEntry(models, model, launchModel)?.displayName;
+  if (typeof name === "string" && name !== "") return name;
+  return model ?? launchModel;
 }

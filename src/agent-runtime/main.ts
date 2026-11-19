@@ -33,7 +33,7 @@ import { CommandList, terminalOnlyFrom } from "./commands.ts";
 import { ClientHub } from "./hub.ts";
 import { promptContent } from "./images.ts";
 import { LiveText } from "./live.ts";
-import { autoModeSupported, PermissionModeTracker } from "./mode.ts";
+import { autoModeSupported, modelName, PermissionModeTracker } from "./mode.ts";
 import { ClaudeSession } from "./session.ts";
 import { TaskTracker } from "./tasks.ts";
 import { planTerminalImport, type SavedMessage } from "./terminal-import.ts";
@@ -136,6 +136,7 @@ const tasks = new TaskTracker();
 /** Sends every connection the status: what the Agent is doing, its mode, tasks and Bell. */
 function publishStatus(): void {
   const running = tasks.list;
+  const model = modelName(modelsListed, currentModel, args.launch.model);
   hub.setStatus({
     ...activity.status,
     conversationId: conversation.id,
@@ -144,6 +145,7 @@ function publishStatus(): void {
     ...(autoMode() && { autoMode: true }),
     ...(bell.isRaised && { bell: true }),
     ...(context && { context }),
+    ...(model !== undefined && { model }),
   });
 }
 
