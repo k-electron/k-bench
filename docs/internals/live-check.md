@@ -74,3 +74,30 @@ A prompt ends at its `command_lifecycle` `completed` (or `cancelled`), not at a 
 - Fake mode shows the rails and the evaluators work; it says nothing about `claude`.
 
 See also [Test seams](test-seams.md) (the fake Claude and how its messages were recorded) and the parity checklist's [live check section](../claude-agent-parity.md).
+
+## Live check results (claude 2.1.328, Haiku, 2026-11-19)
+
+The first full real run of the final script (29 of 40 turns) and the offline replays after it, against the Agent SDK 0.3.325.
+
+**Confirmed on a real `claude`:**
+
+- the user's plugins appear in the first `init`; the subscription login passes `subscriptionProblem()`
+- plan approval reaches `canUseTool`; Focus view (`settings.viewMode`) reads as `init.view_mode: focus`; `--advisor` is per-session, `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` turns it off, the settings files untouched
+- Open in terminal and back (one conversation, `claude --resume`), and the terminal's `/rewind` restoring a file the Agent edited
+- `/clear` (the new session ID first appears on the next turn's `init`), `/goal`, `/loop`, `/compact`
+- `@path` is expanded; a path with a space only when **quoted** (`@"my file.txt"`), which is what the picker now inserts
+- a typed command's reply is an assistant message of model `<synthetic>` (`local_command_source`), the unavailable-command wording and carrier, and `/model` followed by an `init`
+- a message sent during a tool-using turn is folded into the running turn, and every "(queued)" signal came
+- context-left is in tokens; `terminal_slash_commands` first appears on a turn's `init`
+- the deny-with-reply wording is identical to `DENIED_WITH_REPLY` (by hand on the TUI, and from the saved transcript)
+- the permission-mode cycle is manual, accept edits, plan, auto (auto only where the model supports it), and k-bench's matches it
+- Open in web after a terminal `/compact`: the saved chain starts with a system boundary and holds the summary marked `isCompactSummary`; the import now says the terminal compacted and shows the summary as Claude's own
+- the Agent tool launches a subagent asynchronously (backgrounded, in `background_tasks_changed`, ended by `task_notification`); `TaskTracker` agrees with the messages at every `result`
+- the run's rails held: Haiku asserted on every `init`, the budget stopped it, nothing left running
+
+**Still unverified:**
+
+- a subagent that blocks its turn (`is_backgrounded: false`), and `stopTask` on a task that is still running (the run's tasks session was stopped by its budget before it was tried; the scenario now has room, and says NOT PROVOKED when the task has ended)
+- `TodoWrite`, which the model did not call
+- the folder-trust warning's shape, a usage limit, an API retry and MCP activity (costly or unsafe to provoke on purpose; they stay "from SDK types" in [Test seams](test-seams.md))
+- the `deny-list` rail, which only `--fake` exercises
