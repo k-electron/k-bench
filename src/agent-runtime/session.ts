@@ -1,4 +1,5 @@
 import {
+  type AccountInfo,
   type CanUseTool,
   type EffortLevel,
   type ElicitationRequest,
@@ -122,6 +123,8 @@ class PromptQueue implements AsyncIterable<SDKUserMessage> {
 export class ClaudeSession {
   private readonly prompts = new PromptQueue();
   private readonly query: Query;
+  /** Settles once Claude Code's output has ended: it has exited, or the SDK failed. */
+  readonly exited: Promise<void>;
 
   constructor(options: SessionOptions, handlers: SessionHandlers) {
     const { claude, folder, conversation, canUseTool, launch } = options;
@@ -151,7 +154,7 @@ export class ClaudeSession {
       },
     });
     this.query = claudeQuery;
-    void (async () => {
+    this.exited = (async () => {
       try {
         for await (const message of claudeQuery) handlers.message(message);
         handlers.ended(undefined);
@@ -165,6 +168,11 @@ export class ClaudeSession {
   async claudeVersion(): Promise<string> {
     const init = await this.query.initializationResult();
     return init.claude_code_version ?? "unknown";
+  }
+
+  /** The login Claude Code says it has, from the same first reply. */
+  accountInfo(): Promise<AccountInfo> {
+    return this.query.accountInfo();
   }
 
   /**

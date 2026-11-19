@@ -874,13 +874,20 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 });
 
 // The SDK closing stdin is how it closes the fake; Claude Code exits then.
+// `closeDelayMs` in the config makes it slow to notice, as a Claude Code busy with a turn is.
+// biome-ignore lint/style/noRestrictedGlobals: the delay is the thing being simulated; nothing waits on it
+const afterCloseDelay = (then) => setTimeout(then, readConfig().closeDelayMs ?? 0);
 process.stdin.on("end", () => {
-  received({ kind: "closed" });
-  quit(0);
+  afterCloseDelay(() => {
+    received({ kind: "closed" });
+    quit(0);
+  });
 });
 process.on("SIGTERM", () => {
-  received({ kind: "terminated" });
-  quit(143);
+  afterCloseDelay(() => {
+    received({ kind: "terminated" });
+    quit(143);
+  });
 });
 
 // Turns nobody sent start by themselves while the fake is idle.

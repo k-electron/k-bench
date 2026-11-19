@@ -23,6 +23,7 @@ import {
   openPermissionAsks,
   type PermissionMode,
 } from "../shared/agent-protocol.ts";
+import { subscriptionProblem } from "./account.ts";
 import { Activity } from "./activity.ts";
 import { parseRuntimeArgs } from "./args.ts";
 import { PermissionAsks } from "./asks.ts";
@@ -43,6 +44,9 @@ const args = parseRuntimeArgs(process.argv.slice(2));
 // The build ID is the hash of this very file, which a file cannot hold itself.
 const buildId = runtimeBuildId(readFileSync(fileURLToPath(import.meta.url)));
 const log = new AgentLog(agentLogFile(args.agentDir));
+
+/** How long the runtime waits for Claude Code to close before it exits anyway. */
+const CLAUDE_CLOSE_WAIT_MS = 2_000;
 
 let claudeVersion = "unknown";
 let finishing = false;
@@ -299,6 +303,12 @@ async function finish(
     // Same.
   }
   claude.close();
+  // The runtime's own exit ends its tmux session, which kills whatever still runs in it:
+  // Claude Code is given a moment to close by itself first.
+  await Promise.race([
+    claude.exited,
+    new Promise((resolve) => setTimeout(resolve, CLAUDE_CLOSE_WAIT_MS)),
+  ]);
   await hub.close();
   process.exit(code);
 }
@@ -323,12 +333,20 @@ process.on("unhandledRejection", (error) => {
 // If it dies first, `ended` above has already recorded why.
 try {
   claudeVersion = await claude.claudeVersion();
-  permissionMode.set(await claude.permissionMode());
-  commandList.set(await claude.commands());
-  hub.setCommands(commandList.commands);
-  publishStatus();
-  await hub.listen();
-  void refreshContext();
+  // Before the runtime listens, so before any prompt can reach Claude Code: a login that is
+  // not a Claude subscription (an API key, another provider) never takes a turn. The runtime
+  // ends with the reason, which is what Stopped shows.
+  const notSubscription = subscriptionProblem(await claude.accountInfo());
+  if (notSubscription) {
+    await finish(notSubscription, 1);
+  } else {
+    permissionMode.set(await claude.permissionMode());
+    commandList.set(await claude.commands());
+    hub.setCommands(commandList.commands);
+    publishStatus();
+    await hub.listen();
+    void refreshContext();
+  }
 } catch (error) {
   await finish(error instanceof Error ? error.message.slice(0, 1000) : String(error), 1);
 }
