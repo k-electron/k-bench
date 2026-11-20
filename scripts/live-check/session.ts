@@ -69,6 +69,8 @@ export interface Run {
   sessionIds: Set<string>;
   /** The plan files `ExitPlanMode` named. */
   reportedPlans: string[];
+  /** The `output_file` of every `task_notification` the run saw: removed by provenance at the end. */
+  taskOutputs: string[];
   /** In `--fake`: the hand on the fake Claude. */
   fakeClaude?: FakeClaude;
   say(line: string): void;
@@ -105,6 +107,8 @@ export interface SessionSpec {
   onAsk?: (toolName: string, input: Record<string, unknown>) => void;
   /** Extra `settings` for this session only (flag-tier, never the owner's files). */
   extraSettings?: Record<string, unknown>;
+  /** The SDK's `forwardSubagentText` (off in the shipped session). */
+  forwardSubagentText?: boolean;
 }
 
 /** One permission ask Claude Code made and how it was answered. */
@@ -112,6 +116,10 @@ export interface Ask {
   toolName: string;
   input: Record<string, unknown>;
   decision: "allow" | "deny";
+  /** `canUseTool`'s `agentID`: set when a subagent asks. */
+  agentId?: string;
+  /** `canUseTool`'s `toolUseID`. */
+  toolUseId?: string;
 }
 
 type Wire = { dir: "in" | "out"; message: Msg };
@@ -207,10 +215,16 @@ export class LiveSession {
     };
     const launched = sdkLaunchOptions(launch);
     const policy: ToolPolicy = { ...spec.policy, folder: run.folder };
-    const canUseTool: CanUseTool = async (toolName, input) => {
+    const canUseTool: CanUseTool = async (toolName, input, options) => {
       spec.onAsk?.(toolName, input);
       const decision = decideTool(policy, toolName, input);
-      this.asks.push({ toolName, input, decision: decision.behavior });
+      this.asks.push({
+        toolName,
+        input,
+        decision: decision.behavior,
+        ...(options?.agentID ? { agentId: options.agentID } : {}),
+        ...(options?.toolUseID ? { toolUseId: options.toolUseID } : {}),
+      });
       return decision.behavior === "allow"
         ? { behavior: "allow", updatedInput: input }
         : { behavior: "deny", message: decision.message };
@@ -254,6 +268,7 @@ export class LiveSession {
         maxTurns: spec.maxTurns ?? 6,
         maxBudgetUsd: 0.5,
         ...(spec.agents ? { agents: spec.agents } : {}),
+        ...(spec.forwardSubagentText ? { forwardSubagentText: true } : {}),
         ...(spec.resume ? { resume: spec.resume } : {}),
         spawnClaudeCodeProcess: (options) => this.spawnClaude(options),
       },
@@ -370,6 +385,14 @@ export class LiveSession {
   /** The rails that watch every message. */
   private observe(m: Msg): void {
     if (typeof m.session_id === "string") this.run.sessionIds.add(m.session_id);
+    if (
+      m.type === "system" &&
+      m.subtype === "task_notification" &&
+      typeof m.output_file === "string" &&
+      !this.run.taskOutputs.includes(m.output_file)
+    ) {
+      this.run.taskOutputs.push(m.output_file);
+    }
     if (m.type === "system" && m.subtype === "init" && this.init === undefined) {
       this.init = m;
       const problem = modelProblem(m);
@@ -569,7 +592,12 @@ export class LiveSession {
       out.push(
         JSON.stringify({
           dir: "callback",
-          canUseTool: { tool: ask.toolName, decision: ask.decision },
+          canUseTool: {
+            tool: ask.toolName,
+            decision: ask.decision,
+            ...(ask.agentId ? { agentID: ask.agentId } : {}),
+            ...(ask.toolUseId ? { toolUseID: ask.toolUseId } : {}),
+          },
         }),
       );
     }

@@ -26,6 +26,8 @@ export function redactText(text: string, places: Places): string {
   let out = text;
   const folders: Array<[string, string]> = [
     [places.folder, "/home/you/project"],
+    // The folder's name as Claude Code derives it (`projects/<name>`, task output folders).
+    [places.folder.replace(/[^a-zA-Z0-9]/g, "-"), "-home-you-project"],
     [places.tmp, "/tmp/live-check"],
     [places.configDir, "/home/you/.claude"],
   ];

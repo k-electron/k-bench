@@ -8,7 +8,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CHECKS } from "./live-check/checks.ts";
+import { CHECKS as BASE_CHECKS } from "./live-check/checks.ts";
 import { HELP, parseOptions } from "./live-check/options.ts";
 import { redactText, writeChecked } from "./live-check/privacy.ts";
 import { BudgetExhausted } from "./live-check/rails.ts";
@@ -19,8 +19,18 @@ import {
   verdictLabel,
 } from "./live-check/results.ts";
 import { createRun, endRun, type RunExtras } from "./live-check/run.ts";
-import { SCENARIO_LIST } from "./live-check/scenarios.ts";
+import { SCENARIO_LIST as BASE_SCENARIOS } from "./live-check/scenarios.ts";
 import { LiveSession, type Run, RunAborted } from "./live-check/session.ts";
+import {
+  ctrlBAgentCheck,
+  ctrlBBashCheck,
+  ctrlBScenario,
+  rewindFilesCheck,
+  rewindScenario,
+  subagentAskCheck,
+  subagentMessagesCheck,
+  subagentsScenario,
+} from "./live-check/subagents-rewind.ts";
 import {
   type Captured,
   type Check,
@@ -29,6 +39,22 @@ import {
   SCENARIOS,
   type Verdict,
 } from "./live-check/types.ts";
+
+// Issue #178's scenarios and checks (research branch), after the rest.
+const SCENARIO_LIST = [
+  ...BASE_SCENARIOS,
+  rewindScenario,
+  ctrlBScenario,
+  subagentsScenario,
+];
+const CHECKS = [
+  ...BASE_CHECKS,
+  subagentMessagesCheck,
+  subagentAskCheck,
+  rewindFilesCheck,
+  ctrlBBashCheck,
+  ctrlBAgentCheck,
+];
 
 const say = (line: string) => process.stdout.write(`${line}\n`);
 

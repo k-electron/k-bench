@@ -125,6 +125,7 @@ export function createRun(
     pids: new Set(),
     sessionIds: new Set(),
     reportedPlans: [],
+    taskOutputs: [],
     ...(fakeClaude ? { fakeClaude } : {}),
     say,
     fail(reason: string) {
@@ -221,6 +222,7 @@ export async function endRun(
     startedAt: run.startedAt,
     reportedPlans: run.reportedPlans,
     sessionIds: [...run.sessionIds],
+    taskOutputs: run.taskOutputs,
   });
   const { removed, failed } = runCleanup(plan);
   const show = (path: string) => path.replace(homedir(), "~");

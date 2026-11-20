@@ -32,6 +32,8 @@ export interface CleanupInput {
   reportedPlans: readonly string[];
   /** The conversation IDs this run saw. */
   sessionIds: readonly string[];
+  /** The `output_file` of each `task_notification` this run saw. */
+  taskOutputs?: readonly string[];
 }
 
 /** What to remove: the plan files, the conversation folder, and the per-conversation folders of this run's own IDs. Nothing is removed here. */
@@ -90,6 +92,19 @@ export function planCleanup(input: CleanupInput): Removal[] {
     for (const kind of ["file-history", "session-env"]) {
       const path = join(configDir, kind, id);
       if (existsSync(path)) add(path, `${kind} of a conversation of this run`);
+    }
+  }
+  // Task output files: Claude Code keeps them in a folder named after the working folder (the
+  // same rule as `projects/`), outside its own folder. The folder named after the throwaway
+  // folder, found by walking up from each file this run was told of, goes as a whole.
+  for (const file of input.taskOutputs ?? []) {
+    if (!name.includes(projectDirName(`kb-livecheck-${runId}`)) || runId.length < 4)
+      break;
+    for (let at = dirname(file); at !== dirname(at); at = dirname(at)) {
+      if (basename(at) === name) {
+        if (existsSync(at)) add(at, "task output files of the throwaway folder");
+        break;
+      }
     }
   }
   return removals;
