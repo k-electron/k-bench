@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { DENIED_WITH_REPLY } from "../../src/agent-runtime/asks.ts";
 import { autoModeSupported } from "../../src/agent-runtime/mode.ts";
 import { permissionModeCycle } from "../../src/shared/agent-protocol.ts";
+import { HOOKS_MODE_CHECKS } from "./hooks-mode.ts";
 import { SPACE_FORMS } from "./scenarios.ts";
 import {
   assistantText,
@@ -1541,4 +1542,6 @@ export const CHECKS: Check[] = [
   uncommonKinds,
   knownKinds,
   denyList,
+  // Issue #177 (research branch)
+  ...HOOKS_MODE_CHECKS,
 ];

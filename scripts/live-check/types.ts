@@ -34,6 +34,10 @@ export const SCENARIOS = [
   "midturn",
   "compaction",
   "rails",
+  // Issue #177 (research branch)
+  "start-mode",
+  "hooks",
+  "denials",
 ] as const;
 export type ScenarioName = (typeof SCENARIOS)[number];
 

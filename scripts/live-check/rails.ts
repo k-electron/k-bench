@@ -205,6 +205,8 @@ export function blockedTools(options: {
   bash?: boolean;
   /** The check needs the file tools gone: `@path` must be expanded by Claude Code, not read by the model. */
   noFileTools?: boolean;
+  /** The denial check needs WebFetch offered, so that a deny rule (not this list) refuses it (issue #177). */
+  webFetch?: boolean;
   /** Names `settingsRisk` found in the owner's allow rules, so that the same rule denies. */
   fromRules?: readonly string[];
 }): string[] {
@@ -213,7 +215,7 @@ export function blockedTools(options: {
     "mcp__*__*",
     "mcp__claude_ai_*",
     ...(options.bash ? [] : ["Bash"]),
-    "WebFetch",
+    ...(options.webFetch ? [] : ["WebFetch"]),
     "WebSearch",
     "NotebookEdit",
     ...(options.noFileTools ? ["Read", "Glob", "Grep", "Write", "Edit"] : []),

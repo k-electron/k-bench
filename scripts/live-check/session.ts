@@ -93,7 +93,12 @@ export interface SessionSpec {
   launch?: Partial<Pick<LaunchOptions, "advisor" | "focusView">>;
   policy?: Omit<ToolPolicy, "folder">;
   blocked?: Parameters<typeof blockedTools>[0];
-  permissionMode?: PermissionMode;
+  /** The mode to pass; `null` passes none, as k-bench's runtime does (issue #177: no turn is sent in such a session). */
+  permissionMode?: PermissionMode | null;
+  /** `includeHookEvents` (issue #177). */
+  includeHookEvents?: boolean;
+  /** No `canUseTool` (issue #177's starting-mode probe): such a session can never be sent a prompt. */
+  probeOnly?: boolean;
   /** Whether `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` is set; by default, whenever the advisor launch option is off. */
   advisorOff?: boolean;
   /** Carry on this conversation. */
@@ -223,7 +228,7 @@ export class LiveSession {
         systemPrompt: { type: "preset", preset: "claude_code" },
         includePartialMessages: true,
         enableFileCheckpointing: true,
-        canUseTool,
+        ...(spec.probeOnly ? {} : { canUseTool }),
         perTaskStopAffordance: true,
         onElicitation: async () => ({ action: "decline" }),
         // The shipped launch options: model, effort, advisor and Focus view, and the
@@ -245,7 +250,10 @@ export class LiveSession {
         },
         // Rails the shipped session does not have.
         strictMcpConfig: true,
-        permissionMode: spec.permissionMode ?? "default",
+        ...(spec.permissionMode === null
+          ? {}
+          : { permissionMode: spec.permissionMode ?? "default" }),
+        ...(spec.includeHookEvents ? { includeHookEvents: true } : {}),
         disallowedTools: blockedTools({
           ...spec.blocked,
           fromRules: run.settings.denyToo,
@@ -425,6 +433,8 @@ export class LiveSession {
   send(text: string, uuid: string = randomUUID()): number {
     if (this.run.abort.signal.aborted)
       throw new RunAborted(this.run.abortReason ?? "aborted");
+    if (this.spec.probeOnly)
+      throw new Error("a probe-only session is never sent a prompt");
     this.run.budget.reserve(this.spec.name);
     const from = this.msgs.length;
     this.events.push({ kind: "prompt", id: uuid, text });

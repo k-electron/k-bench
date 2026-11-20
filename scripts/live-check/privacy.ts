@@ -47,17 +47,50 @@ export function redactText(text: string, places: Places): string {
   return out;
 }
 
+/** What the check's own hooks print (issue #177): output carrying it is the check's, not the owner's. */
+export const HOOK_MARK = "KBLC";
+
+const lengthLabel = (value: unknown) =>
+  typeof value === "string" && value !== ""
+    ? `<owner's text, ${value.length} chars>`
+    : value;
+
 /** What a recording keeps of a message: the shared scrub, then what only a live run holds (hook output). */
 function scrubLive(message: Json): Json {
   const copy = scrub(message);
+  const ours = JSON.stringify(copy).includes(HOOK_MARK);
   if (copy.type === "system" && typeof copy.subtype === "string") {
-    if (/^(hook_|memory_recall|plugin_install)/.test(copy.subtype)) {
+    // A hook's lifecycle message keeps its shape; its output only when the check's own hook printed it.
+    if (/^hook_/.test(copy.subtype)) {
+      if (ours) return copy;
+      const shape: Json = {};
+      for (const [key, value] of Object.entries(copy)) {
+        shape[key] = ["stdout", "stderr", "output"].includes(key)
+          ? lengthLabel(value)
+          : value;
+      }
+      return shape;
+    }
+    if (copy.subtype === "informational" && !ours) {
+      return { ...copy, content: lengthLabel(copy.content) };
+    }
+    if (/^(memory_recall|plugin_install)/.test(copy.subtype)) {
       return {
         type: copy.type,
         subtype: copy.subtype,
         session_id: copy.session_id,
         uuid: copy.uuid,
       };
+    }
+  }
+  // Claude Code's own note in an assistant message (a hook's `systemMessage`, say): the
+  // owner's hooks' text is not kept.
+  if (copy.type === "assistant" && copy.is_meta === true && !ours) {
+    const inner = copy.message as Json | undefined;
+    if (inner && Array.isArray(inner.content)) {
+      inner.content = (inner.content as Json[]).map((block) =>
+        block.type === "text" ? { ...block, text: lengthLabel(block.text) } : block,
+      );
     }
   }
   return copy;

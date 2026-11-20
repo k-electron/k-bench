@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FakeStep } from "../../test/harness/fake-claude.ts";
+import { denialsScenario, hooksScenario, startModeScenario } from "./hooks-mode.ts";
 import { isInside } from "./rails.ts";
 import { isResult, isSystem, type LiveSession, type Msg, toolCalls } from "./session.ts";
 import { terminalScenario } from "./terminal.ts";
@@ -524,6 +525,9 @@ export const SCENARIO_LIST: Scenario[] = [
   midturn,
   compaction,
   rails,
+  startModeScenario,
+  hooksScenario,
+  denialsScenario,
 ];
 
 export type { LiveSession, Msg };
