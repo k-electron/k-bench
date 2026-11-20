@@ -6,6 +6,10 @@ import {
   EXIT_PLAN_MODE,
 } from "../../../../src/shared/agent-questions.ts";
 import type { PermissionAsk } from "../../agent/transcript";
+import {
+  AskInterruptPrototype,
+  askPrototypeVariant,
+} from "./askPrototype/AskInterruptPrototype";
 import { Composer } from "./Composer";
 import { ModeLine } from "./ModeLine";
 import { PermissionPrompt } from "./PermissionPrompt";
@@ -62,6 +66,8 @@ export function PromptDock({
   focused: boolean;
 }) {
   const [ask, ...rest] = conversation.asks;
+  // PROTOTYPE (#179): `?askproto=A|B|C` swaps the dock for the prototype's variants.
+  if (askPrototypeVariant()) return <AskInterruptPrototype conversation={conversation} />;
   return (
     <>
       {ask && (
