@@ -18,6 +18,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Fixed
 
+- Stopping or deleting a Session right as the last running Session ends no longer fails with a server error.
 - The state request no longer fails for a moment when the last running Session ends, which could make a client briefly miss the change.
 - A Dev instance started from inside Claude Code no longer passes Claude Code's own environment variables to its Sessions, which turned the advisor off in every Claude Session it launched.
 
