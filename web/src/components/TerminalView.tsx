@@ -1,4 +1,5 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import { type IDisposable, type IEvent, Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import type { SessionKind } from "../../../src/shared/state-protocol.ts";
@@ -185,9 +186,14 @@ export function TerminalView({
         cursorBlink: true,
         scrollback: 0, // tmux keeps the history; the server redraws the screen on attach.
         macOptionClickForcesSelection: true,
+        allowProposedApi: true, // the grapheme addon registers a Unicode version
       });
       const fit = new FitAddon();
       terminal.loadAddon(fit);
+      // The grapheme addon is marked experimental. k-bench uses it anyway because it makes
+      // xterm.js measure emoji, skin tones, flags and joined emoji the way tmux does; without
+      // it the browser and tmux disagree on where the cursor is after one (see ADR-0009).
+      terminal.loadAddon(new UnicodeGraphemesAddon());
       terminal.open(element);
       fit.fit();
 
