@@ -14,6 +14,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Changed
 
+- The terminal has a new look: the dark Graphite colour scheme, which matches the app's greys, and the JetBrains Mono font at 13px, bundled with k-bench so nothing is loaded from the internet. The Pane's background matches the terminal's, so no black edge shows around it. A phone keeps all 32 rows and fits 48 columns where it fitted 43. Typing, scrolling, copying and the Extra keys are unchanged.
 - The phone's Extra keys row has an **⏎** key that sends Enter, so you can run a line without the on-screen keyboard. Its keys are now narrower symbols (⎋, ⇥, ⇤ for Esc, Tab and Shift-Tab) so they all fit in one row, still 40px tall.
 
 ### Fixed
