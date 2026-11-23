@@ -50,7 +50,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
   - `PaneArea`, one or two Panes with a draggable divider;
   - `Pane`, a Session's terminal in one slot;
   - `PaneLabels`, the top bar's `Workspace › Session` label over each Pane, laid out on the same grid columns as `PaneArea` (`paneColumns` in `src/layout.ts`), so each label follows its Pane and the divider by construction;
-  - `TerminalView`, xterm.js on the terminal WebSocket: wheel and touch scroll tmux history (below), OSC 52 copies to the clipboard, shift-drag selects in the browser, and a "reconnecting…" badge shows while the connection retries;
+  - `TerminalView`, xterm.js on the terminal WebSocket, in the look from `src/terminalLook.ts` (the Graphite theme, JetBrains Mono 13px bundled through `@fontsource`, and the wait for the font before xterm.js opens, since it measures its cells once; `Pane` reads the same module for its background, so no seam shows): wheel and touch scroll tmux history (below), wheel and touch scroll tmux history (below), OSC 52 copies to the clipboard, shift-drag selects in the browser, and a "reconnecting…" badge shows while the connection retries;
   - `ExtraKeys`, for the phone layout (below).
 - `src/components/ui/` holds the shadcn/ui components.
 - `src/api.ts` is the API client.

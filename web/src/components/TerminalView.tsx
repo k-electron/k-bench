@@ -6,6 +6,12 @@ import { type MirroredField, mirrorTypedLine } from "../mirroredField";
 import { useSmartTypingChoice, useSmartTypingOffered } from "../smartTyping";
 import { createTerminalConnection } from "../terminalConnection";
 import { applyArmedCtrl, registerTerminal } from "../terminalInput";
+import {
+  TERMINAL_FONT_FAMILY,
+  TERMINAL_FONT_SIZE,
+  terminalFontLoaded,
+  terminalTheme,
+} from "../terminalLook";
 import { touchScrolls } from "../touchScroll";
 import { wheelReports } from "../wheelReports";
 
@@ -160,69 +166,84 @@ export function TerminalView({
   useEffect(() => {
     const element = container.current;
     if (!element) return;
-
-    const terminal = new Terminal({
-      fontFamily: "ui-monospace, Menlo, monospace",
-      fontSize: 14,
-      cursorBlink: true,
-      scrollback: 0, // tmux keeps the history; the server redraws the screen on attach.
-      macOptionClickForcesSelection: true,
+    let cancelled = false;
+    let stop: (() => void) | undefined;
+    // xterm.js measures its cells once, when it opens, so it waits for the font.
+    void terminalFontLoaded().then(() => {
+      if (!cancelled) stop = start(element);
     });
-    const fit = new FitAddon();
-    terminal.loadAddon(fit);
-    terminal.open(element);
-    fit.fit();
-
-    // tmux copies a mouse selection to the clipboard by sending OSC 52 to its terminal.
-    const clipboard = terminal.parser.registerOscHandler(52, (data) => {
-      const text = clipboardText(data);
-      if (text !== undefined) void navigator.clipboard?.writeText(text).catch(() => {});
-      return true;
-    });
-    const stopShiftDrag = shiftDragSelects(element);
-    const reports = wheelReports(terminal);
-    const stopTouchScroll = touchScrolls(element, reports);
-
-    const connection = createTerminalConnection({
-      sessionId,
-      size: { cols: terminal.cols, rows: terminal.rows },
-      openSocket: (path) => new WebSocket(terminalUrl(path)),
-      wake: retryWhenAwake,
-    });
-    const subscription = connection.subscribe({
-      output: (bytes) => terminal.write(bytes),
-      reconnecting: (on) => {
-        setReconnecting(on);
-        typedLine.current?.clear(); // a fresh line for the keyboard
-        if (!on) terminal.reset(); // tmux is about to redraw the whole screen
-      },
-    });
-
-    // An armed Ctrl is for the owner's next key, so the terminal's own answers pass it by.
-    const input = onTerminalInput(terminal, (data, automatic) =>
-      connection.input(automatic ? data : applyArmedCtrl(data), automatic),
-    );
-    const resized = terminal.onResize(({ cols, rows }) => connection.resize(cols, rows));
-    const observer = new ResizeObserver(() => fit.fit());
-    observer.observe(element);
-    terminalRef.current = terminal;
-    setTerminal(terminal);
-    if (focusedRef.current) terminal.focus();
-
     return () => {
-      terminalRef.current = null;
-      setTerminal(null);
-      observer.disconnect();
-      input.dispose();
-      resized.dispose();
-      clipboard.dispose();
-      stopShiftDrag();
-      stopTouchScroll();
-      reports.dispose();
-      subscription();
-      connection.close();
-      terminal.dispose();
+      cancelled = true;
+      stop?.();
     };
+
+    function start(element: HTMLElement): () => void {
+      const terminal = new Terminal({
+        fontFamily: TERMINAL_FONT_FAMILY,
+        fontSize: TERMINAL_FONT_SIZE,
+        theme: terminalTheme,
+        cursorBlink: true,
+        scrollback: 0, // tmux keeps the history; the server redraws the screen on attach.
+        macOptionClickForcesSelection: true,
+      });
+      const fit = new FitAddon();
+      terminal.loadAddon(fit);
+      terminal.open(element);
+      fit.fit();
+
+      // tmux copies a mouse selection to the clipboard by sending OSC 52 to its terminal.
+      const clipboard = terminal.parser.registerOscHandler(52, (data) => {
+        const text = clipboardText(data);
+        if (text !== undefined) void navigator.clipboard?.writeText(text).catch(() => {});
+        return true;
+      });
+      const stopShiftDrag = shiftDragSelects(element);
+      const reports = wheelReports(terminal);
+      const stopTouchScroll = touchScrolls(element, reports);
+
+      const connection = createTerminalConnection({
+        sessionId,
+        size: { cols: terminal.cols, rows: terminal.rows },
+        openSocket: (path) => new WebSocket(terminalUrl(path)),
+        wake: retryWhenAwake,
+      });
+      const subscription = connection.subscribe({
+        output: (bytes) => terminal.write(bytes),
+        reconnecting: (on) => {
+          setReconnecting(on);
+          typedLine.current?.clear(); // a fresh line for the keyboard
+          if (!on) terminal.reset(); // tmux is about to redraw the whole screen
+        },
+      });
+
+      // An armed Ctrl is for the owner's next key, so the terminal's own answers pass it by.
+      const input = onTerminalInput(terminal, (data, automatic) =>
+        connection.input(automatic ? data : applyArmedCtrl(data), automatic),
+      );
+      const resized = terminal.onResize(({ cols, rows }) =>
+        connection.resize(cols, rows),
+      );
+      const observer = new ResizeObserver(() => fit.fit());
+      observer.observe(element);
+      terminalRef.current = terminal;
+      setTerminal(terminal);
+      if (focusedRef.current) terminal.focus();
+
+      return () => {
+        terminalRef.current = null;
+        setTerminal(null);
+        observer.disconnect();
+        input.dispose();
+        resized.dispose();
+        clipboard.dispose();
+        stopShiftDrag();
+        stopTouchScroll();
+        reports.dispose();
+        subscription();
+        connection.close();
+        terminal.dispose();
+      };
+    }
   }, [sessionId]);
 
   // Smart typing takes over the terminal's hidden field; a new terminal (the Session
