@@ -1,4 +1,5 @@
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
+import { TERMINAL_BACKGROUND } from "../terminalLook";
 import { TerminalView } from "./TerminalView";
 
 interface PaneProps {
@@ -12,7 +13,8 @@ export function Pane({ session, focused }: PaneProps) {
   return (
     <section
       aria-label={`Terminal ${session.name}`}
-      className="h-full min-h-0 bg-black p-2"
+      className="h-full min-h-0 p-2"
+      style={{ backgroundColor: TERMINAL_BACKGROUND }}
     >
       {session.status === "running" ? (
         <TerminalView sessionId={session.id} kind={session.kind} focused={focused} />
