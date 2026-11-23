@@ -3,7 +3,7 @@ import "@fontsource/jetbrains-mono/700.css";
 import type { ITheme } from "@xterm/xterm";
 
 /**
- * The terminal's one fixed look (ADR 0009): the Graphite colours and JetBrains Mono at 13px,
+ * The terminal's one fixed look (ADR-0009): the Graphite colours and JetBrains Mono at 13px,
  * with the line height, letter spacing, cursor and Pane padding left as xterm.js has them.
  * `TerminalView` and `Pane` both read it, so the colours live in one place. The font is
  * bundled (`@fontsource`), never fetched from a CDN: k-bench is tailnet-only.
@@ -38,7 +38,8 @@ export const terminalTheme: ITheme = {
 
 /** 13px keeps a phone's 32 rows and gains columns; 14px would cost two rows. */
 export const TERMINAL_FONT_SIZE = 13;
-export const TERMINAL_FONT_FAMILY = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+const TERMINAL_FONT_NAME = '"JetBrains Mono"';
+export const TERMINAL_FONT_FAMILY = `${TERMINAL_FONT_NAME}, ui-monospace, Menlo, monospace`;
 
 /**
  * Resolves once the regular and bold faces have loaded. xterm.js measures its cells once,
@@ -48,8 +49,8 @@ export const TERMINAL_FONT_FAMILY = '"JetBrains Mono", ui-monospace, Menlo, mono
 export async function terminalFontLoaded(): Promise<void> {
   try {
     await Promise.all([
-      document.fonts.load(`400 ${TERMINAL_FONT_SIZE}px "JetBrains Mono"`),
-      document.fonts.load(`700 ${TERMINAL_FONT_SIZE}px "JetBrains Mono"`),
+      document.fonts.load(`400 ${TERMINAL_FONT_SIZE}px ${TERMINAL_FONT_NAME}`),
+      document.fonts.load(`700 ${TERMINAL_FONT_SIZE}px ${TERMINAL_FONT_NAME}`),
     ]);
   } catch {
     // Carry on with the fallback font.
