@@ -6,6 +6,8 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
 ### Added
 
 - A **Paste** key in the phone's floating keys, shown while the on-screen keyboard is up. It pastes the clipboard's text into the Session as a real paste (bracketed when the program asked for it), and the keyboard stays up. **⌄** (close the keyboard) moves to a row of its own below the arrows. Paste is only offered where the browser can read the clipboard; without it, **⌄** stays in the top row.
@@ -91,7 +93,8 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
 - A README and a [user guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
 - Requirements: macOS, Node 26 or later, tmux and Tailscale with HTTPS certificates enabled.
 
-[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/k-electron/k-bench/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/k-electron/k-bench/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/k-electron/k-bench/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/k-electron/k-bench/compare/v0.1.1...v0.1.2
