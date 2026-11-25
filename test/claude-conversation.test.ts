@@ -92,7 +92,7 @@ describe("A Claude Session follows its conversation", () => {
     expect(await fakeClaudeArgs(again)).toEqual(["--resume", moved]);
   });
 
-  it("starts the conversation it moved to afresh when it never had a message", async () => {
+  it("starts the conversation it moved to afresh when it never had a message, and keeps following", async () => {
     const { server, workspace } = await boot();
     const claude = await server.createClaudeSession(workspace.id);
     const terminal = await server.openTerminal(claude.id);
@@ -105,6 +105,13 @@ describe("A Claude Session follows its conversation", () => {
     expect(await fakeClaudeArgs(again)).toEqual(["--session-id", moved]);
     expect(again.output).toContain("No conversation found");
     expect(again.output).not.toContain("exited with an error");
+    // The restarted Claude Code is followed too.
+    const movedAgain = await clear(again);
+    again.run("a first message");
+    await again.waitForOutput("claude-stub heard:");
+    await server.state();
+    const third = await quitAndRestart(server, claude.id, again);
+    expect(await fakeClaudeArgs(third)).toEqual(["--resume", movedAgain]);
   });
 
   it("resumes the conversation it was launched with when Claude Code runs no hooks", async () => {
