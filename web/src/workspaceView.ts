@@ -28,21 +28,29 @@ export interface WorkspaceView {
   left: PaneContent;
   /** The right Pane: the Worker, or the Other Session the owner opened there. */
   right: PaneContent;
-  /** Share of the width the left Pane takes. */
+  /**
+   * Share of the width the left Pane takes while both are open. While one is shut, the
+   * share it reopens at.
+   */
   ratio: number;
+  /** The shut Pane, which shows only a rail, if either is. */
+  shut: Side | null;
   /**
    * The Pane whose terminal should have the keyboard: the one the owner last chose
-   * something for, or last clicked into.
+   * something for, or last clicked into, unless that one is shut.
    */
   focus: Side;
-  /** The Sessions on screen, one per Pane, for the sidebar's highlight. */
+  /** The Sessions on screen in an open Pane, for the sidebar's highlight. */
   shown: ReadonlySet<string>;
   /**
    * Opens a Workspace (choosing it by name): makes it the Open Workspace on the Host, which
    * starts its Stopped Prime and Worker, and brings back Prime with Worker.
    */
   openWorkspace(id: string): void;
-  /** Shows the Prime (it is always in the left Pane, so this gives it the keyboard). */
+  /**
+   * Shows the Prime (it is always in the left Pane, so this gives it the keyboard).
+   * Opening anything into a shut Pane reopens it.
+   */
   showPrime(): void;
   /** Shows the Worker in the right Pane. */
   showWorker(): void;
@@ -58,11 +66,74 @@ export interface WorkspaceView {
   chooseSession(workspaceId: string, session: SessionState): void;
   /** The owner clicked into a Pane. */
   focusPane(side: Side): void;
-  setRatio(ratio: number): void;
+  /**
+   * Moves the divider. Within `SHUT_EDGE` of an edge it shuts that Pane, which reopens at
+   * `reopenAt`: where the divider was before the drag that shut it. It defaults to the
+   * current ratio, which is right for anything but a drag.
+   */
+  setRatio(ratio: number, reopenAt?: number): void;
+  /** Reopens a shut Pane where the divider was before it was shut. */
+  reopen(side: Side): void;
 }
 
-export const MIN_RATIO = 0.2;
-export const MAX_RATIO = 0.8;
+/** How close to an edge, as a share of the width, the divider shuts that Pane. */
+export const SHUT_EDGE = 0.08;
+
+/** Where the divider sits for one Workspace on this device. */
+export interface Split {
+  /** As `WorkspaceView.ratio`. */
+  ratio: number;
+  shut: Side | null;
+}
+
+const HALF_AND_HALF: Split = { ratio: 0.5, shut: null };
+
+/** The split after the divider is moved to `ratio`. */
+export function moveDivider(ratio: number, reopenAt: number): Split {
+  if (ratio < SHUT_EDGE) return { ratio: reopenAt, shut: "left" };
+  if (ratio > 1 - SHUT_EDGE) return { ratio: reopenAt, shut: "right" };
+  return { ratio, shut: null };
+}
+
+/**
+ * Where the browser keeps each Workspace's split, which stays on this device: a laptop and
+ * an iPad can each be set up their own way.
+ */
+const SPLITS_KEY = "k-bench.splits";
+
+function isSplit(value: unknown): value is Split {
+  if (typeof value !== "object" || value === null) return false;
+  const { ratio, shut } = value as Record<string, unknown>;
+  return (
+    typeof ratio === "number" &&
+    ratio > 0 &&
+    ratio < 1 &&
+    (shut === null || shut === "left" || shut === "right")
+  );
+}
+
+function loadSplits(): Record<string, Split> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(SPLITS_KEY) ?? "{}");
+    if (typeof saved !== "object" || saved === null) return {};
+    return Object.fromEntries(
+      Object.entries(saved).filter(([, split]) => isSplit(split)),
+    );
+  } catch {
+    // Storage unavailable or garbled: every Workspace starts half and half.
+    return {};
+  }
+}
+
+function saveSplits(splits: Record<string, Split>): void {
+  try {
+    localStorage.setItem(SPLITS_KEY, JSON.stringify(splits));
+  } catch {
+    // Storage unavailable: the splits last until the page is closed.
+  }
+}
+
+const otherSide = (side: Side): Side => (side === "left" ? "right" : "left");
 
 /**
  * Where the browser kept the Pane layout before Workspaces owned the main view. It is
@@ -90,7 +161,8 @@ export function workspacePanes(
  * Worker or one Other Session in the right.
  *
  * The Open Workspace comes from the state on every render, so every device follows it.
- * What the right Pane shows, and the divider, are kept per Workspace in memory for now.
+ * What the right Pane shows is kept per Workspace in memory for now. The divider, and which
+ * Pane is shut, are kept per Workspace in this browser's storage.
  *
  * It also does what any device does on load, whatever its size: it opens the Open
  * Workspace once, deletes the retired saved layout, and forgets Smart typing choices of
@@ -101,7 +173,7 @@ export function useWorkspaceView(
   actions: Actions,
 ): WorkspaceView {
   const [rightShown, setRightShown] = useState<Record<string, RightPaneShown>>({});
-  const [ratios, setRatios] = useState<Record<string, number>>({});
+  const [splits, setSplits] = useState(loadSplits);
   const [focus, setFocus] = useState<Side>("left");
 
   const workspace = state?.workspaces.find((w) => w.id === state.openWorkspaceId);
@@ -111,6 +183,8 @@ export function useWorkspaceView(
   );
 
   useOpenOnLoad(state, actions);
+
+  useEffect(() => saveSplits(splits), [splits]);
 
   useEffect(() => {
     try {
@@ -133,34 +207,56 @@ export function useWorkspaceView(
   }, [title]);
 
   const openId = workspace?.id;
+  const split = (openId && splits[openId]) || HALF_AND_HALF;
+
+  /** Reopens a Workspace's Pane if it is shut, where the divider was before. */
+  const reopen = useCallback((workspaceId: string, side: Side) => {
+    setSplits((current) => {
+      const was = current[workspaceId];
+      if (was?.shut !== side) return current;
+      return { ...current, [workspaceId]: { ratio: was.ratio, shut: null } };
+    });
+  }, []);
+
   const showOnRight = useCallback(
     (workspaceId: string, shown: RightPaneShown) => {
       setRightShown((current) => ({ ...current, [workspaceId]: shown }));
       setFocus("right");
+      reopen(workspaceId, "right");
       if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
     },
-    [actions, openId],
+    [actions, openId, reopen],
   );
+
+  const showPrimeOf = (workspaceId: string) => {
+    setFocus("left");
+    reopen(workspaceId, "left");
+  };
 
   const openWorkspace = (id: string) => {
     setRightShown((current) => ({ ...current, [id]: null }));
     setFocus("left");
+    // The Workspace's name brings back the Worker, so a shut right Pane opens again.
+    reopen(id, "right");
     void actions.openWorkspace(id);
   };
 
   const shown = new Set<string>();
-  for (const pane of [left, right])
-    if (pane.kind === "session") shown.add(pane.session.id);
+  if (split.shut !== "left" && left.kind === "session") shown.add(left.session.id);
+  if (split.shut !== "right" && right.kind === "session") shown.add(right.session.id);
 
   return {
     workspace,
     left,
     right,
-    ratio: (openId && ratios[openId]) || 0.5,
-    focus,
+    ratio: split.ratio,
+    shut: split.shut,
+    focus: focus === split.shut ? otherSide(focus) : focus,
     shown,
     openWorkspace,
-    showPrime: () => setFocus("left"),
+    showPrime: () => {
+      if (openId) showPrimeOf(openId);
+    },
     showWorker: () => {
       if (openId) showOnRight(openId, null);
     },
@@ -170,15 +266,17 @@ export function useWorkspaceView(
       else if (session.role === null) showOnRight(workspaceId, session.id);
       else {
         // The Prime. Another Workspace's opens it, keeping what its right Pane showed.
-        setFocus("left");
+        showPrimeOf(workspaceId);
         if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
       }
     },
     focusPane: setFocus,
-    setRatio: (ratio) => {
+    setRatio: (ratio, reopenAt = split.ratio) => {
       if (!openId) return;
-      const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio));
-      setRatios((current) => ({ ...current, [openId]: clamped }));
+      setSplits((current) => ({ ...current, [openId]: moveDivider(ratio, reopenAt) }));
+    },
+    reopen: (side) => {
+      if (openId) reopen(openId, side);
     },
   };
 }
