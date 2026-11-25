@@ -1,6 +1,4 @@
-import { mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
 import {
@@ -8,6 +6,7 @@ import {
   otherSessions,
   type TestServer,
 } from "./harness/instance.ts";
+import { writeOldStore } from "./harness/old-store.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { typeIntoSession } from "./harness/tmux.ts";
 
@@ -256,16 +255,14 @@ describe("Sessions that existed before Claude Sessions", () => {
     const instance = createTestInstance();
     const folder = instance.makeFolder("project");
     // The store as the first version of k-bench left it.
-    mkdirSync(instance.config.dataDir, { recursive: true });
-    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
-    old.exec(`
-      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
-      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+    writeOldStore(
+      instance,
+      1,
+      `
       INSERT INTO workspaces VALUES ('w1', 'project', '${folder}', 0);
       INSERT INTO sessions VALUES ('s1', 'w1', 'build', 1);
-      PRAGMA user_version = 1;
-    `);
-    old.close();
+    `,
+    );
 
     const server = await instance.start();
 
@@ -282,11 +279,10 @@ describe("Workspaces that existed before the Prime and Worker", () => {
     const empty = instance.makeFolder("empty");
     // The store as schema version 4 left it: a Workspace with a shell Session and a Claude
     // Session that the owner happened to name "Prime", and a Workspace with no Sessions.
-    mkdirSync(instance.config.dataDir, { recursive: true });
-    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
-    old.exec(`
-      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
-      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+    writeOldStore(
+      instance,
+      4,
+      `
       ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shell';
       ALTER TABLE sessions ADD COLUMN conversation_id TEXT;
       ALTER TABLE sessions ADD COLUMN launch_options TEXT;
@@ -297,9 +293,8 @@ describe("Workspaces that existed before the Prime and Worker", () => {
       INSERT INTO sessions VALUES ('s2', 'w1', 'Prime', 2, 'claude',
         '11111111-1111-4111-8111-111111111111',
         '{"model":"sonnet","effort":"low","advisor":"off","focusView":false}');
-      PRAGMA user_version = 4;
-    `);
-    old.close();
+    `,
+    );
 
     const server = await instance.start();
     const { workspaces } = await server.state();

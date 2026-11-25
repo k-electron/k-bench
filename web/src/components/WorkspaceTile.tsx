@@ -20,11 +20,6 @@ export function tileHue(name: string): number {
   return hue;
 }
 
-/** Some Session of the Workspace has a Bell. */
-export function hasBell(workspace: WorkspaceState): boolean {
-  return workspace.sessions.some((session) => session.bell);
-}
-
 /**
  * A Workspace's coloured letter tile, with an amber dot when `bell` and a warning mark
  * when it is Missing. The letters are decoration; the dot and the mark are labelled.

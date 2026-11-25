@@ -32,6 +32,7 @@ import { type ComponentProps, type CSSProperties, type ReactNode, useState } fro
 import { cn } from "@/lib/utils";
 import { type Actions, useActions } from "@/useAppState";
 import { useSidebarCollapsed } from "@/useSidebarCollapsed";
+import { hasBell } from "@/workspaces";
 import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
 import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type {
@@ -52,7 +53,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { hasBell, WorkspaceTile } from "./WorkspaceTile";
+import { WorkspaceTile } from "./WorkspaceTile";
 
 /**
  * Where the tree is shown: beside the Panes on a desktop or tablet, where it can collapse

@@ -1,9 +1,7 @@
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
 import { createTestInstance } from "./harness/instance.ts";
+import { writeOldStore } from "./harness/old-store.ts";
 
 describe("Ordering a Workspace's Other Sessions", () => {
   it("lists them in the owner's order after the Prime and Worker, across a restart, with a new Session last", async () => {
@@ -61,18 +59,16 @@ describe("Ordering a Workspace's Other Sessions", () => {
     const instance = createTestInstance();
     const folder = instance.makeFolder("project");
     // The store as the first version of k-bench left it, with rows stored out of creation order.
-    mkdirSync(instance.config.dataDir, { recursive: true });
-    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
-    old.exec(`
-      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
-      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+    writeOldStore(
+      instance,
+      1,
+      `
       INSERT INTO workspaces VALUES ('w1', 'project', '${folder}', 0);
       INSERT INTO sessions VALUES ('s3', 'w1', 'third', 30);
       INSERT INTO sessions VALUES ('s1', 'w1', 'first', 10);
       INSERT INTO sessions VALUES ('s2', 'w1', 'second', 20);
-      PRAGMA user_version = 1;
-    `);
-    old.close();
+    `,
+    );
 
     const server = await instance.start();
     await server.createSession("w1", "fourth");

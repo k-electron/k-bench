@@ -8,6 +8,7 @@ import type {
 } from "../../src/shared/state-protocol.ts";
 import { forgetSmartTypingOfMissing } from "./smartTyping";
 import type { Actions } from "./useAppState";
+import { findOpenWorkspace } from "./workspaces";
 
 /** What a Pane shows. */
 export type PaneContent =
@@ -210,7 +211,7 @@ export function useWorkspaceView(
     [actions],
   );
 
-  const workspace = state?.workspaces.find((w) => w.id === state.openWorkspaceId);
+  const workspace = findOpenWorkspace(state);
   const { left, right, worker, tabs } = workspacePanes(workspace);
   // The latest state, for changes made after an await (a new Session opening once it is
   // in state) or before the next render, so they build on the right Pane as it is now.
@@ -303,7 +304,7 @@ export function useWorkspaceView(
     starting: !openedOnLoad || opening > 0,
     shown,
     openWorkspace,
-    open: (id) => open(id),
+    open,
     showPrime: () => {
       if (openId) showPrimeOf(openId);
     },

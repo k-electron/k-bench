@@ -7,9 +7,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { createTestInstance } from "./harness/instance.ts";
+import { writeOldStore } from "./harness/old-store.ts";
 
 describe("the folder picker's directory listing", () => {
   it("lists the subfolders of the configured root by default, in name order, without files", async () => {
@@ -94,16 +94,14 @@ describe("the folder picker's directory listing", () => {
     mkdirSync(older);
     mkdirSync(newer);
     // The store as the first version of k-bench left it, the newer Workspace dragged first.
-    mkdirSync(instance.config.dataDir, { recursive: true });
-    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
-    old.exec(`
-      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
-      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+    writeOldStore(
+      instance,
+      1,
+      `
       INSERT INTO workspaces VALUES ('w1', 'older', '${older}', 1);
       INSERT INTO workspaces VALUES ('w2', 'newer', '${newer}', 0);
-      PRAGMA user_version = 1;
-    `);
-    old.close();
+    `,
+    );
     const server = await instance.start();
 
     const listing = (await (await server.request("/api/directories")).json()) as {

@@ -5,7 +5,7 @@ import type {
   State,
   WorkspaceState,
 } from "../../src/shared/state-protocol.ts";
-import { hasBell } from "./components/WorkspaceTile";
+import { findOpenWorkspace, hasBell } from "./workspaces";
 import type { WorkspaceView } from "./workspaceView";
 
 export interface PhoneView {
@@ -79,7 +79,7 @@ export function usePhoneView(
     }
   }, []);
 
-  const workspace = state?.workspaces.find((w) => w.id === state.openWorkspaceId);
+  const workspace = findOpenWorkspace(state);
   const sessions = workspace?.sessions ?? [];
   const saved = workspace && shown[workspace.id];
   const session = sessions.find((s) => s.id === saved) ?? sessionsByRole(sessions).prime;
