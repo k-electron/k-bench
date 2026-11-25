@@ -29,6 +29,8 @@ describe("Opening a Workspace", () => {
     expect([prime?.status, worker?.status]).toEqual(["running", "running"]);
     const primeArgs = await fakeClaudeArgs(await server.openTerminal(prime?.id ?? ""));
     const workerArgs = await fakeClaudeArgs(await server.openTerminal(worker?.id ?? ""));
+    // The first start begins the conversation k-bench recorded for each.
+    expect([primeArgs[0], workerArgs[0]]).toEqual(["--session-id", "--session-id"]);
     expect(primeArgs.slice(2)).toEqual(["--model", "opus", "--effort", "high"]);
     expect(workerArgs.slice(2)).toEqual([
       "--model",
