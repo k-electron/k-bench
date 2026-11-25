@@ -1,8 +1,8 @@
 # Using k-bench with Claude Code
 
-k-bench launches Claude Code for you and resumes it when you restart. A **Claude Session** is a Session that runs Claude Code itself, in a Workspace's folder, with the model, effort and advisor you pick in a dialog. Restarting it brings back the same Claude conversation. This page covers that, and the few things worth setting up so k-bench and Claude Code work well together.
+k-bench launches Claude Code for you and resumes it when you restart. A **Claude Session** is a Session that runs Claude Code itself, in a Workspace's folder, with the model, effort and advisor you pick in a dialog. Restarting it brings back the Claude conversation you were last in. This page covers that, and the few things worth setting up so k-bench and Claude Code work well together.
 
-k-bench only starts and resumes Claude Code, using its documented command-line flags. It never reads Claude Code's output or files. What you see in a Claude Session is the real Claude Code in a real terminal, so its slash commands, skills and hooks all work as they do on your Mac.
+k-bench starts and resumes Claude Code using its documented command-line flags, and adds one silent hook so it knows which conversation you are in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)). It changes nothing else about what Claude sees or does. What you see in a Claude Session is the real Claude Code in a real terminal, so its slash commands, skills and hooks all work as they do on your Mac.
 
 ## Start a Claude Session
 
@@ -58,9 +58,13 @@ If Claude Code exits with an error, such as a model and advisor it won't pair, o
 
 ### Restarting resumes the conversation
 
-A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**. There is no dialog. Claude Code resumes the same conversation, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench gave the conversation its ID when it launched the Session, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
+A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**. There is no dialog. Claude Code resumes the conversation last running in the Session, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench knows the conversation by its ID, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
 
-Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with the same Launch options.
+A Claude Session follows its conversation. When you move to another one inside Claude Code, with `/clear`, `/resume`, `/branch` or `/fork`, k-bench notices and saves it straight away, whether or not a browser is open, and a later restart resumes that one. Compacting a conversation keeps it. To do this, k-bench adds a `SessionStart` hook to each Claude Code it launches, for that launch only. The hook prints nothing, so nothing reaches your conversation, and your own settings and hooks are left alone.
+
+It can't follow the conversation when Claude Code doesn't run hooks: in a folder you haven't trusted, or when your settings have `disableAllHooks`. Then a restart resumes the last conversation k-bench knew, which is the one it launched unless it followed a move before.
+
+Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with that same ID and the same Launch options. That includes a conversation you started with `/clear` and never typed into.
 
 Deleting a Claude Session ends it but leaves its conversation alone, so you can still find it with `claude --resume` in a terminal.
 
@@ -96,7 +100,7 @@ To check it, start a short task in a Session, then open a different Session. Whe
 
 ## One Session per Claude conversation
 
-A Claude Session is tied to the one conversation it started with, so give each Claude conversation its own Claude Session, and name it after the task (in the dialog, or later with **...** then **Rename**). Then:
+A Claude Session runs one conversation at a time. You can move it to another with `/clear` or `/resume`, but it is simplest to give each piece of work its own Claude Session, and name it after the task (in the dialog, or later with **...** then **Rename**). Then:
 
 - you can run several conversations at once and switch between them from the sidebar;
 - a Bell tells you which one is waiting, instead of you checking each in turn;

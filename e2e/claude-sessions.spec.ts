@@ -66,7 +66,7 @@ test("the Claude dialog opens with every option Default, and a choice reaches Cl
   await expect(terminal).toContainText("claude-stub arg: opus");
   await expect(terminal).toContainText("claude-stub arg: xhigh");
   await expect(terminal).toContainText("claude-stub advisor tool disabled: 1");
-  await expect(terminal).toContainText("claude-stub arg: --settings");
+  await expect(terminal).toContainText('"viewMode":"focus"');
   await expect(terminal).not.toContainText("claude-stub arg: --advisor");
 });
 

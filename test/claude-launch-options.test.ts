@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
-import { fakeClaudeArgs } from "./harness/fake-claude.ts";
+import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
 import type { TestServer } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 
-// What reaches Claude Code is the contract with it (ADR-0005), so these tests read the flags
-// and the environment the stub (test/harness/fake-claude.sh) was started with.
+// What reaches Claude Code is the contract with it (ADR-0005), so these tests read the flags,
+// the settings and the environment the stub (test/harness/fake-claude.sh) was started with.
 
-const FOCUS_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
+const FOCUS_SETTINGS = { viewMode: "focus", tui: "fullscreen" };
 
 /** The stub's arguments begin `--session-id <conversation ID>`; the flags are what follows. */
 const SESSION_ID_ARGS = 2;
@@ -29,6 +29,7 @@ async function launch(
     session,
     terminal,
     flags: flagsAfterSessionId(args),
+    settings: await fakeClaudeSettings(terminal),
     advisorDisabled: terminal.output.includes("advisor tool disabled: 1"),
   };
 }
@@ -36,15 +37,16 @@ async function launch(
 const DEFAULTS = { model: "default", effort: "default", advisor: "default" };
 
 describe("Launch options", () => {
-  it("add no flag for Default", async () => {
+  it("add no flag or setting for Default", async () => {
     const { server, workspace } = await boot();
 
-    const { flags, advisorDisabled } = await launch(server, workspace.id, {
+    const { flags, settings, advisorDisabled } = await launch(server, workspace.id, {
       ...DEFAULTS,
       focusView: false,
     });
 
     expect(flags).toEqual([]);
+    expect(settings).toEqual({});
     expect(advisorDisabled).toBe(false);
   });
 
@@ -82,15 +84,16 @@ describe("Launch options", () => {
     expect(flags).toEqual([]);
   });
 
-  it("start Focus view with both settings as one argument, and nothing else", async () => {
+  it("start Focus view with both settings, and nothing else", async () => {
     const { server, workspace } = await boot();
 
-    const { flags } = await launch(server, workspace.id, {
+    const { flags, settings } = await launch(server, workspace.id, {
       ...DEFAULTS,
       focusView: true,
     });
 
-    expect(flags).toEqual(["--settings", FOCUS_SETTINGS]);
+    expect(flags).toEqual([]);
+    expect(settings).toEqual(FOCUS_SETTINGS);
   });
 
   it("are refused when a value is unknown, naming the field, and create no Session", async () => {
@@ -146,9 +149,8 @@ describe("Launch options", () => {
       "haiku",
       "--effort",
       "low",
-      "--settings",
-      FOCUS_SETTINGS,
     ]);
+    expect(await fakeClaudeSettings(again)).toEqual(FOCUS_SETTINGS);
     expect(again.output).toContain("advisor tool disabled: 1");
   });
 });
