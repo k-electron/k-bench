@@ -81,6 +81,67 @@ test("tapping a Workspace's name in the drawer opens it on its Prime and closes 
   await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${two}`);
 });
 
+test("tapping the title lists the Workspace's Sessions, and tapping one shows it and closes the sheet", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"), { name: "alpha" });
+  await app.createSession("alpha");
+  await expect(app.terminal("session 1")).toBeVisible();
+
+  await app.openSessionsSheet();
+
+  // Prime, Worker, then the Other Sessions; the one on screen is highlighted.
+  await expect(app.sessionsSheet.getByRole("listitem")).toHaveText([
+    /^Prime/,
+    /^Worker/,
+    /^session 1/,
+  ]);
+  await expect(app.sheetRow("Worker")).toContainText("stopped");
+  await expect(app.sheetRow("session 1")).toHaveAttribute("aria-current", "true");
+  await expect(app.sheetRow("Prime")).not.toHaveAttribute("aria-current", "true");
+
+  await app.sheetRow("Worker").tap();
+
+  await expect(app.sessionsSheet).toBeHidden();
+  await expect(app.phoneTitle).toHaveText("alpha › Worker");
+  await expect(app.terminal("session 1")).toHaveCount(0);
+
+  // Tapping outside the sheet closes it without choosing.
+  await app.openSessionsSheet();
+  await app.sessionsSheet.getByRole("button", { name: "Close sessions" }).tap();
+  await expect(app.sessionsSheet).toBeHidden();
+  await expect(app.phoneTitle).toHaveText("alpha › Worker");
+});
+
+test("a Bell elsewhere in the Open Workspace dots its name in the title, and one in another Workspace dots the menu button", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
+  await app.createSession("beta");
+  await expect(app.terminal("session 1")).toBeVisible();
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  // Opening alpha starts its Prime and Worker, and shows the Prime.
+  await app.workspace("alpha").getByRole("button", { name: "alpha", exact: true }).tap();
+  await expect(app.terminal("Prime")).toContainText("claude-stub ready");
+  await expect(app.titleBell).toHaveCount(0);
+  await expect(app.menuBell).toHaveCount(0);
+
+  await kbench.ringBell("Worker", "alpha");
+
+  await expect(app.titleBell).toBeVisible();
+  await expect(app.menuBell).toHaveCount(0);
+
+  await kbench.ringBell("session 1", "beta");
+
+  await expect(app.menuBell).toBeVisible();
+  await expect(app.titleBell).toBeVisible();
+});
+
 test("a Stopped Session on screen shows Restart, and pressing it brings the terminal back", async ({
   app,
   kbench,

@@ -1,10 +1,8 @@
-import { MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
-import { PhoneTitle, PhoneView } from "@/components/PhoneView";
+import { PhoneMenuButton, PhoneTitle, PhoneView } from "@/components/PhoneView";
 import { Sidebar } from "@/components/Sidebar";
 import { TypingKeys } from "@/components/TypingKeys";
-import { Button } from "@/components/ui/button";
 import { WorkspaceView } from "@/components/WorkspaceView";
 import { cn } from "@/lib/utils";
 import { usePhoneView } from "./phoneView";
@@ -100,15 +98,7 @@ export function App() {
             <div className="flex h-9 shrink-0 items-center border-b">
               {phone ? (
                 <>
-                  <Button
-                    className="ml-2"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Menu"
-                    onClick={() => setDrawerOpen(true)}
-                  >
-                    <MenuIcon />
-                  </Button>
+                  <PhoneMenuButton view={phoneView} onOpen={() => setDrawerOpen(true)} />
                   <PhoneTitle view={phoneView} />
                 </>
               ) : (

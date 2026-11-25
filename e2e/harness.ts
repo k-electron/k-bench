@@ -1,7 +1,7 @@
 import { createServer } from "node:net";
 import { basename, relative, resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
-import { Store } from "../src/server/store.ts";
+import { type SessionRow, Store } from "../src/server/store.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
 import { pollUntil } from "../test/harness/poll.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
@@ -86,6 +86,40 @@ export class AppPage {
   /** On a phone: the `Workspace › Session` title beside the Menu button. */
   get phoneTitle(): Locator {
     return this.page.getByRole("main").getByRole("heading", { level: 1 });
+  }
+
+  /** On a phone: the sheet listing the Open Workspace's Sessions, opened from the title. */
+  get sessionsSheet(): Locator {
+    return this.page.getByRole("dialog", { name: "Sessions", exact: true });
+  }
+
+  /** On a phone: taps the title to open the Sessions sheet. */
+  async openSessionsSheet(): Promise<void> {
+    await this.phoneTitle.getByRole("button").tap();
+    await expect(this.sessionsSheet).toBeVisible();
+  }
+
+  /** On a phone: a Session's row in the Sessions sheet. */
+  sheetRow(name: string): Locator {
+    return this.sessionsSheet.getByRole("button").filter({
+      has: this.page.getByText(name, { exact: true }),
+    });
+  }
+
+  /** On a phone: the dot on the title's Workspace name, for a Bell elsewhere in it. */
+  get titleBell(): Locator {
+    return this.phoneTitle.getByRole("img", {
+      name: "Another session here rang the bell",
+      exact: true,
+    });
+  }
+
+  /** On a phone: the dot on the Menu button, for a Bell in another Workspace. */
+  get menuBell(): Locator {
+    return this.page.getByRole("img", {
+      name: "A session in another workspace rang the bell",
+      exact: true,
+    });
   }
 
   /** On a desktop or tablet: the left Pane (always the Prime) or the right one. */
@@ -496,16 +530,26 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-/** The id of the Session named `name`, read from the database whether or not a server runs. */
-function sessionIdNamed(instance: TestInstance, name: string): string {
+/**
+ * The Session named `name` (in the Workspace named `workspaceName`, when given), read from
+ * the database whether or not a server runs.
+ */
+function sessionNamed(
+  instance: TestInstance,
+  name: string,
+  workspaceName?: string,
+): SessionRow {
   const store = new Store(instance.config.dataDir);
   try {
     const session = store
       .listWorkspaces()
+      .filter(
+        (workspace) => workspaceName === undefined || workspace.name === workspaceName,
+      )
       .flatMap((workspace) => store.listSessions(workspace.id))
       .find((s) => s.name === name);
     if (!session) throw new Error(`No Session named ${name}`);
-    return session.id;
+    return session;
   } finally {
     store.close();
   }
@@ -519,11 +563,11 @@ export interface Kbench {
   /** Starts the server again on the same address, data folder and tmux socket. */
   startServer(): Promise<void>;
   /**
-   * Rings the terminal bell in the named Session's shell, with no browser involved, once no
-   * terminal is viewing it (one that just moved to another Session can take a moment to let
-   * go). Works while the server is stopped too.
+   * Rings the terminal bell in the named Session (of the named Workspace, when given), with
+   * no browser involved, once no terminal is viewing it (one that just moved to another
+   * Session can take a moment to let go). Works while the server is stopped too.
    */
-  ringBell(sessionName: string): Promise<void>;
+  ringBell(sessionName: string, workspaceName?: string): Promise<void>;
 }
 
 interface Fixtures {
@@ -545,13 +589,18 @@ export const test = base.extend<Fixtures>({
       await use({
         instance,
         url: server.baseUrl,
-        ringBell: async (sessionName) => {
-          const id = sessionIdNamed(instance, sessionName);
+        ringBell: async (sessionName, workspaceName) => {
+          const session = sessionNamed(instance, sessionName, workspaceName);
           const socket = instance.config.tmuxSocket;
-          await pollUntil(() => attachedClientCount(socket, id) === 0, {
+          await pollUntil(() => attachedClientCount(socket, session.id) === 0, {
             description: `no terminal to be viewing ${sessionName}`,
           });
-          typeIntoSession(socket, id, "printf '\\a'");
+          // A Claude Session runs the stub, which rings when told `bell`.
+          typeIntoSession(
+            socket,
+            session.id,
+            session.kind === "claude" ? "bell" : "printf '\\a'",
+          );
         },
         stopServer: () => server.stop(),
         startServer: async () => {
