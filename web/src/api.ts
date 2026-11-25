@@ -7,6 +7,8 @@ export interface DirectoryListing {
   path: string;
   parent?: string;
   directories: Array<{ name: string; path: string }>;
+  /** The picker root (Home), which the folder picker shows among its Places. */
+  root: string;
 }
 
 export class ApiError extends Error {

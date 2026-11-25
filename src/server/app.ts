@@ -35,15 +35,16 @@ function optionalString(value: unknown): string | undefined {
 export function createApp(
   service: Service,
   options: {
+    /** The folder picker's root: Home. */
+    pickerRoot: string;
     webDir?: string;
-    pickerRoot?: string;
     /**
      * Called after every request that changed something, so open clients hear about it.
      * Returns the state revision from which the change shows; the response carries it in
      * the `State-Revision` header, so the client that made the change can wait for it.
      */
     onMutation?: () => number;
-  } = {},
+  },
 ): Hono {
   const app = new Hono();
 
@@ -78,10 +79,9 @@ export function createApp(
   // the picker root (Home), which the picker shows among its Places.
   app.get("/api/directories", (c) => {
     const root = options.pickerRoot;
-    const path = c.req.query("path") || (root && service.pickerStart(root));
-    if (!path) throw new ServiceError("invalid", "path is required");
+    const path = c.req.query("path") || service.pickerStart(root);
     try {
-      return c.json({ ...listDirectories(path), ...(root ? { root } : {}) });
+      return c.json({ ...listDirectories(path), root });
     } catch (error) {
       if (error instanceof DirectoryError) {
         throw new ServiceError("invalid", error.message);

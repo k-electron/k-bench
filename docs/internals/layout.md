@@ -44,6 +44,7 @@ The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases 
 - `src/App.tsx` is the shell.
 - `src/components/` holds:
   - `Sidebar`, `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`;
+  - `FolderPicker`, the folder picker both New Workspace and Change folder use: Places, breadcrumbs, a filter and one folder's subfolders, each marked with the Workspace it holds, if any. It opens where `GET /api/directories` without a path says, and on a phone its dialog is a full-screen sheet with Places as chips. Its path helpers, Places ranking and breadcrumbs are pure functions in `src/folders.ts`;
   - `NewClaudeDialog`, the New Claude… dialog (it loads the last-used Launch options when it opens);
   - `WorkspaceRow`, a sortable Workspace row with its menu;
   - `SessionRow`, `BellBadge` and `ClaudeGlyph`;

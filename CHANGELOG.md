@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- **New Workspace** and **Change folder** pick the folder with a proper folder picker instead of a pasted path or the bare **Browse folders** list. It opens in the folder your newest Workspace is in (or Home), shows one folder's subfolders at a time with breadcrumbs above them and a **Filter** box, and lists **Places**: Home, the folders that hold your Workspaces (most Workspaces first, up to five) and Computer. A folder that already has a Workspace is marked with its name, and the Workspace's name follows the folder you pick until you type your own. On a phone the picker fills the screen, with Places as a row of chips.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

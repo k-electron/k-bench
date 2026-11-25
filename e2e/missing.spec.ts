@@ -39,7 +39,7 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
 
   const restored = kbench.instance.makeFolder("restored");
   await app.workspaceAction("project", "Change folder");
-  await app.page.getByRole("textbox", { name: "Folder path" }).fill(restored);
+  await app.pickFolder(restored);
   await app.page.getByRole("button", { name: "Save" }).click();
 
   await expect(app.missingNotice("project")).toHaveCount(0);

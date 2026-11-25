@@ -6,7 +6,7 @@ Open the URL that `k-bench install` printed. The sidebar lists your Workspaces a
 
 A **Workspace** is a named entry that points at a project folder on your Mac. A **Session** is a named, persistent program inside a Workspace, started in that Workspace's folder: your shell, or, for a **Claude Session**, Claude Code itself.
 
-**Create a Workspace.** Choose **New Workspace**, then paste the path of a project folder on your Mac or choose **Browse folders** to pick it. The name defaults to the folder's name; give it another one if you like. Several Workspaces may point at the same folder.
+**Create a Workspace.** Choose **New Workspace** and pick a project folder on your Mac. The picker opens in the folder your newest Workspace is in (Home when you have none) and shows one folder's subfolders at a time: choose a subfolder to step into it, a breadcrumb above the list to step back up, or type in **Filter** to narrow a long list. **Places**, on the left (a row of chips on a phone), jumps to Home, to the folders that hold your Workspaces (the ones holding most first, up to five) or to Computer, the top of the disk. A folder that already has a Workspace shows that Workspace's name. The folder shown is the one you get. The name defaults to the folder's name, shown greyed in the **Name** box; type another one if you like. Several Workspaces may point at the same folder. **Change folder** in a Workspace's menu uses the same picker.
 
 **Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the Focused Pane and starts in the Workspace's folder.
 
