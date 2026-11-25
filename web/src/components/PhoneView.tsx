@@ -21,21 +21,18 @@ function BellDot({ label, className }: { label: string; className?: string }) {
 /** The phone's Menu button, which opens the drawer, with a dot for a Bell in another Workspace. */
 export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => void }) {
   return (
-    <Button
-      className="relative ml-2"
-      variant="ghost"
-      size="sm"
-      aria-label="Menu"
-      onClick={onOpen}
-    >
-      <MenuIcon />
+    // The dot sits beside the button rather than in it, so its label stays its own.
+    <span className="relative ml-2 inline-flex">
+      <Button variant="ghost" size="sm" aria-label="Menu" onClick={onOpen}>
+        <MenuIcon />
+      </Button>
       {view.bellElsewhere && (
         <BellDot
           label="A session in another workspace rang the bell"
-          className="absolute top-1 right-1.5 ring-2 ring-background"
+          className="pointer-events-none absolute top-1 right-1.5 ring-2 ring-background"
         />
       )}
-    </Button>
+    </span>
   );
 }
 
