@@ -1,5 +1,4 @@
 import {
-  Columns2Icon as ColumnsIcon,
   MoreHorizontalIcon,
   PencilIcon,
   RotateCcwIcon,
@@ -24,21 +23,16 @@ import {
 
 export interface SessionRowProps {
   session: SessionState;
+  /** It is on screen, in a Pane. */
   isOpen: boolean;
   onOpen: () => void;
-  onOpenInOtherPane: () => void;
 }
 
 /**
  * One Session in the sidebar: the row to open it, plus its row menu. To add a menu action,
  * add a `DropdownMenuItem` below (and any dialog it needs beside the existing ones).
  */
-export function SessionRow({
-  session,
-  isOpen,
-  onOpen,
-  onOpenInOtherPane,
-}: SessionRowProps) {
+export function SessionRow({ session, isOpen, onOpen }: SessionRowProps) {
   const actions = useActions();
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -64,8 +58,7 @@ export function SessionRow({
           session.status === "stopped" && "text-muted-foreground",
         )}
         aria-current={isOpen ? "true" : undefined}
-        // ⌘-click opens it in the other Pane.
-        onClick={(event) => (event.metaKey ? onOpenInOtherPane() : onOpen())}
+        onClick={onOpen}
       >
         <TerminalIcon />
         <span className="truncate">{session.name}</span>
@@ -87,10 +80,6 @@ export function SessionRow({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onOpenInOtherPane}>
-            <ColumnsIcon />
-            Open in other pane
-          </DropdownMenuItem>
           {session.status === "stopped" && (
             <DropdownMenuItem onSelect={() => void actions.restartSession(session.id)}>
               <RotateCcwIcon />

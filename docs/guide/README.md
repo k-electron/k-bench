@@ -20,7 +20,7 @@ New here? Follow the [quick start in the README](../../README.md#quick-start), t
 - **Launch options**: the model, effort, advisor and Focus view a Claude Session starts with. They are fixed for its life.
 - **Stopped**: a Session whose program is gone, because it exited or because you logged out of the Host or restarted it. You can restart it in the same folder: a shell starts fresh, and a Claude Session resumes its conversation.
 - **Missing**: a Workspace whose folder no longer exists on the Host.
-- **Pane** and **Focused Pane**: one of up to two side-by-side slots that each show a Session, and the one that opening a Session from the sidebar goes to.
+- **Pane**: one of two side-by-side slots on a desktop or tablet. The left one always shows the Prime, and the right one the Worker or another Session you opened there. A phone has a single Pane.
 - **Bell**: a mark on a Session that asks for your attention. It appears when the program in the Session rings the terminal bell, and clears once you view the Session.
 
 [GLOSSARY.md](../../GLOSSARY.md) has the full definitions.

@@ -4,7 +4,7 @@ import { TerminalView } from "./TerminalView";
 
 interface PaneProps {
   session: SessionState;
-  /** Whether this is in the Focused Pane. */
+  /** Whether its terminal should have the keyboard. */
   focused: boolean;
 }
 

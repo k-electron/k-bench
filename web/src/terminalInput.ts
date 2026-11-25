@@ -18,7 +18,7 @@ interface RegisteredTerminal {
 let registered: RegisteredTerminal | null = null;
 
 /**
- * Registers the terminal that extra keys go to (the one in the Focused Pane), how to take
+ * Registers the terminal that extra keys go to (the one on screen), how to take
  * keyboard focus off it, and how to end the line Smart typing mirrors: every Extra key is a
  * key that isn't text, so it ends that line.
  */

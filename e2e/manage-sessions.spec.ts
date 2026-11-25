@@ -58,7 +58,7 @@ test("deleting a Session asks for confirmation, and cancelling keeps it", async 
   await app.runMarker(app.terminal("session 1"), "kb-still-here-8841");
 });
 
-test("confirming the deletion removes the Session and empties its Pane", async ({
+test("confirming the deletion removes the Session and its terminal", async ({
   app,
   kbench,
 }) => {

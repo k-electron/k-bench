@@ -1,20 +1,22 @@
-import { Columns2Icon, MenuIcon } from "lucide-react";
+import { MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
-import { PaneArea } from "@/components/PaneArea";
-import { PaneLabels } from "@/components/PaneLabels";
+import { PhonePane, PhonePaneLabel } from "@/components/PhonePane";
 import { Sidebar } from "@/components/Sidebar";
 import { TypingKeys } from "@/components/TypingKeys";
 import { Button } from "@/components/ui/button";
+import { WorkspaceView } from "@/components/WorkspaceView";
 import { cn } from "@/lib/utils";
 import { ActionsProvider, useAppState } from "./useAppState";
 import { useIsPhone } from "./useIsPhone";
 import { useKeyboardUp } from "./useKeyboardUp";
-import { usePaneView } from "./usePaneView";
+import { usePhonePane } from "./usePhonePane";
+import { useWorkspaceView } from "./workspaceView";
 
 /**
- * The app shell. On desktop, the sidebar beside the main view (one or two Panes). On a
- * phone, one Pane filling the screen, the sidebar in a slide-out drawer, and the extra keys.
+ * The app shell. On a desktop or tablet, the sidebar beside the Open Workspace's two Panes.
+ * On a phone, one Pane filling the screen, the sidebar in a slide-out drawer, and the
+ * extra keys.
  */
 export function App() {
   const { state, actions, error } = useAppState();
@@ -22,7 +24,9 @@ export function App() {
   // With the on-screen keyboard up the app fits the space above it, minus the header and
   // the Extra keys row, which a compact overlay on the terminal replaces.
   const keyboardUp = useKeyboardUp(phone);
-  const panes = usePaneView(state, phone);
+  // Both run whatever the size, so resizing the window keeps each one's state.
+  const view = useWorkspaceView(state, actions);
+  const phonePane = usePhonePane(state);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerShown = phone && drawerOpen;
   useEffect(() => {
@@ -33,6 +37,15 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [drawerShown]);
+
+  /** Shows a new Other Session, once it is in state. */
+  const openCreated = (workspaceId: string, id: string | undefined) => {
+    if (id === undefined) return;
+    if (phone) phonePane.open(id);
+    else view.openOtherSession(workspaceId, id);
+    setDrawerOpen(false);
+  };
+  const phoneSessionId = phonePane.sessionId;
 
   return (
     <ActionsProvider value={actions}>
@@ -58,81 +71,74 @@ export function App() {
             phone && !drawerOpen && "invisible -translate-x-full",
           )}
           state={state}
-          openId={panes.focusedSessionId}
-          onOpen={(id) => {
-            panes.openInFocusedPane(id);
+          shown={phone ? new Set(phoneSessionId ? [phoneSessionId] : []) : view.shown}
+          onOpenSession={(workspaceId, session) => {
+            if (phone) phonePane.open(session.id);
+            else view.chooseSession(workspaceId, session);
             setDrawerOpen(false);
           }}
-          onOpenInOtherPane={panes.openInOtherPane}
+          onOpenWorkspace={(workspaceId) =>
+            phone
+              ? void actions.openWorkspace(workspaceId)
+              : view.openWorkspace(workspaceId)
+          }
           onCreateSession={async (workspaceId) => {
-            // Resolves once the new Session is in state, so the Pane knows it.
-            const id = await actions.createSession(workspaceId);
-            if (id === undefined) return;
-            panes.openInFocusedPane(id);
-            setDrawerOpen(false);
+            openCreated(workspaceId, await actions.createSession(workspaceId));
           }}
           onCreateClaudeSession={async (workspaceId, input) => {
             // A refusal rejects, so the dialog can show it; it stays open.
-            const id = await actions.createClaudeSession(workspaceId, input);
-            if (id === undefined) return;
-            panes.openInFocusedPane(id);
-            setDrawerOpen(false);
+            openCreated(
+              workspaceId,
+              await actions.createClaudeSession(workspaceId, input),
+            );
           }}
           error={error}
         />
         <main className="flex min-w-0 flex-1 flex-col">
           {!keyboardUp && (
-            <div className="relative flex h-9 shrink-0 items-center border-b">
-              {phone && (
-                <Button
-                  className="ml-2"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Menu"
-                  onClick={() => setDrawerOpen(true)}
-                >
-                  <MenuIcon />
-                </Button>
-              )}
-              {/* On a phone the labels start after the Menu button; on desktop they span the
-                  bar, over the Panes' own columns, with the toggle on top at the right. */}
-              <PaneLabels
-                panes={panes.panes}
-                paneCount={panes.paneCount}
-                ratio={panes.ratio}
-                className={phone ? "flex-1" : "absolute inset-0"}
-              />
-              {!phone && (
-                <Button
-                  className="relative mr-2 ml-auto"
-                  variant={panes.paneCount === 2 ? "secondary" : "ghost"}
-                  size="sm"
-                  aria-label="Two panes"
-                  aria-pressed={panes.paneCount === 2}
-                  onClick={panes.togglePaneCount}
-                >
-                  <Columns2Icon />
-                </Button>
+            <div className="flex h-9 shrink-0 items-center border-b">
+              {phone ? (
+                <>
+                  <Button
+                    className="ml-2"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Menu"
+                    onClick={() => setDrawerOpen(true)}
+                  >
+                    <MenuIcon />
+                  </Button>
+                  <PhonePaneLabel content={phonePane.content} />
+                </>
+              ) : (
+                view.workspace && (
+                  <h1
+                    className="min-w-0 truncate px-3 text-sm font-medium"
+                    title={view.workspace.folder}
+                  >
+                    {view.workspace.name}
+                  </h1>
+                )
               )}
             </div>
           )}
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <PaneArea
-              panes={panes.panes}
-              paneCount={panes.paneCount}
-              ratio={panes.ratio}
-              emptyMessage={
-                state?.workspaces.length === 0
-                  ? "Create a Workspace to get started."
-                  : "Select a Session."
-              }
-              onFocus={panes.focusPane}
-              onResize={panes.setRatio}
-            />
-            {keyboardUp && panes.focusedSessionId && <TypingKeys />}
+            {phone ? (
+              <PhonePane
+                content={phonePane.content}
+                emptyMessage={
+                  state?.workspaces.length === 0
+                    ? "Create a Workspace to get started."
+                    : "Select a Session."
+                }
+              />
+            ) : (
+              state && <WorkspaceView view={view} />
+            )}
+            {keyboardUp && phoneSessionId && <TypingKeys />}
           </div>
-          {phone && !keyboardUp && panes.focusedSessionId && (
-            <ExtraKeys sessionId={panes.focusedSessionId} />
+          {phone && !keyboardUp && phoneSessionId && (
+            <ExtraKeys sessionId={phoneSessionId} />
           )}
         </main>
       </div>

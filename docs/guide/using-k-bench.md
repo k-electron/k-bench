@@ -1,6 +1,6 @@
 # Using k-bench
 
-Open the URL that `k-bench install` printed. The sidebar lists your Workspaces and their Sessions, and the main area shows your Sessions' terminals.
+Open the URL that `k-bench install` printed. The sidebar lists your Workspaces and their Sessions, and the main area shows the Open Workspace: its Prime and, beside it, its Worker.
 
 ## Workspaces and Sessions
 
@@ -12,9 +12,9 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Its Prime and Worker.** Every new Workspace comes with two Claude Sessions, the **Prime** and the **Worker**, made with it and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, for planning, and the Worker runs Sonnet at high effort with an Opus advisor, for doing the work, both in Focus view. They're passed again on every launch. Both start out Stopped. **Opening the Workspace**, by clicking its name in the sidebar, starts them: the first start begins each one's Claude conversation, and opening it again later starts a Stopped one again, resuming its conversation. One that is already running is left alone. If you quit one (`/exit`) or it crashes, it stays Stopped until you open the Workspace again or choose **Restart** from its **...** menu; k-bench never restarts it by itself. A Missing Workspace starts nothing when opened, and its Prime and Worker start as soon as you change its folder to one that exists.
 
-**The Open Workspace** is the one you last opened, on any device: k-bench keeps it on your Mac, so your phone and your laptop agree on it. Until you open one, it's the first Workspace in your order, and deleting it makes the first one open. They're always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
+**The Open Workspace** is the one you last opened, on any device: k-bench keeps it on your Mac, so your phone and your laptop agree on it, and opening another on one device switches the others too. Loading k-bench opens it, so its Stopped Prime and Worker start when you arrive. Until you open one, it's the first Workspace in your order, and deleting it makes the first one open. Clicking a Session of another Workspace in the sidebar opens that Workspace too. They're always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
 
-**Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the Focused Pane and starts in the Workspace's folder.
+**Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the right Pane and starts in the Workspace's folder.
 
 - **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
 - **New Claude…** opens a dialog where you choose a name (optional), the model, the effort, the advisor and Focus view, then launches a Claude Session. It runs Claude Code itself, and the sidebar marks it with a small orange glyph. A blank name gives "session N" too. [Using k-bench with Claude Code](claude-code.md) explains the dialog.
@@ -24,7 +24,7 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 **Manage them.** Each row has a **...** menu.
 
 - A Workspace's menu has **Rename**, **Change folder** and **Delete**. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace by its grip to reorder it (on a phone, press and hold first), and use the chevron to collapse it.
-- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. The Prime's and Worker's menus have no **Rename** or **Delete**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
+- A Session's menu has **Rename**, **Delete** and, for a Stopped Session, **Restart**. The Prime's and Worker's menus have no **Rename** or **Delete**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
 
 A green dot next to a Session means its program is running. A hollow dot means it is Stopped.
 
@@ -62,16 +62,17 @@ To fix it, open the Workspace's **...** menu, choose **Change folder** and point
 
 ![Two Panes: a shell on the left and a dev server on the right](../images/desktop.png)
 
-On a wide screen the main area shows one or two **Panes**, side by side, each showing one Session.
+On a desktop or tablet (768 pixels wide and up) the main area belongs to the **Open Workspace** and shows two **Panes** side by side.
 
-- Turn the second Pane on and off with the **Two panes** button at the top right.
-- A label at the top of each Pane's column, `Workspace › Session`, says which Session the Pane shows. A long one is cut off with `…` at about two thirds of the Pane's width. With two Panes the Focused Pane's label is bright and the other is dimmed. The browser tab is titled after the Focused Pane's Session, as `Session · Workspace — k-bench`.
-- The **Focused Pane** is the one that opening a Session from the sidebar goes to, and the one that receives your keystrokes. With two Panes it has a bright line along its top edge. Click in a Pane to focus it, or press `⌘\` to move focus to the other one.
-- Click a Session to open it in the Focused Pane. To open it in the other Pane, hold `⌘` while you click it, or use **Open in other pane** in its menu. If only one Pane is showing, this turns the second on.
-- A Session can't be in both Panes. Opening one that is already in the other Pane swaps them.
+- The **left Pane** always shows the Workspace's Prime, under a slim label reading "Prime".
+- The **right Pane** shows its Worker, or another of its Sessions that you opened there. Its label names the Session it shows.
+- Click an Other Session in the sidebar to show it in the right Pane, and click the Worker to bring the Worker back. Clicking the Prime puts your keystrokes in the left Pane.
+- Clicking the Workspace's name brings back Prime with Worker.
+- The top bar shows the Workspace's name, with its folder as a tooltip, and the browser tab reads `Workspace — k-bench`.
+- Sessions on screen are highlighted in the sidebar. Only those two have a terminal open, so any other Session can raise a [Bell](#bells).
 - Drag the divider between the Panes to resize them. If you focus the divider you can also move it with the left and right arrow keys.
 
-Your layout is remembered per browser, so your phone and your laptop can differ. A narrow screen always has a single Pane (see [the phone layout](#the-phone-layout)).
+A narrow screen has a single Pane instead (see [the phone layout](#the-phone-layout)).
 
 ## Bells
 
@@ -105,7 +106,7 @@ On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-be
 ![The phone drawer listing Workspaces and Sessions](../images/phone-drawer.png)
 
 - The **drawer** holds your Workspaces and Sessions. Open it with the menu button at the top left. Choosing a Session closes it and shows that Session. Tap outside it to close it without choosing.
-- The **Pane** shows the Session you opened last, and its `Workspace › Session` label sits beside the menu button.
+- The **Pane** shows the Session you opened last on this phone, from any Workspace, and its `Workspace › Session` label sits beside the menu button.
 
 ![A phone Session with the extra keys along the bottom](../images/phone-terminal.png)
 

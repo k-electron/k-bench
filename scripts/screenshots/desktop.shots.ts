@@ -1,7 +1,8 @@
-// Desktop: two Panes side by side, then the same scene after a Session rings its Bell.
+// Desktop: the Open Workspace with a shell in the right Pane, then the same scene after a
+// Session rings its Bell. The left Pane holds the Prime, which runs the test stub here.
 import { expect, test } from "./fixtures.ts";
 
-test("desktop with two Panes, and a Session that rang the Bell", async ({
+test("desktop with a Session in the right Pane, and a Session that rang the Bell", async ({
   app,
   kbench,
   demo,
@@ -12,21 +13,16 @@ test("desktop with two Panes, and a Session that rang the Bell", async ({
   await expect(app.session("tests")).toBeVisible();
 
   await app.session("main").click();
-  await app.session("dev server").click({ modifiers: ["Meta"] });
-  const left = app.terminalIn(1, "main");
-  const right = app.terminalIn(2, "dev server");
-  await expect(left).toBeVisible();
+  const right = app.terminalIn("right", "main");
   await expect(right).toBeVisible();
 
-  await app.runMarker(left, "shellready");
+  await app.runMarker(right, "shellready");
   await app.runCommand(
-    left,
+    right,
     "clear; git log --oneline; ls -lg src; cat package.json",
     '"version": "1.4.0"',
   );
-  await app.runMarker(right, "shellready");
-  await app.runCommand(right, "clear; dev-server", "GET /about");
-  await expect(left).toContainText("orders.ts");
+  await expect(right).toContainText("orders.ts");
 
   await demo.shoot("desktop.png");
 

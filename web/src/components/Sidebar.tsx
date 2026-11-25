@@ -17,7 +17,11 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
 import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
-import type { State, WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import type {
+  SessionState,
+  State,
+  WorkspaceState,
+} from "../../../src/shared/state-protocol.ts";
 import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { EditWorkspaceDialog, type WorkspaceEdit } from "./EditWorkspaceDialog";
 import { NewClaudeDialog } from "./NewClaudeDialog";
@@ -27,10 +31,12 @@ import { WorkspaceRow } from "./WorkspaceRow";
 
 interface SidebarProps {
   state: State | undefined;
-  /** The Session in the Focused Pane. */
-  openId: string | undefined;
-  onOpen: (sessionId: string) => void;
-  onOpenInOtherPane: (sessionId: string) => void;
+  /** The Sessions on screen, highlighted. */
+  shown: ReadonlySet<string>;
+  /** A Session row was chosen. */
+  onOpenSession: (workspaceId: string, session: SessionState) => void;
+  /** A Workspace's name was chosen. */
+  onOpenWorkspace: (workspaceId: string) => void;
   /** Creates a Session and opens it. */
   onCreateSession: (workspaceId: string) => Promise<void>;
   /** Launches a Claude Session and opens it; rejects with the server's refusal. */
@@ -45,14 +51,14 @@ interface SidebarProps {
 }
 
 /**
- * The tree of Workspaces and their Sessions. Opening a Session is up to the caller; every
- * other action comes from `useActions`.
+ * The tree of Workspaces and their Sessions. Opening a Workspace or a Session is up to the
+ * caller; every other action comes from `useActions`.
  */
 export function Sidebar({
   state,
-  openId,
-  onOpen,
-  onOpenInOtherPane,
+  shown,
+  onOpenSession,
+  onOpenWorkspace,
   onCreateSession,
   onCreateClaudeSession,
   error,
@@ -103,7 +109,7 @@ export function Sidebar({
                 workspace={workspace}
                 onCreateSession={() => void onCreateSession(workspace.id)}
                 onCreateClaude={() => setLaunching(workspace)}
-                onOpen={() => void actions.openWorkspace(workspace.id)}
+                onOpen={() => onOpenWorkspace(workspace.id)}
                 onAction={(action) => setDialog({ workspace, action })}
               >
                 <ul>
@@ -111,9 +117,8 @@ export function Sidebar({
                     <li key={session.id}>
                       <SessionRow
                         session={session}
-                        isOpen={session.id === openId}
-                        onOpen={() => onOpen(session.id)}
-                        onOpenInOtherPane={() => onOpenInOtherPane(session.id)}
+                        isOpen={shown.has(session.id)}
+                        onOpen={() => onOpenSession(workspace.id, session)}
                       />
                     </li>
                   ))}
