@@ -8,6 +8,8 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Create a Workspace.** Choose **New Workspace** and pick a project folder on your Mac. The picker opens in the folder your newest Workspace is in (Home when you have none) and shows one folder's subfolders at a time: choose a subfolder to step into it, a breadcrumb above the list to step back up, or type in **Filter** to narrow a long list. **Places**, on the left (a row of chips on a phone), jumps to Home, to the folders that hold your Workspaces (the ones holding most first, up to five) or to Computer, the top of the disk. A folder that already has a Workspace shows that Workspace's name. The folder shown is the one you get. The name defaults to the folder's name, shown greyed in the **Name** box; type another one if you like. A folder has at most one Workspace, so a project never gets two sets of Claudes editing the same files: choosing Create on a folder that already has one says "A Workspace for this folder already exists", naming it, and takes you there instead, making it the Open Workspace. Changing a Workspace's folder to one that another Workspace has is refused with a message naming that Workspace, and the folder stays as it was. **Change folder** in a Workspace's menu uses the same picker, opening at the Workspace's own folder, and **Save** stays off until you pick a different one.
 
+**Type or paste a path.** Click or tap the breadcrumb bar (anywhere past the last crumb) and it turns into a path field, like a file manager's address bar. `~` is Home. As you type, it suggests the folders inside the one you've typed so far; **Tab** completes the highlighted suggestion (the first, unless you pick another with the arrow keys), and tapping one does the same. **Enter** goes to the path you typed and turns the field back into breadcrumbs. It never makes anything: any part of the path that doesn't exist becomes new folders, just as if you'd made them with **New folder** below. Hidden folders (names starting with `.`) stay out of the list, but once you type a `.` the suggestions include them, greyed out. **Escape**, or clicking away, leaves the field without moving.
+
 **Make a new folder for it.** For a new project, choose **New folder** in the picker and type its name; Enter steps into it, and another **New folder** there goes a level deeper. Folders that don't exist yet are shown in italics, in the breadcrumbs and in the path under the list, and the list inside one says it doesn't exist yet. Nothing is made on disk until you choose Create, whose button counts them ("Create 2 folders and Workspace"); tapping an earlier breadcrumb drops the new folders after it. A name that already exists just opens that folder. If a folder can't be made (a file is in the way, say), the message names it, no Workspace is created, and any folders already made stay. **Change folder** can make new folders the same way.
 
 **Its Prime and Worker.** Every new Workspace comes with two Claude Sessions, the **Prime** and the **Worker**, made with it and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, for planning, and the Worker runs Sonnet at high effort with an Opus advisor, for doing the work, both in Focus view. They're passed again on every launch. Both start out Stopped. **Opening the Workspace**, by clicking its name in the sidebar, starts them: the first start begins each one's Claude conversation, and opening it again later starts a Stopped one again, resuming its conversation. One that is already running is left alone. If you quit one (`/exit`) or it crashes, it stays Stopped until you open the Workspace again or choose **Restart** from its **...** menu; k-bench never restarts it by itself. A Missing Workspace starts nothing when opened, and its Prime and Worker start as soon as you change its folder to one that exists.
@@ -43,7 +45,7 @@ Every open tab shows changes at once, so a Session you create on your phone appe
 
 A Session is Stopped when its program no longer exists. That happens when the program exits (you type `exit` in a shell, or quit Claude Code in a Claude Session), and it happens when you log out of your Mac or restart it, because that ends every program in your login session.
 
-After a logout or a restart, k-bench comes back on its own when you log in again. Everything is still listed: every Workspace and every Session. The Sessions show Stopped, and you restart each one yourself: open its **...** menu and choose **Restart**. The Session keeps its name and folder, and what it starts depends on its kind:
+After a logout or a restart, k-bench comes back on its own when you log in again. Everything is still listed: every Workspace and every Session. The Sessions show Stopped, and you restart each one yourself: open its **...** menu and choose **Restart**, or, when it's in a Pane, press the **Restart** button that Pane shows in place of its terminal. Opening the Workspace restarts its Prime and Worker for you. The Session keeps its name and folder, and what it starts depends on its kind:
 
 - A shell Session gets a fresh shell. What was running in the old shell is gone, so a dev server needs starting again, and so does a Claude Code you started by hand: bring that conversation back with Claude Code's own `/resume`.
 - A Claude Session resumes its Claude conversation, with the same Launch options it was created with, and needs no `/resume`. See [Quitting, errors and restarting](claude-code.md#quitting-errors-and-restarting).
@@ -63,7 +65,9 @@ What that means in practice:
 - Starting a new Session, or restarting a Stopped one (a Claude Session too), fails and the sidebar says "Folder does not exist".
 - Every other Workspace and Session keeps working.
 
-To fix it, open the Workspace, choose **Change folder** in the note (or in its **...** menu) and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
+A Pane whose Session isn't running says "This Workspace's folder is missing" instead of offering **Restart**, with a **Change folder** button, so you can fix it from there too.
+
+To fix it, open the Workspace and choose **Change folder**, in the note under its name, in its **...** menu or in a Pane, and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
 
 ## Panes
 
@@ -76,8 +80,17 @@ On a desktop or tablet (768 pixels wide and up) the main area belongs to the **O
 - Click an Other Session in the sidebar to show it in the right Pane, and click the Worker to bring the Worker back. Clicking the Prime puts your keystrokes in the left Pane.
 - Clicking the Workspace's name brings back Prime with Worker.
 - The top bar shows the Workspace's name, with its folder as a tooltip, and the browser tab reads `Workspace — k-bench`.
-- Sessions on screen are highlighted in the sidebar. Only those two have a terminal open, so any other Session can raise a [Bell](#bells).
-- Drag the divider between the Panes to resize them. If you focus the divider you can also move it with the left and right arrow keys.
+- Sessions on screen are highlighted in the sidebar. Only those have a terminal open, so any other Session can raise a [Bell](#bells).
+- Drag the divider between the Panes to resize them, anywhere you like. Double-click it for half and half. If you focus the divider you can also move it with the left and right arrow keys.
+
+### Shutting a Pane
+
+When the screen is tight, give one Claude the whole width by shutting the other Pane: drag the divider to within a few percent of an edge.
+
+- A shut Pane leaves a thin **rail** with its Session's icon and name, written vertically. Its terminal is closed, so its Session can raise a [Bell](#bells), which shows as an amber dot on the rail.
+- Click the rail to open the Pane again where the divider was before you shut it (half and half if you never moved it).
+- Opening something into a shut Pane opens it too: clicking the Prime reopens the left Pane, and clicking the Workspace's name, the Worker or an Other Session reopens the right one.
+- Where the divider sits, and which Pane is shut, are kept for each Workspace on this device only, so a laptop and an iPad can each be set up their own way. They survive a reload.
 
 A narrow screen has a single Pane instead (see [the phone layout](#the-phone-layout)).
 

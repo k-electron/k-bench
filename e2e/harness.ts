@@ -134,6 +134,38 @@ export class AppPage {
     await this.page.mouse.up();
   }
 
+  /** The divider's position: the left Pane's share of the width, in percent. */
+  async dividerPercent(): Promise<number> {
+    return Number(await this.divider.getAttribute("aria-valuenow"));
+  }
+
+  /** Drags the divider to a few pixels from the left or right edge, which shuts that Pane. */
+  async shutPane(side: "left" | "right"): Promise<void> {
+    const [divider, pane] = await Promise.all([
+      this.divider.boundingBox(),
+      this.pane(side).boundingBox(),
+    ]);
+    if (!divider || !pane) throw new Error(`The ${side} Pane is not open`);
+    const edge = side === "left" ? pane.x + 5 : pane.x + pane.width - 5;
+    await this.dragDivider(edge - (divider.x + divider.width / 2));
+  }
+
+  /** The rail a shut Pane leaves, which reopens it when clicked. */
+  rail(side: "left" | "right", sessionName: string): Locator {
+    return this.pane(side).getByRole("button", {
+      name: `Show ${sessionName}`,
+      exact: true,
+    });
+  }
+
+  /** The Bell dot on a shut Pane's rail; present only while its Session has a Bell. */
+  railBell(side: "left" | "right", sessionName: string): Locator {
+    return this.pane(side).getByRole("img", {
+      name: `${sessionName} rang the bell`,
+      exact: true,
+    });
+  }
+
   /** A Session's row, found only while it is running, or only while it is Stopped. */
   sessionStatus(name: string, status: "running" | "stopped"): Locator {
     return status === "stopped"

@@ -81,13 +81,16 @@ function send<T>(
  * Workspaces and Sessions reach the page.
  */
 export const api = {
-  /** Subfolders of `path`, or of the configured root when omitted. */
-  listDirectories: (path?: string) =>
-    get<DirectoryListing>(
-      path === undefined
-        ? "/api/directories"
-        : `/api/directories?path=${encodeURIComponent(path)}`,
-    ),
+  /**
+   * Subfolders of `path`, or of the picker's starting folder when omitted; hidden ones (a
+   * leading `.`) only with `hidden`.
+   */
+  listDirectories: (path?: string, { hidden = false }: { hidden?: boolean } = {}) => {
+    const query = new URLSearchParams();
+    if (path !== undefined) query.set("path", path);
+    if (hidden) query.set("hidden", "1");
+    return get<DirectoryListing>(`/api/directories?${query}`);
+  },
   createWorkspace: (input: {
     folder: string;
     name?: string;

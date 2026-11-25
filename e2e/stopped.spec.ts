@@ -66,3 +66,27 @@ test("restarting a Session whose folder is gone shows why and leaves it Stopped"
   await expect(app.sidebar.getByRole("alert")).toContainText("Folder does not exist");
   await expect(app.sessionStatus("session 1", "stopped")).toBeVisible();
 });
+
+test("a Prime that quits shows Restart in its Pane, and pressing it brings its terminal back", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  // Loading k-bench opens the Workspace, starting its Prime.
+  await page.reload();
+  const prime = app.terminalIn("left", "Prime");
+  await expect(prime).toContainText("claude-stub ready");
+  await app.runCommand(prime, "first message", "claude-stub heard: first message");
+
+  await page.keyboard.type("exit 0");
+  await page.keyboard.press("Enter");
+
+  const restart = app.pane("left").getByRole("button", { name: "Restart", exact: true });
+  await expect(restart).toBeVisible();
+  await restart.click();
+
+  await expect(restart).toHaveCount(0);
+  await expect(prime).toContainText("claude-stub ready");
+  await app.runCommand(prime, "second message", "claude-stub heard: second message");
+});
