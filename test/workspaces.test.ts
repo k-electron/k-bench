@@ -33,6 +33,27 @@ describe("the folder picker's directory listing", () => {
     expect(listing.directories[0]?.path).toBe(join(instance.root, "Alpha"));
   });
 
+  it("includes hidden folders only when asked to", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const projects = instance.makeFolder("projects");
+    mkdirSync(join(projects, ".secret"));
+    mkdirSync(join(projects, "app"));
+    instance.makeFolder(".hidden-at-home");
+    const names = async (query: string) =>
+      (
+        (await (await server.request(`/api/directories?${query}`)).json()) as {
+          directories: Array<{ name: string }>;
+        }
+      ).directories.map((d) => d.name);
+    const path = `path=${encodeURIComponent(projects)}`;
+
+    expect(await names(path)).toEqual(["app"]);
+    expect(await names(`${path}&hidden=1`)).toEqual([".secret", "app"]);
+    // Also where the picker opens, when no path is given.
+    expect(await names("hidden=1")).toContain(".hidden-at-home");
+  });
+
   it("starts at Home when there are no Workspaces, and names Home as the picker root", async () => {
     const instance = createTestInstance();
     const server = await instance.start();

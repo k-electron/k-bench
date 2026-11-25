@@ -40,6 +40,49 @@ export function folderNameProblem(name: string): string | undefined {
   return undefined;
 }
 
+/** `path` as the picker shows it: `~` for the picker root (Home) and inside it. */
+export function tildePath(path: string, root: string): string {
+  if (path === root) return "~";
+  return path.startsWith(`${root}/`) ? `~${path.slice(root.length)}` : path;
+}
+
+/**
+ * The absolute folder a typed path means: `~` is the picker root (Home), a path that isn't
+ * absolute is inside it, and `.` and `..` are followed.
+ */
+export function expandPath(text: string, root: string): string {
+  const typed = text.trim();
+  const [start, rest] =
+    typed === "~"
+      ? [root, ""]
+      : typed.startsWith("~/")
+        ? [root, typed.slice(2)]
+        : typed.startsWith("/")
+          ? ["/", typed]
+          : [root, typed];
+  return rest.split("/").reduce((path, name) => {
+    if (name === "" || name === ".") return path;
+    return name === ".." ? dirname(path) : join(path, name);
+  }, start);
+}
+
+/**
+ * A typed path split for completing it: `head` is the text up to its last `/`, `parent` the
+ * folder that names, and `partial` the name being typed in it.
+ */
+export function typedPath(
+  text: string,
+  root: string,
+): { head: string; parent: string; partial: string } {
+  const cut = text.lastIndexOf("/");
+  if (cut < 0) {
+    const home = text.trim() === "~";
+    return { head: home ? "~/" : "", parent: root, partial: home ? "" : text };
+  }
+  const head = text.slice(0, cut + 1);
+  return { head, parent: expandPath(head, root), partial: text.slice(cut + 1) };
+}
+
 /** `path` is `folder` or inside it. */
 export function isWithin(path: string, folder: string): boolean {
   return path === folder || path.startsWith(folder === "/" ? "/" : `${folder}/`);

@@ -81,7 +81,8 @@ export function createApp(
     const root = options.pickerRoot;
     const path = c.req.query("path") || service.pickerStart(root);
     try {
-      return c.json({ ...listDirectories(path), root });
+      const hidden = c.req.query("hidden") === "1";
+      return c.json({ ...listDirectories(path, { hidden }), root });
     } catch (error) {
       if (error instanceof DirectoryError) {
         throw new ServiceError("invalid", error.message);
