@@ -29,20 +29,18 @@ async function clear(terminal: TerminalClient): Promise<string> {
   );
 }
 
-/** Quits Claude Code, waits for the Session to be Stopped, and restarts it. */
+/**
+ * Quits Claude Code, waits for its Session to end, and restarts it. Nothing here reads the
+ * state, as no browser is viewing the Session: what the restart resumes was saved by k-bench
+ * following the conversation on its own.
+ */
 async function quitAndRestart(
   server: TestServer,
   sessionId: string,
   terminal: TerminalClient,
 ) {
   terminal.run("exit 0");
-  await pollUntil(
-    async () =>
-      (await server.state()).workspaces
-        .flatMap((w) => w.sessions)
-        .find((s) => s.id === sessionId)?.status === "stopped",
-    { description: "the Session to be Stopped" },
-  );
+  await terminal.waitForEnded();
   const response = await server.post(`/api/sessions/${sessionId}/restart`);
   expect(response.status).toBe(200);
   return server.openTerminal(sessionId);
@@ -58,9 +56,6 @@ describe("A Claude Session follows its conversation", () => {
     const moved = await clear(terminal);
     terminal.run("a first message, so the new conversation is saved");
     await terminal.waitForOutput("claude-stub heard:");
-    // A browser showing the sidebar reads the state, as this does. Without it the change is
-    // still followed, but the fake Claude Code could quit before k-bench got to it.
-    await server.state();
 
     const again = await quitAndRestart(server, claude.id, terminal);
 
@@ -98,7 +93,6 @@ describe("A Claude Session follows its conversation", () => {
     const terminal = await server.openTerminal(claude.id);
     await fakeClaudeArgs(terminal);
     const moved = await clear(terminal);
-    await server.state();
 
     const again = await quitAndRestart(server, claude.id, terminal);
 
@@ -109,7 +103,6 @@ describe("A Claude Session follows its conversation", () => {
     const movedAgain = await clear(again);
     again.run("a first message");
     await again.waitForOutput("claude-stub heard:");
-    await server.state();
     const third = await quitAndRestart(server, claude.id, again);
     expect(await fakeClaudeArgs(third)).toEqual(["--resume", movedAgain]);
   });
@@ -125,7 +118,6 @@ describe("A Claude Session follows its conversation", () => {
     await clear(terminal);
     terminal.run("a message in the second conversation");
     await terminal.waitForOutput("claude-stub heard: a message in the second");
-    await server.state();
 
     const again = await quitAndRestart(server, claude.id, terminal);
 
@@ -142,7 +134,6 @@ describe("A Claude Session follows its conversation", () => {
     const moved = await clear(terminal);
     terminal.run("a first message");
     await terminal.waitForOutput("claude-stub heard:");
-    await server.state();
 
     const again = await quitAndRestart(server, claude.id, terminal);
 
