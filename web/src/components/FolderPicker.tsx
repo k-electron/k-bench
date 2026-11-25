@@ -294,16 +294,29 @@ function PathBar({
   onChoose: (choice: FolderChoice) => void;
 }) {
   const [typing, setTyping] = useState(false);
+  const typeButton = useRef<HTMLButtonElement>(null);
+  // After Enter or Escape the focus comes back to the bar; after a click elsewhere it stays there.
+  const refocus = useRef(false);
+  const close = (returnFocus: boolean) => {
+    refocus.current = returnFocus;
+    setTyping(false);
+  };
+  useEffect(() => {
+    if (typing || !refocus.current) return;
+    refocus.current = false;
+    typeButton.current?.focus();
+  }, [typing]);
   if (typing) {
     return (
       <PathField
         choice={choice}
         root={root}
         onChoose={(next) => {
-          setTyping(false);
+          close(true);
           onChoose(next);
         }}
-        onCancel={() => setTyping(false)}
+        onEscape={() => close(true)}
+        onCancel={() => close(false)}
       />
     );
   }
@@ -319,6 +332,7 @@ function PathBar({
       />
       {/* The rest of the bar: clicking or tapping it turns the bar into the path field. */}
       <button
+        ref={typeButton}
         type="button"
         aria-label="Type a path"
         title="Type a path"
@@ -336,17 +350,20 @@ function PathBar({
  * greyed, once the name being typed starts with `.`). Tab completes the highlighted
  * suggestion, or the first; Enter goes to the typed path, or to a suggestion picked with the
  * arrow keys, and never makes anything: a part of the path that doesn't exist becomes new
- * folders. Escape, or leaving the field, goes back to the breadcrumbs unchanged.
+ * folders. Tab never leaves the field: pressed while the suggestions load, it completes once
+ * they arrive. Escape, or leaving the field, goes back to the breadcrumbs unchanged.
  */
 function PathField({
   choice,
   root,
   onChoose,
+  onEscape,
   onCancel,
 }: {
   choice: FolderChoice;
   root: string;
   onChoose: (choice: FolderChoice) => void;
+  onEscape: () => void;
   onCancel: () => void;
 }) {
   const [text, setText] = useState(() => {
@@ -356,10 +373,12 @@ function PathField({
   // Set only by the arrow keys, so Enter goes where was typed unless a suggestion was picked.
   const [highlight, setHighlight] = useState<number>();
   const [problem, setProblem] = useState<string>();
+  // A Tab pressed before the suggestions for what's typed have loaded.
+  const [tabWaiting, setTabWaiting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const problemId = useId();
-  useEscapeIn(input, onCancel);
+  useEscapeIn(input, onEscape);
 
   const { head, parent, partial } = typedPath(text, root);
   const { listing } = useDirectoryListing(parent, { hidden: partial.startsWith(".") });
@@ -375,7 +394,14 @@ function PathField({
     setText(next);
     setHighlight(undefined);
     setProblem(undefined);
+    setTabWaiting(false);
   };
+  if (tabWaiting && listing !== undefined) {
+    // The suggestions a waiting Tab was for have arrived: complete now.
+    const pick = suggestions[0];
+    if (pick) edit(`${head}${pick.name}/`);
+    else setTabWaiting(false);
+  }
   const complete = (name: string) => {
     edit(`${head}${name}/`);
     input.current?.focus();
@@ -396,7 +422,7 @@ function PathField({
           aria-label="Folder path"
           aria-autocomplete="list"
           aria-expanded={suggestions.length > 0}
-          aria-controls={listId}
+          aria-controls={suggestions.length > 0 ? listId : undefined}
           aria-activedescendant={
             highlight === undefined ? undefined : `${listId}-${highlight}`
           }
@@ -418,10 +444,12 @@ function PathField({
               event.preventDefault();
               const picked = highlight === undefined ? undefined : suggestions[highlight];
               go(picked ? join(parent, picked.name) : expandPath(text, root));
-            } else if (event.key === "Tab" && !event.shiftKey && count > 0) {
+            } else if (event.key === "Tab" && !event.shiftKey) {
+              // Tab never moves the focus on: leaving would drop what's typed.
               event.preventDefault();
               const pick = suggestions[tabTarget];
               if (pick) complete(pick.name);
+              else if (listing === undefined) setTabWaiting(true);
             } else if (event.key === "ArrowDown" && count > 0) {
               event.preventDefault();
               setHighlight((h) => (h === undefined ? 0 : (h + 1) % count));

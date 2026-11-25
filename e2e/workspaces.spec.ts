@@ -96,11 +96,14 @@ test("type a path in the picker: Tab completes a folder, Enter goes there, and a
   await expect(suggestion(".secret")).toBeVisible();
   await field.press("Backspace");
   await field.pressSequentially("bil");
+  await expect(suggestion("billing")).toBeVisible();
   await field.press("Tab");
+  await expect(field).toHaveValue("~/projects/billing/");
   await field.press("Enter");
 
   await expect(app.breadcrumb("billing")).toHaveAttribute("aria-current", "location");
   await expect(field).toHaveCount(0);
+  await expect(picker.getByRole("button", { name: "Type a path" })).toBeFocused();
 
   await picker.getByRole("button", { name: "Type a path" }).click();
   await field.fill("~/projects/billing/api/v2");
