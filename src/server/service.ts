@@ -142,6 +142,27 @@ export class Service {
     this.store.setWorkspaceOrder(ids);
   }
 
+  /**
+   * `ids` must be every Other Session of the Workspace exactly once, in the order the owner
+   * wants. The Prime and Worker always come first, so they are never in it.
+   */
+  reorderSessions(workspaceId: string, ids: string[]): void {
+    if (!this.store.getWorkspace(workspaceId)) {
+      throw new ServiceError("not_found", "Unknown Workspace");
+    }
+    const known = this.store
+      .listSessions(workspaceId)
+      .filter((session) => session.role === null)
+      .map((session) => session.id);
+    if (ids.length !== known.length || !known.every((id) => ids.includes(id))) {
+      throw new ServiceError(
+        "invalid",
+        "ids must list every Other Session of the Workspace exactly once",
+      );
+    }
+    this.store.setSessionOrder(workspaceId, ids);
+  }
+
   /** Ends the Workspace's shells first, then forgets it. The folder on disk is never touched. */
   async deleteWorkspace(id: string): Promise<void> {
     if (!this.store.getWorkspace(id))

@@ -123,6 +123,15 @@ export function createApp(
     return c.body(null, 204);
   });
 
+  app.put("/api/workspaces/:id/sessions/order", async (c) => {
+    const { ids } = await jsonBody(c.req.raw);
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "ids must be a list of Session ids");
+    }
+    service.reorderSessions(c.req.param("id"), ids);
+    return c.json({ ids });
+  });
+
   app.post("/api/workspaces/:id/sessions", async (c) => {
     const body = await jsonBody(c.req.raw);
     // `claude` makes it a Claude Session; its Launch options are checked before anything starts.

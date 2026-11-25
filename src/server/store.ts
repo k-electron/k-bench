@@ -50,6 +50,18 @@ const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX sessions_one_per_role ON sessions (workspace_id, role)
     WHERE role IS NOT NULL;
   `,
+  // A Session's place in the owner's order of its Workspace's Other Sessions (the Prime and
+  // Worker are listed first whatever theirs). Existing Sessions keep their creation order.
+  // The default keeps inserts that don't name a position working.
+  `
+  ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+  UPDATE sessions SET position = (
+    SELECT COUNT(*) FROM sessions earlier
+    WHERE earlier.workspace_id = sessions.workspace_id
+      AND (earlier.created_at < sessions.created_at
+        OR (earlier.created_at = sessions.created_at AND earlier.rowid < sessions.rowid))
+  );
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -176,12 +188,27 @@ export class Store {
     });
   }
 
+  /** Gives each of a Workspace's Sessions the position of its index in `ids`, in one transaction. */
+  setSessionOrder(workspaceId: string, ids: string[]): void {
+    const update = this.db.prepare(
+      "UPDATE sessions SET position = ? WHERE id = ? AND workspace_id = ?",
+    );
+    this.transaction(() => {
+      ids.forEach((id, index) => {
+        update.run(index, id, workspaceId);
+      });
+    });
+  }
+
+  /** The Prime, then the Worker, then the Other Sessions in the owner's order. */
   listSessions(workspaceId: string): SessionRow[] {
     const rows = this.db
       .prepare(
         `SELECT id, workspace_id AS workspaceId, name, kind, role,
                 conversation_id AS conversationId, launch_options AS launchOptions
-         FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid`,
+         FROM sessions WHERE workspace_id = ?
+         ORDER BY CASE role WHEN 'prime' THEN 0 WHEN 'worker' THEN 1 ELSE 2 END,
+                  position, rowid`,
       )
       .all(workspaceId) as unknown as RawSessionRow[];
     return rows.map(sessionRow);
@@ -252,11 +279,18 @@ export class Store {
     const launchOptions = conversationId === null ? null : (input.launchOptions ?? null);
     const kind = conversationId === null ? "shell" : "claude";
     const role = input.role ?? null;
+    // A new Session goes last in its Workspace's order.
+    const next = this.db
+      .prepare(
+        "SELECT COALESCE(MAX(position), -1) + 1 AS position FROM sessions WHERE workspace_id = ?",
+      )
+      .get(input.workspaceId) as { position: number };
     this.db
       .prepare(
         `INSERT INTO sessions
-           (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options,
+            position)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -267,6 +301,7 @@ export class Store {
         role,
         conversationId,
         launchOptions && JSON.stringify(launchOptions),
+        next.position,
       );
     return {
       id: input.id,
