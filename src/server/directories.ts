@@ -6,7 +6,7 @@ export interface DirectoryListing {
   path: string;
   /** Its parent folder, absent at the top of the filesystem. */
   parent?: string;
-  /** Its subfolders by name, hidden ones left out. */
+  /** Its subfolders by name; hidden ones (a leading `.`) only when asked for. */
   directories: Array<{ name: string; path: string }>;
 }
 
@@ -21,8 +21,14 @@ function isDirectory(path: string): boolean {
   }
 }
 
-/** The subfolders of `path`, for the folder picker. Symlinks to folders count as folders. */
-export function listDirectories(path: string): DirectoryListing {
+/**
+ * The subfolders of `path`, for the folder picker. Symlinks to folders count as folders.
+ * Hidden folders are left out unless `hidden` is set (for the path field's suggestions).
+ */
+export function listDirectories(
+  path: string,
+  { hidden = false }: { hidden?: boolean } = {},
+): DirectoryListing {
   if (!isAbsolute(path)) throw new DirectoryError(`Path must be absolute: ${path}`);
   const folder = resolve(path);
   if (!isDirectory(folder)) throw new DirectoryError(`Folder does not exist: ${folder}`);
@@ -33,7 +39,9 @@ export function listDirectories(path: string): DirectoryListing {
     throw new DirectoryError(`Cannot read folder: ${folder}`);
   }
   const directories = names
-    .filter((name) => !name.startsWith(".") && isDirectory(join(folder, name)))
+    .filter(
+      (name) => (hidden || !name.startsWith(".")) && isDirectory(join(folder, name)),
+    )
     .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }))
     .map((name) => ({ name, path: join(folder, name) }));
   const parent = dirname(folder);
