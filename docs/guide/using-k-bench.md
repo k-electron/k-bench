@@ -76,8 +76,17 @@ On a desktop or tablet (768 pixels wide and up) the main area belongs to the **O
 - Clicking the Workspace's name brings back Prime with Worker, and keeps the tabs.
 - The tabs, and which one is showing, are kept for each Workspace on your Mac, so switching Workspaces, reloading, or picking up another device brings back what you had.
 - The top bar shows the Workspace's name, with its folder as a tooltip, and the browser tab reads `Workspace — k-bench`.
-- Sessions on screen are highlighted in the sidebar. Only those two have a terminal open, so any other Session can raise a [Bell](#bells).
-- Drag the divider between the Panes to resize them. If you focus the divider you can also move it with the left and right arrow keys.
+- Sessions on screen are highlighted in the sidebar. Only those have a terminal open, so any other Session can raise a [Bell](#bells).
+- Drag the divider between the Panes to resize them, anywhere you like. Double-click it for half and half. If you focus the divider you can also move it with the left and right arrow keys.
+
+### Shutting a Pane
+
+When the screen is tight, give one Claude the whole width by shutting the other Pane: drag the divider to within a few percent of an edge.
+
+- A shut Pane leaves a thin **rail** with its Session's icon and name, written vertically. Its terminal is closed, so its Session can raise a [Bell](#bells), which shows as an amber dot on the rail.
+- Click the rail to open the Pane again where the divider was before you shut it (half and half if you never moved it).
+- Opening something into a shut Pane opens it too: clicking the Prime reopens the left Pane, and clicking the Workspace's name, the Worker or an Other Session reopens the right one.
+- Where the divider sits, and which Pane is shut, are kept for each Workspace on this device only, so a laptop and an iPad can each be set up their own way. They survive a reload.
 
 A narrow screen has a single Pane instead (see [the phone layout](#the-phone-layout)).
 

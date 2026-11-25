@@ -1,20 +1,50 @@
 import { type ReactNode, useRef } from "react";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
-import {
-  MAX_RATIO,
-  MIN_RATIO,
-  type PaneContent,
-  type Side,
-  type WorkspaceView as View,
-} from "../workspaceView";
+import type { PaneContent, Side, WorkspaceView as View } from "../workspaceView";
 import { MissingPane } from "./MissingPane";
 import { Pane } from "./Pane";
 import { RightPaneTabs } from "./RightPaneTabs";
 import { SessionIcon } from "./SessionIcon";
 
+/** How wide a shut Pane's rail is. */
+const RAIL = "28px";
+
 /** The CSS grid columns of the two Panes, with the divider's 6px between them. */
-function columns(ratio: number): string {
+function columns(ratio: number, shut: Side | null): string {
+  if (shut === "left") return `${RAIL} 6px minmax(0, 1fr)`;
+  if (shut === "right") return `minmax(0, 1fr) 6px ${RAIL}`;
   return `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`;
+}
+
+/**
+ * What a shut Pane leaves: a thin rail with its Session's icon, its name written
+ * vertically and a Bell dot. Its terminal is detached, so the Session can ring its Bell.
+ * Clicking it reopens the Pane.
+ */
+function Rail({ session, onOpen }: { session: SessionState; onOpen: () => void }) {
+  return (
+    <div className="relative h-full">
+      <button
+        type="button"
+        aria-label={`Show ${session.name}`}
+        title={`Show ${session.name}`}
+        onClick={onOpen}
+        className="flex h-full w-full flex-col items-center gap-2 bg-card py-3 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        <SessionIcon session={session} className="size-4" />
+        <span className="min-h-0 truncate" style={{ writingMode: "vertical-rl" }}>
+          {session.name}
+        </span>
+      </button>
+      {session.bell && (
+        <span
+          role="img"
+          aria-label={`${session.name} rang the bell`}
+          className="pointer-events-none absolute bottom-3 left-1/2 size-2 -translate-x-1/2 rounded-full bg-amber-400"
+        />
+      )}
+    </div>
+  );
 }
 
 /** The slim bar naming what a Pane shows. */
@@ -39,6 +69,8 @@ export function WorkspaceView({
   workspaces: WorkspaceState[];
 }) {
   const grid = useRef<HTMLDivElement>(null);
+  // Where the divider was when a drag began: a drag that shuts a Pane reopens it there.
+  const dragFrom = useRef(view.ratio);
 
   const { workspace } = view;
   if (!workspace) {
@@ -78,24 +110,33 @@ export function WorkspaceView({
       onFocusCapture={() => view.focusPane(side)}
       className="flex min-h-0 min-w-0 flex-col"
     >
-      <LabelBar>{label}</LabelBar>
-      <div className="min-h-0 flex-1">
-        {content.kind === "session" && body(side, content.session)}
-      </div>
+      {view.shut === side && content.kind === "session" ? (
+        <Rail session={content.session} onOpen={() => view.reopen(side)} />
+      ) : (
+        <>
+          <LabelBar>{label}</LabelBar>
+          <div className="min-h-0 flex-1">
+            {content.kind === "session" && body(side, content.session)}
+          </div>
+        </>
+      )}
     </div>
   );
 
+  const { left, right, ratio, shut } = view;
   const moveDivider = (clientX: number) => {
     const rect = grid.current?.getBoundingClientRect();
-    if (rect && rect.width > 0) view.setRatio((clientX - rect.left) / rect.width);
+    if (rect && rect.width > 0) {
+      view.setRatio((clientX - rect.left) / rect.width, dragFrom.current);
+    }
   };
+  const position = shut === "left" ? 0 : shut === "right" ? 1 : ratio;
 
-  const { left, right, ratio } = view;
   return (
     <div
       ref={grid}
       className="grid min-h-0 flex-1"
-      style={{ gridTemplateColumns: columns(ratio) }}
+      style={{ gridTemplateColumns: columns(ratio, shut) }}
     >
       {slot(
         "left",
@@ -110,24 +151,30 @@ export function WorkspaceView({
         role="separator"
         aria-label="Resize panes"
         aria-orientation="vertical"
-        aria-valuemin={Math.round(MIN_RATIO * 100)}
-        aria-valuemax={Math.round(MAX_RATIO * 100)}
-        aria-valuenow={Math.round(ratio * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(position * 100)}
+        title="Drag to resize, or to an edge to shut a Pane. Double-click for half and half."
         tabIndex={0}
         className="cursor-col-resize touch-none bg-border hover:bg-primary focus-visible:bg-primary"
-        onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+        onPointerDown={(event) => {
+          dragFrom.current = ratio;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
         onPointerMove={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             moveDivider(event.clientX);
           }
         }}
+        onDoubleClick={() => view.setRatio(0.5)}
         onKeyDown={(event) => {
           const step =
             event.key === "ArrowLeft" ? -0.02 : event.key === "ArrowRight" ? 0.02 : 0;
-          if (step) {
-            event.preventDefault();
-            view.setRatio(ratio + step);
-          }
+          if (!step) return;
+          event.preventDefault();
+          // A step away from a shut Pane's edge reopens it; a step into an edge shuts.
+          if (!shut) view.setRatio(ratio + step);
+          else if ((shut === "left") === step > 0) view.reopen(shut);
         }}
       />
       {slot(
