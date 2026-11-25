@@ -29,7 +29,7 @@ A named, persistent program belonging to one Workspace, started in that Workspac
 _Avoid_: terminal, tab, tmux session
 
 **Claude Session**:
-A Session that runs one Claude conversation. It is either started from the New Claude dialog with the owner's Launch options, or made by k-bench as a Workspace's Prime or Worker. Restarting it resumes that same Claude conversation.
+A Session that runs one Claude conversation at a time. It is either started from the New Claude dialog with the owner's Launch options, or made by k-bench as a Workspace's Prime or Worker. Restarting it resumes the one last running in it.
 _Avoid_: Claude terminal, agent session
 
 **Prime**:
@@ -57,7 +57,7 @@ A Session's request for attention, raised when the Session's program rings the t
 _Avoid_: notification, alert, activity
 
 **Claude conversation**:
-A Claude Code conversation. A Claude Session runs exactly one and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
+A Claude Code conversation. A Claude Session runs one at a time and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
 _Avoid_: session, Claude session id (use conversation ID)
 
 **Pane**:

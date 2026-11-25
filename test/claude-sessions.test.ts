@@ -2,7 +2,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { fakeClaudeArgs } from "./harness/fake-claude.ts";
+import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
 import {
   createTestInstance,
   otherSessions,
@@ -12,7 +12,7 @@ import { pollUntil } from "./harness/poll.ts";
 import { typeIntoSession } from "./harness/tmux.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const FOCUS_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
+const FOCUS_SETTINGS = { viewMode: "focus", tui: "fullscreen" };
 const ERROR_HELD = "Claude Code exited with an error. Press any key to close.";
 
 async function boot() {
@@ -168,9 +168,8 @@ describe("Claude Sessions", () => {
       conversationId,
       "--model",
       "opus",
-      "--settings",
-      FOCUS_SETTINGS,
     ]);
+    expect(await fakeClaudeSettings(again)).toEqual(FOCUS_SETTINGS);
     expect(again.output).toContain("advisor tool disabled: 1");
     expect(again.output).not.toContain("No conversation found");
   });

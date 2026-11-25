@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionState } from "../src/shared/state-protocol.ts";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
-import { fakeClaudeArgs } from "./harness/fake-claude.ts";
+import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
 import type { TestServer } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 
@@ -18,14 +18,12 @@ async function restart(server: TestServer, sessionId: string) {
   expect(response.status).toBe(200);
   const terminal = await server.openTerminal(sessionId);
   const [idFlag, conversationId, ...flags] = await fakeClaudeArgs(terminal);
-  const settings = flags.indexOf("--settings");
   return {
     terminal,
     idFlag,
     conversationId,
-    // Everything but the settings, which are checked by what they hold.
-    flags: settings === -1 ? flags : flags.toSpliced(settings, 2),
-    settings: settings === -1 ? undefined : JSON.parse(flags[settings + 1] as string),
+    flags,
+    settings: await fakeClaudeSettings(terminal),
     advisorDisabled: terminal.output.includes("advisor tool disabled: 1"),
   };
 }

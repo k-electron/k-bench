@@ -216,6 +216,19 @@ export class Store {
       .run(JSON.stringify(options));
   }
 
+  /**
+   * Records the Claude conversation a Claude Session is now on, in place: no history is kept.
+   * A shell Session, or one not stored yet, is left alone.
+   */
+  setConversationId(id: string, conversationId: string): void {
+    this.db
+      .prepare(
+        `UPDATE sessions SET conversation_id = ?
+         WHERE id = ? AND kind = 'claude' AND conversation_id IS NOT ?`,
+      )
+      .run(conversationId, id, conversationId);
+  }
+
   renameSession(id: string, name: string): void {
     this.db.prepare("UPDATE sessions SET name = ? WHERE id = ?").run(name, id);
   }

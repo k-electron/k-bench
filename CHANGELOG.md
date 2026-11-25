@@ -10,6 +10,14 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 - Every new Workspace comes with a **Prime** and a **Worker**: two Claude Sessions made with the Workspace and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, and the Worker runs Sonnet at high effort with an Opus advisor, both in Focus view. They're passed again on every launch, so a restart never drifts. Neither is started when the Workspace is created; for now, start each with **Restart** from its row menu. They can't be renamed or deleted (their rows have no **Rename** or **Delete**), and no other Session can be named "Prime" or "Worker". Deleting the Workspace ends them with its other Sessions.
 
+### Changed
+
+- A folder can have only one Workspace, so a project never gets two sets of Claudes editing the same files. Creating a Workspace on a folder that already has one is refused with a message naming that Workspace, and so is changing a Workspace's folder to one. Workspaces that already share a folder are left as they are.
+
+### Fixed
+
+- Restarting a Claude Session now resumes the conversation last running in it. After a `/clear`, `/resume`, `/branch` or `/fork` inside Claude Code, a restart used to go back to the conversation the Session was launched with. k-bench now follows the conversation through a silent Claude Code hook it adds to each launch, and saves it at once, whether or not a browser is open. Where Claude Code can't run hooks (a folder you haven't trusted, or `disableAllHooks`), a restart resumes the last conversation k-bench knew, as before.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added
