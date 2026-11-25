@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { type ComponentProps, type CSSProperties, type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useActions } from "@/useAppState";
+import { type Actions, useActions } from "@/useAppState";
 import { useSidebarCollapsed } from "@/useSidebarCollapsed";
 import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
 import type {
@@ -68,6 +68,11 @@ interface SidebarProps {
   onOpenSession: (workspaceId: string, session: SessionState) => void;
   /** A Workspace's name was chosen. */
   onOpenWorkspace: (workspaceId: string) => void;
+  /**
+   * Creates a Workspace. When its folder already has one, opens that one as choosing its
+   * name does, and says so in `error`.
+   */
+  onCreateWorkspace: (input: Parameters<Actions["createWorkspace"]>[0]) => Promise<void>;
   /** Creates a Session and opens it. */
   onCreateSession: (workspaceId: string) => Promise<void>;
   /** Launches a Claude Session and opens it; rejects with the server's refusal. */
@@ -75,7 +80,10 @@ interface SidebarProps {
     workspaceId: string,
     input: { name: string; claude: LaunchOptions },
   ) => Promise<void>;
-  /** Why the last Session create or restart was refused, if it was. */
+  /**
+   * Why the last Session create or restart, or Workspace open, was refused, or that a new
+   * Workspace's folder already had one.
+   */
   error?: string;
   mode?: SidebarMode;
   /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */
@@ -88,14 +96,16 @@ type SessionAction = "rename" | "delete";
  * The sidebar tree: every Workspace in the owner's order, each with its letter tile, and
  * only the Open Workspace unfolded into its Prime, Worker and Other Sessions. Only the Open
  * Workspace's row has the new-Session and Workspace menus. Beside the Panes it can collapse
- * to a column of tiles, remembered on this device. Opening a Workspace or a Session is up
- * to the caller; every other action comes from `useActions`.
+ * to a column of tiles, remembered on this device. Opening a Workspace or a Session, and
+ * creating one (which can open one), is up to the caller; every other action comes from
+ * `useActions`.
  */
 export function Sidebar({
   state,
   shown,
   onOpenSession,
   onOpenWorkspace,
+  onCreateWorkspace,
   onCreateSession,
   onCreateClaudeSession,
   error,
@@ -119,7 +129,7 @@ export function Sidebar({
   const newWorkspace = (trigger: ReactNode) => (
     <NewWorkspaceDialog
       workspaces={workspaces}
-      onCreate={actions.createWorkspace}
+      onCreate={onCreateWorkspace}
       trigger={trigger}
     />
   );

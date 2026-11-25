@@ -79,6 +79,18 @@ test("tapping a Workspace's name in the drawer opens it on its Prime and closes 
   await openByName("beta");
   await expect(app.phoneTitle).toHaveText("beta › Prime");
   await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${two}`);
+
+  // Create on a folder that already has a Workspace opens it the same way.
+  await app.openDrawer();
+  await app.session("Worker").tap();
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
+  await openByName("alpha");
+  await app.openDrawer();
+  await app.createWorkspace(two);
+  await expect(app.page.getByRole("alert")).toContainText(
+    "A Workspace for this folder already exists",
+  );
+  await expect(app.phoneTitle).toHaveText("beta › Prime");
 });
 
 test("tapping the title lists the Workspace's Sessions, and tapping one shows it and closes the sheet", async ({

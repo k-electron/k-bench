@@ -119,25 +119,21 @@ test("type a path in the picker: Tab completes a folder, Enter goes there, and a
   );
 });
 
-test("Create on a folder that already has a Workspace says so and opens that Workspace", async ({
+test("Create on a folder that already has a Workspace says so and opens that Workspace as its name does", async ({
   app,
   kbench,
 }) => {
   const folder = kbench.instance.makeFolder("my-project");
-  // The first Workspace is the Open one until another is opened.
   await app.createWorkspace(kbench.instance.makeFolder("search"));
   await expect(app.workspace("search")).toBeVisible();
   await app.createWorkspace(folder, { name: "Billing" });
   await expect(app.workspace("Billing")).toBeVisible();
-  const openWorkspaceName = async () => {
-    const response = await app.page.request.get(`${kbench.url}/api/state`);
-    const state = (await response.json()) as {
-      openWorkspaceId: string | null;
-      workspaces: Array<{ id: string; name: string }>;
-    };
-    return state.workspaces.find((w) => w.id === state.openWorkspaceId)?.name;
-  };
-  expect(await openWorkspaceName()).toBe("search");
+  // Billing's right Pane is left showing an Other Session, then search is opened.
+  await app.openWorkspace("Billing");
+  await app.createSession("Billing");
+  await expect(app.terminalIn("right", "session 1")).toBeVisible();
+  await app.openWorkspace("search");
+  await expect(app.workspaceTitle).toHaveText("search");
 
   await app.createWorkspace(folder);
 
@@ -145,7 +141,10 @@ test("Create on a folder that already has a Workspace says so and opens that Wor
     "A Workspace for this folder already exists",
   );
   await expect(app.page.getByRole("dialog")).toHaveCount(0);
-  await expect.poll(openWorkspaceName).toBe("Billing");
+  // Opened as choosing its name opens it: Prime with Worker.
+  await expect(app.workspaceTitle).toHaveText("Billing");
+  await expect(app.terminalIn("left", "Prime")).toBeVisible();
+  await expect(app.terminalIn("right", "Worker")).toBeVisible();
   expect(await app.workspaceNames()).toEqual(["search", "Billing"]);
 });
 

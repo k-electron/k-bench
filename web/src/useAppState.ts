@@ -25,14 +25,18 @@ function eventsUrl(): string {
  */
 export interface Actions {
   /**
-   * When the folder already has a Workspace, opens that one instead and says so in `error`,
-   * so the owner ends up where they meant to be. Any other refusal rejects.
+   * When the folder already has a Workspace, opens that one instead with `openExisting` (the
+   * view's open, as choosing its name) and says so in `error`, so the owner ends up where
+   * they meant to be. Any other refusal rejects.
    */
-  createWorkspace(input: {
-    folder: string;
-    name?: string;
-    createMissingFolders?: boolean;
-  }): Promise<void>;
+  createWorkspace(
+    input: {
+      folder: string;
+      name?: string;
+      createMissingFolders?: boolean;
+    },
+    openExisting: (id: string) => void,
+  ): Promise<void>;
   updateWorkspace(
     id: string,
     changes: { name?: string; folder?: string; createMissingFolders?: boolean },
@@ -142,16 +146,14 @@ export function useAppState(): {
     };
 
     return {
-      createWorkspace: async (input) => {
+      createWorkspace: async (input, openExisting) => {
         try {
           await act(api.createWorkspace(input));
         } catch (failure) {
           if (!(failure instanceof ApiError) || !failure.folderOwner) throw failure;
-          const { id } = failure.folderOwner;
-          await reporting(async () => {
-            await act(api.openWorkspace(id));
-            setError(failure.message);
-          });
+          // Opening clears `error` as it starts, so the message is set after it.
+          openExisting(failure.folderOwner.id);
+          setError(failure.message);
         }
       },
       updateWorkspace: (id, changes) => act(api.updateWorkspace(id, changes)),

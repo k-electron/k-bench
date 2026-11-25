@@ -43,6 +43,11 @@ export function App() {
     else view.openOtherSession(workspaceId, id);
     setDrawerOpen(false);
   };
+  /** Opens a Workspace as choosing its name does. */
+  const openWorkspace = (workspaceId: string) => {
+    if (phone) phoneView.openWorkspace(workspaceId);
+    else view.openWorkspace(workspaceId);
+  };
   const phoneSessionId = phoneView.session?.id;
 
   return (
@@ -77,10 +82,11 @@ export function App() {
             setDrawerOpen(false);
           }}
           onOpenWorkspace={(workspaceId) => {
-            if (phone) phoneView.openWorkspace(workspaceId);
-            else view.openWorkspace(workspaceId);
+            openWorkspace(workspaceId);
             setDrawerOpen(false);
           }}
+          // The drawer stays open, as after any create, so the owner sees why.
+          onCreateWorkspace={(input) => actions.createWorkspace(input, openWorkspace)}
           onCreateSession={async (workspaceId) => {
             openCreated(workspaceId, await actions.createSession(workspaceId));
           }}
