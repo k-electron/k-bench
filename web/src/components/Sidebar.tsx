@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { type Actions, useActions } from "@/useAppState";
 import { useSidebarCollapsed } from "@/useSidebarCollapsed";
 import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
+import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type {
   SessionState,
   State,
@@ -511,19 +512,6 @@ function WorkspaceItem({
   );
 }
 
-/** A Workspace's Prime, Worker and Other Sessions. */
-function sessionsByRole(workspace: WorkspaceState): {
-  prime: SessionState | undefined;
-  worker: SessionState | undefined;
-  others: SessionState[];
-} {
-  return {
-    prime: workspace.sessions.find((s) => s.role === "prime"),
-    worker: workspace.sessions.find((s) => s.role === "worker"),
-    others: workspace.sessions.filter((s) => s.role === null),
-  };
-}
-
 /**
  * The collapsed sidebar's column: a tile per Workspace, which opens it, and under the Open
  * Workspace's tile its Sessions as small icons, which open them.
@@ -580,10 +568,8 @@ function WorkspaceTileItem({
   onOpenSession: (session: SessionState) => void;
 }) {
   const { row, handle, isDragging } = useSortableRow(workspace.id);
-  const { prime, worker, others } = sessionsByRole(workspace);
-  const sessions = [prime, worker, ...others].filter(
-    (s): s is SessionState => s !== undefined,
-  );
+  const { primeAndWorker, others } = sessionsByRole(workspace.sessions);
+  const sessions = [...primeAndWorker, ...others];
   return (
     <li
       {...row}
@@ -680,7 +666,7 @@ function SessionList({
   /** Every Other Session's id, in the order one was dragged into. */
   onReorder: (ids: string[]) => Promise<void>;
 }) {
-  const { prime, worker, others } = sessionsByRole(workspace);
+  const { prime, worker, others } = sessionsByRole(workspace.sessions);
   const props = (session: SessionState) => ({
     session,
     isShown: shown.has(session.id),

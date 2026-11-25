@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from "react";
+import { sessionsByRole } from "../../src/shared/session-roles.ts";
 import type {
   SessionState,
   State,
@@ -81,8 +82,7 @@ export function usePhoneView(
   const workspace = state?.workspaces.find((w) => w.id === state.openWorkspaceId);
   const sessions = workspace?.sessions ?? [];
   const saved = workspace && shown[workspace.id];
-  const session =
-    sessions.find((s) => s.id === saved) ?? sessions.find((s) => s.role === "prime");
+  const session = sessions.find((s) => s.id === saved) ?? sessionsByRole(sessions).prime;
 
   return {
     workspace,

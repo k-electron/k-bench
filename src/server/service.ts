@@ -6,6 +6,7 @@ import {
   type LaunchOptions,
   ROLE_LAUNCH_OPTIONS,
 } from "../shared/launch-options.ts";
+import { sessionsByRole } from "../shared/session-roles.ts";
 import type { RightPaneState, SessionRole, State } from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
@@ -234,8 +235,8 @@ export class Service {
 
   /** Starts the Workspace's Prime and Worker, those that are Stopped, together. */
   private async startRoles(workspaceId: string): Promise<void> {
-    const roles = this.store.listSessions(workspaceId).filter((session) => session.role);
-    await Promise.all(roles.map((session) => this.restartSession(session.id)));
+    const { primeAndWorker } = sessionsByRole(this.store.listSessions(workspaceId));
+    await Promise.all(primeAndWorker.map((session) => this.restartSession(session.id)));
   }
 
   /**
@@ -261,12 +262,8 @@ export class Service {
   }
 
   private otherSessionIds(workspaceId: string): Set<string> {
-    return new Set(
-      this.store
-        .listSessions(workspaceId)
-        .filter((session) => session.role === null)
-        .map((session) => session.id),
-    );
+    const { others } = sessionsByRole(this.store.listSessions(workspaceId));
+    return new Set(others.map((session) => session.id));
   }
 
   /**
@@ -299,10 +296,7 @@ export class Service {
     if (!this.store.getWorkspace(workspaceId)) {
       throw new ServiceError("not_found", "Unknown Workspace");
     }
-    const known = this.store
-      .listSessions(workspaceId)
-      .filter((session) => session.role === null)
-      .map((session) => session.id);
+    const known = [...this.otherSessionIds(workspaceId)];
     if (ids.length !== known.length || !known.every((id) => ids.includes(id))) {
       throw new ServiceError(
         "invalid",

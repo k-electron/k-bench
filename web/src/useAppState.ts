@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
+import { sessionsByRole } from "../../src/shared/session-roles.ts";
 import {
   EVENTS_PATH,
   type RightPaneState,
@@ -208,7 +209,7 @@ export function useAppState(): {
                   ? {
                       ...w,
                       sessions: [
-                        ...w.sessions.filter((s) => s.role !== null),
+                        ...sessionsByRole(w.sessions).primeAndWorker,
                         ...ids.flatMap((id) => w.sessions.find((s) => s.id === id) ?? []),
                       ],
                     }

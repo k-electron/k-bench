@@ -2,6 +2,7 @@ import { ChevronDownIcon, MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import type { PhoneView as View } from "../phoneView";
 import { SessionIcon } from "./SessionIcon";
@@ -112,8 +113,7 @@ function SessionsSheet({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const fixed = workspace.sessions.filter((s) => s.role !== null);
-  const others = workspace.sessions.filter((s) => s.role === null);
+  const { primeAndWorker, others } = sessionsByRole(workspace.sessions);
   const row = (session: SessionState) => (
     <SheetRow
       key={session.id}
@@ -150,8 +150,8 @@ function SessionsSheet({
           {workspace.name}
         </div>
         <ul className="grid gap-1">
-          {fixed.map(row)}
-          {fixed.length > 0 && others.length > 0 && (
+          {primeAndWorker.map(row)}
+          {primeAndWorker.length > 0 && others.length > 0 && (
             <li aria-hidden="true" className="mx-2 my-1 border-t" />
           )}
           {others.map(row)}

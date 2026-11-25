@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { sessionsByRole } from "../../src/shared/session-roles.ts";
 import type {
   RightPaneState,
   SessionState,
@@ -169,9 +170,8 @@ export function workspacePanes(workspace: WorkspaceState | undefined): {
     session ? { kind: "session", session } : { kind: "empty" };
   const sessions = workspace?.sessions ?? [];
   const { shown, tabs } = workspace?.rightPane ?? NO_RIGHT_PANE;
-  const others = new Map(sessions.filter((s) => s.role === null).map((s) => [s.id, s]));
-  const prime = sessions.find((s) => s.role === "prime");
-  const worker = sessions.find((s) => s.role === "worker");
+  const { prime, worker, others: otherList } = sessionsByRole(sessions);
+  const others = new Map(otherList.map((s) => [s.id, s]));
   // An Other Session that was deleted (here or on another device) gives way to the Worker.
   const other = shown === null ? undefined : others.get(shown);
   return {

@@ -36,6 +36,7 @@ The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsco
 - `terminal-protocol.ts` defines the terminal WebSocket protocol once; the server, the browser and the tests all import it.
 - `launch-options.ts` defines the Launch options, their choices and the all-Default value once, for the server and the New Claude dialog.
 - `state-protocol.ts` does the same for state: the snapshot types, the `State-Revision` header, the events path, and decoding a snapshot or a response's revision.
+- `session-roles.ts` sorts a Workspace's Sessions into its Prime, its Worker and its Other Sessions (`sessionsByRole`), the one way the server and the browser both tell them apart.
 
 ## `web/`
 
