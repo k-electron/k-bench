@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { LaunchOptions } from "../shared/launch-options.ts";
+import { type LaunchOptions, ROLE_LAUNCH_OPTIONS } from "../shared/launch-options.ts";
 import type { SessionKind, SessionRole } from "../shared/state-protocol.ts";
+import { availableName } from "./naming.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
+ * Each is SQL, or a function for a change SQL can't make, and runs in its own transaction.
  * Append only. Per ADR-0002 nothing here records process IDs or running/Stopped status.
  */
-const MIGRATIONS: string[] = [
+const MIGRATIONS: Array<string | ((db: DatabaseSync) => void)> = [
   `
   CREATE TABLE workspaces (
     id       TEXT PRIMARY KEY,
@@ -56,7 +58,80 @@ const MIGRATIONS: string[] = [
   ALTER TABLE workspaces ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
   UPDATE workspaces SET created_at = rowid;
   `,
+  // Every existing Workspace gets a Prime and a Worker, Stopped, each on a fresh conversation.
+  addPrimeAndWorker,
+  // A Session's place in the owner's order of its Workspace's Other Sessions (the Prime and
+  // Worker are listed first whatever theirs). Existing Sessions keep their creation order;
+  // the Prime and Worker the previous migration added get positions too, which is harmless.
+  // The default keeps inserts that don't name a position working.
+  `
+  ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+  UPDATE sessions SET position = (
+    SELECT COUNT(*) FROM sessions earlier
+    WHERE earlier.workspace_id = sessions.workspace_id
+      AND (earlier.created_at < sessions.created_at
+        OR (earlier.created_at = sessions.created_at AND earlier.rowid < sessions.rowid))
+  );
+  `,
+  // The Host's one record of the Open Workspace, the one the main view shows on every
+  // device; null when none has been opened. The id check keeps it to one row.
+  `
+  CREATE TABLE open_workspace (
+    id           INTEGER PRIMARY KEY CHECK (id = 1),
+    workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL
+  );
+  `,
 ];
+
+/**
+ * Records a Prime and a Worker for every Workspace. Existing Sessions stay as Other Sessions;
+ * one already named "Prime" or "Worker" is renamed first, to "Prime (earlier)" for example,
+ * so the names stay unique and the upgrade never fails.
+ */
+function addPrimeAndWorker(db: DatabaseSync): void {
+  const roles = [
+    { role: "prime", name: "Prime" },
+    { role: "worker", name: "Worker" },
+  ] as const;
+  const workspaces = db.prepare("SELECT id FROM workspaces").all() as Array<{
+    id: string;
+  }>;
+  const namesIn = db.prepare(
+    "SELECT name, created_at AS createdAt FROM sessions WHERE workspace_id = ?",
+  );
+  const rename = db.prepare(
+    "UPDATE sessions SET name = ? WHERE workspace_id = ? AND name = ?",
+  );
+  const insert = db.prepare(
+    `INSERT INTO sessions
+       (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options)
+     VALUES (?, ?, ?, ?, 'claude', ?, ?, ?)`,
+  );
+  for (const workspace of workspaces) {
+    const rows = namesIn.all(workspace.id) as Array<{ name: string; createdAt: number }>;
+    const taken = new Set(rows.map((row) => row.name));
+    // Dated just before the Workspace's first Session, so they are listed first, as in a
+    // new Workspace.
+    const first = Math.min(Date.now(), ...rows.map((row) => row.createdAt));
+    for (const { name } of roles) {
+      if (!taken.has(name)) continue;
+      const earlier = availableName(`${name} (earlier)`, taken);
+      rename.run(earlier, workspace.id, name);
+      taken.add(earlier);
+    }
+    for (const [index, { role, name }] of roles.entries()) {
+      insert.run(
+        randomUUID(),
+        workspace.id,
+        name,
+        first - roles.length + index,
+        role,
+        randomUUID(),
+        JSON.stringify(ROLE_LAUNCH_OPTIONS[role]),
+      );
+    }
+  }
+}
 
 export interface WorkspaceRow {
   id: string;
@@ -106,7 +181,9 @@ export class Store {
     for (let version = row.user_version; version < MIGRATIONS.length; version++) {
       this.db.exec("BEGIN");
       try {
-        this.db.exec(MIGRATIONS[version] as string);
+        const migration = MIGRATIONS[version];
+        if (typeof migration === "function") migration(this.db);
+        else this.db.exec(migration as string);
         this.db.exec(`PRAGMA user_version = ${version + 1}`);
         this.db.exec("COMMIT");
       } catch (error) {
@@ -206,12 +283,27 @@ export class Store {
     });
   }
 
+  /** Gives each of a Workspace's Sessions the position of its index in `ids`, in one transaction. */
+  setSessionOrder(workspaceId: string, ids: string[]): void {
+    const update = this.db.prepare(
+      "UPDATE sessions SET position = ? WHERE id = ? AND workspace_id = ?",
+    );
+    this.transaction(() => {
+      ids.forEach((id, index) => {
+        update.run(index, id, workspaceId);
+      });
+    });
+  }
+
+  /** The Prime, then the Worker, then the Other Sessions in the owner's order. */
   listSessions(workspaceId: string): SessionRow[] {
     const rows = this.db
       .prepare(
         `SELECT id, workspace_id AS workspaceId, name, kind, role,
                 conversation_id AS conversationId, launch_options AS launchOptions
-         FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid`,
+         FROM sessions WHERE workspace_id = ?
+         ORDER BY CASE role WHEN 'prime' THEN 0 WHEN 'worker' THEN 1 ELSE 2 END,
+                  position, rowid`,
       )
       .all(workspaceId) as unknown as RawSessionRow[];
     return rows.map(sessionRow);
@@ -244,6 +336,23 @@ export class Store {
          ON CONFLICT (id) DO UPDATE SET options = excluded.options`,
       )
       .run(JSON.stringify(options));
+  }
+
+  /** The Workspace last opened, if one has been and it still exists. */
+  getOpenWorkspaceId(): string | null {
+    const row = this.db
+      .prepare("SELECT workspace_id AS workspaceId FROM open_workspace WHERE id = 1")
+      .get() as { workspaceId: string | null } | undefined;
+    return row?.workspaceId ?? null;
+  }
+
+  setOpenWorkspaceId(workspaceId: string | null): void {
+    this.db
+      .prepare(
+        `INSERT INTO open_workspace (id, workspace_id) VALUES (1, ?)
+         ON CONFLICT (id) DO UPDATE SET workspace_id = excluded.workspace_id`,
+      )
+      .run(workspaceId);
   }
 
   /**
@@ -282,11 +391,18 @@ export class Store {
     const launchOptions = conversationId === null ? null : (input.launchOptions ?? null);
     const kind = conversationId === null ? "shell" : "claude";
     const role = input.role ?? null;
+    // A new Session goes last in its Workspace's order.
+    const next = this.db
+      .prepare(
+        "SELECT COALESCE(MAX(position), -1) + 1 AS position FROM sessions WHERE workspace_id = ?",
+      )
+      .get(input.workspaceId) as { position: number };
     this.db
       .prepare(
         `INSERT INTO sessions
-           (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options,
+            position)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -297,6 +413,7 @@ export class Store {
         role,
         conversationId,
         launchOptions && JSON.stringify(launchOptions),
+        next.position,
       );
     return {
       id: input.id,

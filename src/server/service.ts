@@ -169,9 +169,11 @@ export class Service {
 
   /**
    * Renames and/or re-folders a Workspace; both changes are checked before either is made.
-   * `createMissingFolders` works as in `createWorkspace`.
+   * `createMissingFolders` works as in `createWorkspace`. Moving the Open Workspace onto a
+   * folder starts its Stopped Prime and Worker there, so fixing a Missing one needs no
+   * second open.
    */
-  updateWorkspace(
+  async updateWorkspace(
     id: string,
     changes: { name?: string; folder?: string; createMissingFolders?: boolean },
   ) {
@@ -194,7 +196,37 @@ export class Service {
       makeFolders(update.folder);
     }
     this.store.updateWorkspace(id, update);
+    if (update.folder !== undefined && this.openWorkspaceId() === id) {
+      await this.startRoles(id);
+    }
     return { ...workspace, ...update };
+  }
+
+  /**
+   * Makes the Workspace the Open Workspace and, unless it is Missing, starts its Stopped
+   * Prime and Worker, resuming their conversations. Opening it again changes nothing that
+   * is running.
+   */
+  async openWorkspace(id: string): Promise<{ id: string }> {
+    const workspace = this.store.getWorkspace(id);
+    if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
+    this.store.setOpenWorkspaceId(id);
+    if (isDirectory(workspace.folder)) await this.startRoles(id);
+    return { id };
+  }
+
+  /**
+   * The Open Workspace: the one last opened or, when none is set, the first by position.
+   * Null when there are no Workspaces.
+   */
+  private openWorkspaceId(): string | null {
+    return this.store.getOpenWorkspaceId() ?? this.store.listWorkspaces()[0]?.id ?? null;
+  }
+
+  /** Starts the Workspace's Prime and Worker, those that are Stopped, together. */
+  private async startRoles(workspaceId: string): Promise<void> {
+    const roles = this.store.listSessions(workspaceId).filter((session) => session.role);
+    await Promise.all(roles.map((session) => this.restartSession(session.id)));
   }
 
   /** `ids` must be every Workspace exactly once, in the order the owner wants. */
@@ -206,7 +238,31 @@ export class Service {
     this.store.setWorkspaceOrder(ids);
   }
 
-  /** Ends the Workspace's shells first, then forgets it. The folder on disk is never touched. */
+  /**
+   * `ids` must be every Other Session of the Workspace exactly once, in the order the owner
+   * wants. The Prime and Worker always come first, so they are never in it.
+   */
+  reorderSessions(workspaceId: string, ids: string[]): void {
+    if (!this.store.getWorkspace(workspaceId)) {
+      throw new ServiceError("not_found", "Unknown Workspace");
+    }
+    const known = this.store
+      .listSessions(workspaceId)
+      .filter((session) => session.role === null)
+      .map((session) => session.id);
+    if (ids.length !== known.length || !known.every((id) => ids.includes(id))) {
+      throw new ServiceError(
+        "invalid",
+        "ids must list every Other Session of the Workspace exactly once",
+      );
+    }
+    this.store.setSessionOrder(workspaceId, ids);
+  }
+
+  /**
+   * Ends the Workspace's shells first, then forgets it. The folder on disk is never touched.
+   * Deleting the Open Workspace opens the first Workspace by position, or none.
+   */
   async deleteWorkspace(id: string): Promise<void> {
     if (!this.store.getWorkspace(id))
       throw new ServiceError("not_found", "Unknown Workspace");
@@ -218,7 +274,14 @@ export class Service {
     );
     const failed = kills.find((kill) => kill.status === "rejected");
     if (failed) throw failed.reason;
-    this.store.deleteWorkspace(id);
+    const wasOpen = this.openWorkspaceId() === id;
+    this.store.transaction(() => {
+      this.store.deleteWorkspace(id);
+      // The first Workspace by position becomes open, and stays so through a reorder. It is
+      // not started: only opening it does that.
+      if (wasOpen)
+        this.store.setOpenWorkspaceId(this.store.listWorkspaces()[0]?.id ?? null);
+    });
   }
 
   private workspaceNames(exceptId?: string): Set<string> {
@@ -351,6 +414,7 @@ export class Service {
   async getState(): Promise<State> {
     const live = await this.reconciler.reconcile();
     return {
+      openWorkspaceId: this.openWorkspaceId(),
       workspaces: this.store.listWorkspaces().map((workspace) => ({
         ...workspace,
         missing: !isDirectory(workspace.folder),

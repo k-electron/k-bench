@@ -36,10 +36,13 @@ export function WorkspaceRow({
   workspace,
   onCreateSession,
   onCreateClaude,
+  onOpen,
   onAction,
   children,
 }: {
   workspace: WorkspaceState;
+  /** Makes it the Open Workspace. */
+  onOpen: () => void;
   /** New shell. */
   onCreateSession: () => void;
   /** New Claude…, which asks for its details first. */
@@ -90,7 +93,14 @@ export function WorkspaceRow({
         </button>
         <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
         <h2 className="min-w-0 flex-1 truncate" title={workspace.folder}>
-          {workspace.name}
+          {/* Opening it starts its Prime and Worker. */}
+          <button
+            type="button"
+            onClick={onOpen}
+            className="max-w-full truncate rounded text-left hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            {workspace.name}
+          </button>
         </h2>
         {/* Collapsed, the Sessions' own badges are out of sight: roll them up here. */}
         {collapsed && workspace.sessions.some((session) => session.bell) && (

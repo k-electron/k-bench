@@ -114,7 +114,7 @@ export function createApp(
 
   app.patch("/api/workspaces/:id", async (c) => {
     const body = await jsonBody(c.req.raw);
-    const workspace = service.updateWorkspace(c.req.param("id"), {
+    const workspace = await service.updateWorkspace(c.req.param("id"), {
       name: optionalString(body.name),
       folder: optionalString(body.folder),
       createMissingFolders: body.createMissingFolders === true,
@@ -122,9 +122,22 @@ export function createApp(
     return c.json(workspace);
   });
 
+  app.post("/api/workspaces/:id/open", async (c) =>
+    c.json(await service.openWorkspace(c.req.param("id"))),
+  );
+
   app.delete("/api/workspaces/:id", async (c) => {
     await service.deleteWorkspace(c.req.param("id"));
     return c.body(null, 204);
+  });
+
+  app.put("/api/workspaces/:id/sessions/order", async (c) => {
+    const { ids } = await jsonBody(c.req.raw);
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "ids must be a list of Session ids");
+    }
+    service.reorderSessions(c.req.param("id"), ids);
+    return c.json({ ids });
   });
 
   app.post("/api/workspaces/:id/sessions", async (c) => {

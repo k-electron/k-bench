@@ -103,6 +103,7 @@ export function Sidebar({
                 workspace={workspace}
                 onCreateSession={() => void onCreateSession(workspace.id)}
                 onCreateClaude={() => setLaunching(workspace)}
+                onOpen={() => void actions.openWorkspace(workspace.id)}
                 onAction={(action) => setDialog({ workspace, action })}
               >
                 <ul>

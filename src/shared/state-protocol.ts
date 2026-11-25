@@ -39,6 +39,11 @@ export interface WorkspaceState {
 }
 export interface State {
   workspaces: WorkspaceState[];
+  /**
+   * The Open Workspace, the one the main view shows on every device: the one last opened,
+   * else the first by position. Null when there are no Workspaces.
+   */
+  openWorkspaceId: string | null;
 }
 
 /**

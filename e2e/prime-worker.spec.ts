@@ -26,3 +26,16 @@ test("a new Workspace lists its Prime and Worker Stopped, with no Rename or Dele
     await expect(app.terminal(name)).toContainText("claude-stub ready");
   }
 });
+
+test("clicking a Workspace's name opens it, starting its Prime and Worker", async ({
+  app,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await expect(app.sessionStatus("Prime", "stopped")).toBeVisible();
+
+  await app.workspace("project").getByRole("button", { name: "project" }).click();
+
+  await expect(app.sessionStatus("Prime", "running")).toBeVisible();
+  await expect(app.sessionStatus("Worker", "running")).toBeVisible();
+});
