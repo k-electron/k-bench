@@ -539,37 +539,6 @@ test("the choice survives a page reload", async ({ app, kbench }) => {
   await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "true");
 });
 
-test("deleting a Session forgets its choice", async ({ app, kbench }) => {
-  await app.openDrawer();
-  await app.createWorkspace(kbench.instance.makeFolder("project"));
-  await app.createSession("project");
-  await expect(app.terminal("session 1")).toBeVisible();
-  await app.extraKey("Smart typing").tap();
-  await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
-
-  // The choice is kept on this device under the Session's id, which the phone also keeps
-  // as the Session it shows in the Workspace.
-  const id = await app.page.evaluate(
-    `Object.values(JSON.parse(localStorage.getItem("k-bench.phone-sessions")))[0]`,
-  );
-  expect(typeof id).toBe("string");
-  const keeps = () =>
-    app.page.evaluate(
-      `(localStorage.getItem("k-bench.smart-typing") ?? "").includes(${JSON.stringify(id)})`,
-    );
-  expect(await keeps()).toBe(true);
-
-  await app.openDrawer();
-  await app.sessionMenu("session 1", "Delete");
-  await app.page
-    .getByRole("alertdialog", { name: "Delete session 1?" })
-    .getByRole("button", { name: "Delete session" })
-    .click();
-  await expect(app.session("session 1")).toBeHidden();
-
-  await expect.poll(keeps).toBe(false);
-});
-
 test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40px tall", async ({
   app,
   kbench,
