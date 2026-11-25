@@ -49,3 +49,37 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
   await app.createSession("project");
   await expect(app.sessionStatus("session 2", "running")).toBeVisible();
 });
+
+test("a Missing Workspace's Panes say its folder is missing, and Change folder there fixes it", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  const folder = kbench.instance.makeFolder("project");
+  await app.createWorkspace(folder);
+  // Its Prime and Worker haven't been started (only opening does that), and now can't be.
+  rmSync(folder, { recursive: true });
+  await page.reload();
+
+  for (const side of ["left", "right"] as const) {
+    await expect(app.pane(side)).toContainText("This Workspace's folder is missing");
+    await expect(
+      app.pane(side).getByRole("button", { name: "Change folder", exact: true }),
+    ).toBeVisible();
+  }
+
+  const restored = kbench.instance.makeFolder("restored");
+  await app
+    .pane("right")
+    .getByRole("button", { name: "Change folder", exact: true })
+    .click();
+  await app.pickFolder(restored);
+  await app.page.getByRole("button", { name: "Save" }).click();
+
+  // Fixing the Open Workspace's folder starts its Prime and Worker there.
+  await expect(app.terminalIn("left", "Prime")).toContainText(
+    `claude-stub cwd: ${restored}`,
+  );
+  await expect(app.terminalIn("right", "Worker")).toContainText("claude-stub ready");
+  await expect(app.pane("left")).not.toContainText("folder is missing");
+});

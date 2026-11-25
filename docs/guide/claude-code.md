@@ -58,7 +58,7 @@ If Claude Code exits with an error, such as a model and advisor it won't pair, o
 
 ### Restarting resumes the conversation
 
-A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**. There is no dialog. Claude Code resumes the conversation last running in the Session, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench knows the conversation by its ID, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
+A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**, or press **Restart** in its Pane. There is no dialog. Claude Code resumes the conversation last running in the Session, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench knows the conversation by its ID, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
 
 A Claude Session follows its conversation. When you move to another one inside Claude Code, with `/clear`, `/resume`, `/branch` or `/fork`, k-bench notices and saves it straight away, whether or not a browser is open, and a later restart resumes that one. Compacting a conversation keeps it. To do this, k-bench adds a `SessionStart` hook to each Claude Code it launches, for that launch only. The hook prints nothing, so nothing reaches your conversation, and your own settings and hooks are left alone.
 
