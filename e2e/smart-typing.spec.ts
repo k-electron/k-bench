@@ -249,7 +249,7 @@ test("text typed in one Session is not carried into the next: only the new text 
   await app.page.keyboard.type("ab");
   await expect(terminal).toContainText("ab");
 
-  // Another Session takes the Focused Pane, and runs the same program.
+  // Another Session takes the Pane, and runs the same program.
   await app.openDrawer();
   await app.createSession("project");
   const other = app.terminal("session 2");
@@ -547,9 +547,9 @@ test("deleting a Session forgets its choice", async ({ app, kbench }) => {
   await app.extraKey("Smart typing").tap();
   await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
 
-  // The choice is kept on this device, next to the Pane layout, under the Session's id.
+  // The choice is kept on this device, next to the Session on screen, under its id.
   const id = await app.page.evaluate(
-    `JSON.parse(localStorage.getItem("k-bench.layout")).sessions[0]`,
+    `JSON.parse(localStorage.getItem("k-bench.phone-session"))`,
   );
   const keeps = () =>
     app.page.evaluate(

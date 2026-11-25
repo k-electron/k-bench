@@ -61,15 +61,11 @@ A Claude Code conversation. A Claude Session runs one at a time and knows it by 
 _Avoid_: session, Claude session id (use conversation ID)
 
 **Pane**:
-One of at most two side-by-side slots in the main view, each showing one Session. On mobile there is a single Pane.
+One of two side-by-side slots in the main view on a desktop or tablet. The left Pane always shows the Prime. The right Pane shows the Worker, or another of the Workspace's Sessions that the owner opened there. On a phone there is a single Pane.
 _Avoid_: split, window, tab
 
-**Focused Pane**:
-The Pane that opening a Session from the sidebar targets. Exactly one Pane is focused at a time.
-_Avoid_: active pane, current pane
-
 **Extra keys**:
-On a phone, the keys a terminal needs that the on-screen keyboard lacks, such as Esc, Tab and Ctrl. They type into the Session in the Focused Pane. While the on-screen keyboard is up, only a few of them show, as a small overlay on the terminal.
+On a phone, the keys a terminal needs that the on-screen keyboard lacks, such as Esc, Tab and Ctrl. They type into the Session on screen. While the on-screen keyboard is up, only a few of them show, as a small overlay on the terminal.
 _Avoid_: shortcut bar, toolbar, key row, typing keys
 
 **Smart typing**:

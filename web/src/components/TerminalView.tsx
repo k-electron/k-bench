@@ -131,7 +131,7 @@ export function TerminalView({
   sessionId: string;
   /** What the Session runs; it chooses the keyboard's settings for Smart typing. */
   kind: SessionKind;
-  /** Whether this is in the Focused Pane; it takes keyboard focus when it becomes so. */
+  /** Whether it should have the keyboard; it takes keyboard focus when it becomes so. */
   focused: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -153,7 +153,7 @@ export function TerminalView({
     if (focused) terminalRef.current?.focus();
   }, [focused]);
 
-  // The phone's extra keys go to the terminal in the Focused Pane, as if typed.
+  // The phone's extra keys go to the terminal on screen, as if typed.
   useEffect(() => {
     if (!focused) return;
     return registerTerminal({

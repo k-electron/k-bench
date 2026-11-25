@@ -75,35 +75,38 @@ export class AppPage {
     });
   }
 
-  /** One of the (at most two) side-by-side slots in the main view; `n` is 1 or 2. */
-  pane(n: 1 | 2): Locator {
-    return this.page.getByRole("group", { name: `Pane ${n}`, exact: true });
+  /** On a phone: its one Pane. */
+  get phonePane(): Locator {
+    return this.page.getByRole("group", { name: "Pane", exact: true });
   }
 
-  /** The `Workspace › Session` label above Pane `n` in the top bar; absent for an empty Pane. */
-  paneLabel(n: 1 | 2): Locator {
-    return this.page.getByRole("note", { name: `Pane ${n} label`, exact: true });
+  /** On a phone: the `Workspace › Session` label beside the Menu button. */
+  get phonePaneLabel(): Locator {
+    return this.page.getByRole("note", { name: "Pane label", exact: true });
   }
 
-  /** The terminal showing the named Session, found inside Pane `n`. */
-  terminalIn(n: 1 | 2, sessionName: string): Locator {
-    return this.pane(n).getByRole("region", {
+  /** On a desktop or tablet: the left Pane (always the Prime) or the right one. */
+  pane(side: "left" | "right"): Locator {
+    const name = side === "left" ? "Left Pane" : "Right Pane";
+    return this.page.getByRole("group", { name, exact: true });
+  }
+
+  /** The terminal showing the named Session, found inside the left or right Pane. */
+  terminalIn(side: "left" | "right", sessionName: string): Locator {
+    return this.pane(side).getByRole("region", {
       name: `Terminal ${sessionName}`,
       exact: true,
     });
   }
 
-  /** The toggle between one and two Panes. */
-  get panesToggle(): Locator {
-    return this.page.getByRole("button", { name: "Two panes", exact: true });
+  /** On a desktop or tablet: the Open Workspace's name in the top bar. */
+  get workspaceTitle(): Locator {
+    return this.page.getByRole("main").getByRole("heading", { level: 1 });
   }
 
-  /** Switches the main view to two Panes if it is not already. */
-  async showTwoPanes(): Promise<void> {
-    if ((await this.panesToggle.getAttribute("aria-pressed")) !== "true") {
-      await this.panesToggle.click();
-    }
-    await expect(this.pane(2)).toBeVisible();
+  /** Opens a Workspace by clicking its name in the sidebar. */
+  async openWorkspace(name: string): Promise<void> {
+    await this.workspace(name).getByRole("button", { name, exact: true }).click();
   }
 
   /** The draggable divider between the two Panes. */
@@ -121,11 +124,6 @@ export class AppPage {
     await this.page.mouse.down();
     await this.page.mouse.move(x + dx, y, { steps: 10 });
     await this.page.mouse.up();
-  }
-
-  /** Opens a Session's row menu and picks "Open in other pane". */
-  async openInOtherPane(sessionName: string): Promise<void> {
-    await this.sessionMenu(sessionName, "Open in other pane");
   }
 
   /** The running/Stopped indicator beside a Session in the sidebar. */
@@ -373,7 +371,7 @@ export class AppPage {
 
   /**
    * Creates `count` Sessions ("session 1", "session 2", ...), waiting for each to open in
-   * the Focused Pane before creating the next, so a late open can't disturb the layout.
+   * a Pane before creating the next, so a late open can't disturb the view.
    */
   async createSessions(workspaceName: string, count: number): Promise<void> {
     for (let n = 1; n <= count; n++) {

@@ -2,7 +2,7 @@ import { type AppPage, expect, type Kbench, test } from "./harness.ts";
 
 // These run on the `phone` project: a touch device narrower than the layout breakpoint.
 
-test("the phone shows a single Pane and no Pane-count toggle", async ({
+test("the phone shows a single Pane, with no Prime beside it", async ({
   app,
   kbench,
 }) => {
@@ -10,10 +10,10 @@ test("the phone shows a single Pane and no Pane-count toggle", async ({
   await app.createWorkspace(kbench.instance.makeFolder("project"));
   await app.createSession("project");
 
-  await expect(app.pane(1)).toBeVisible();
+  await expect(app.phonePane).toBeVisible();
   await expect(app.terminal("session 1")).toBeVisible();
-  await expect(app.pane(2)).toHaveCount(0);
-  await expect(app.panesToggle).toHaveCount(0);
+  await expect(app.pane("left")).toHaveCount(0);
+  await expect(app.terminal("Prime")).toHaveCount(0);
 });
 
 test("the phone shows the open Session's label beside the Menu button", async ({
@@ -25,11 +25,11 @@ test("the phone shows the open Session's label beside the Menu button", async ({
   await app.createSession("alpha");
   await expect(app.terminal("session 1")).toBeVisible();
 
-  await expect(app.paneLabel(1)).toHaveText("alpha › session 1");
+  await expect(app.phonePaneLabel).toHaveText("alpha › session 1");
   const menu = await app.page
     .getByRole("button", { name: "Menu", exact: true })
     .boundingBox();
-  const label = await app.paneLabel(1).boundingBox();
+  const label = await app.phonePaneLabel.boundingBox();
   if (!menu || !label) throw new Error("The Menu button and the label should both show");
   expect(label.x).toBeGreaterThanOrEqual(menu.x + menu.width);
 });

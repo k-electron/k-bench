@@ -12,7 +12,7 @@ k-bench starts and resumes Claude Code using its documented command-line flags, 
 
 ![The New Claude dialog, with a name, model, effort, advisor and the Focus view checkbox](../images/new-claude.png)
 
-The new Session opens in the Focused Pane, so you can start typing to Claude at once. Claude Code starts in the Workspace's folder, through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings and the account you are signed in to are the same as in a terminal window on that Mac.
+The new Session opens in the right Pane, so you can start typing to Claude at once. Claude Code starts in the Workspace's folder, through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings and the account you are signed in to are the same as in a terminal window on that Mac.
 
 The first time Claude Code runs in a folder it asks whether you trust it, and **"No, exit" is selected by default**. Answer in the terminal as you would anywhere. If you exit there, the Session stops, and you can restart it from its **...** menu.
 
@@ -109,9 +109,9 @@ A Claude Session runs one conversation at a time. You can move it to another wit
 
 Several Sessions can share one Workspace, but a folder has at most one Workspace. If two conversations will edit the same project at once, they can step on each other's files. A common remedy is a separate git worktree for each, with a Workspace per worktree.
 
-## A second Pane for a dev server
+## The right Pane for a dev server
 
-On a wide screen, put Claude Code in one [Pane](using-k-bench.md#panes) and a dev server, a test watcher or a log tail in the other. Create a shell Session in the same Workspace for it (**+**, then **New shell**), open it with `⌘`-click (or **Open in other pane**), and use `⌘\` to move between the two. You see Claude's changes take effect as they happen.
+On a wide screen the Prime is always in the left [Pane](using-k-bench.md#panes). Put a dev server, a test watcher or a log tail in the right one: create a shell Session in the Workspace for it (**+**, then **New shell**), and it opens there. Click the Worker in the sidebar to bring the Worker back, and the shell again to return to it. You see Claude's changes take effect as they happen.
 
 ## Driving Claude Code from your phone
 
