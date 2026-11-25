@@ -116,7 +116,7 @@ export function WorkspaceView({
       session={session}
       workspace={workspace}
       workspaces={workspaces}
-      focused={view.focus === side}
+      focused={view.focusedTerminal === side}
       starting={view.starting}
     />
   );
@@ -127,7 +127,7 @@ export function WorkspaceView({
       role="group"
       aria-label={side === "left" ? "Left Pane" : "Right Pane"}
       // Capture, so clicking into the terminal counts.
-      onFocusCapture={() => view.focusPane(side)}
+      onFocusCapture={() => view.focusTerminal(side)}
       className="flex min-h-0 min-w-0 flex-col"
     >
       {view.shut === side && content.kind === "session" ? (
@@ -166,7 +166,7 @@ export function WorkspaceView({
           Prime
         </>,
       )}
-      {/* biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA pattern for a resizable split */}
+      {/* biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA pattern for a resizable divider */}
       <div
         role="separator"
         aria-label="Resize panes"

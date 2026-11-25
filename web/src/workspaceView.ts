@@ -38,7 +38,7 @@ export interface WorkspaceView {
    * The Pane whose terminal should have the keyboard: the one the owner last chose
    * something for, or last clicked into, unless that one is shut.
    */
-  focus: Side;
+  focusedTerminal: Side;
   /**
    * The Open Workspace is being opened, which starts its Stopped Prime and Worker: their
    * Panes wait for their terminals rather than offering Restart.
@@ -53,7 +53,7 @@ export interface WorkspaceView {
   openWorkspace(id: string): void;
   /**
    * Makes a Workspace the Open Workspace on the Host, which starts its Stopped Prime and
-   * Worker, leaving its right Pane and this device's split alone: the phone's open by name.
+   * Worker, leaving its right Pane and this device's divider alone: the phone's open by name.
    * `starting` covers it as for `openWorkspace`.
    */
   open(id: string): void;
@@ -79,8 +79,8 @@ export interface WorkspaceView {
    * Other Session.
    */
   chooseSession(workspaceId: string, session: SessionState): void;
-  /** The owner clicked into a Pane. */
-  focusPane(side: Side): void;
+  /** The owner clicked into a Pane's terminal. */
+  focusTerminal(side: Side): void;
   /**
    * Moves the divider. Within `SHUT_EDGE` of an edge it shuts that Pane, which reopens at
    * `reopenAt`: where the divider was before the drag that shut it. It defaults to the
@@ -95,28 +95,28 @@ export interface WorkspaceView {
 export const SHUT_EDGE = 0.08;
 
 /** Where the divider sits for one Workspace on this device. */
-export interface Split {
+export interface Divider {
   /** As `WorkspaceView.ratio`. */
   ratio: number;
   shut: Side | null;
 }
 
-const HALF_AND_HALF: Split = { ratio: 0.5, shut: null };
+const HALF_AND_HALF: Divider = { ratio: 0.5, shut: null };
 
-/** The split after the divider is moved to `ratio`. */
-export function moveDivider(ratio: number, reopenAt: number): Split {
+/** Where the divider sits after it is moved to `ratio`. */
+export function moveDivider(ratio: number, reopenAt: number): Divider {
   if (ratio < SHUT_EDGE) return { ratio: reopenAt, shut: "left" };
   if (ratio > 1 - SHUT_EDGE) return { ratio: reopenAt, shut: "right" };
   return { ratio, shut: null };
 }
 
 /**
- * Where the browser keeps each Workspace's split, which stays on this device: a laptop and
+ * Where the browser keeps each Workspace's divider, which stays on this device: a laptop and
  * an iPad can each be set up their own way.
  */
-const SPLITS_KEY = "k-bench.splits";
+const DIVIDERS_KEY = "k-bench.dividers";
 
-function isSplit(value: unknown): value is Split {
+function isDivider(value: unknown): value is Divider {
   if (typeof value !== "object" || value === null) return false;
   const { ratio, shut } = value as Record<string, unknown>;
   return (
@@ -127,12 +127,12 @@ function isSplit(value: unknown): value is Split {
   );
 }
 
-function loadSplits(): Record<string, Split> {
+function loadDividers(): Record<string, Divider> {
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem(SPLITS_KEY) ?? "{}");
+    const saved: unknown = JSON.parse(localStorage.getItem(DIVIDERS_KEY) ?? "{}");
     if (typeof saved !== "object" || saved === null) return {};
     return Object.fromEntries(
-      Object.entries(saved).filter(([, split]) => isSplit(split)),
+      Object.entries(saved).filter(([, divider]) => isDivider(divider)),
     );
   } catch {
     // Storage unavailable or garbled: every Workspace starts half and half.
@@ -140,11 +140,11 @@ function loadSplits(): Record<string, Split> {
   }
 }
 
-function saveSplits(splits: Record<string, Split>): void {
+function saveDividers(dividers: Record<string, Divider>): void {
   try {
-    localStorage.setItem(SPLITS_KEY, JSON.stringify(splits));
+    localStorage.setItem(DIVIDERS_KEY, JSON.stringify(dividers));
   } catch {
-    // Storage unavailable: the splits last until the page is closed.
+    // Storage unavailable: the dividers last until the page is closed.
   }
 }
 
@@ -198,8 +198,8 @@ export function useWorkspaceView(
   state: State | undefined,
   actions: Actions,
 ): WorkspaceView {
-  const [splits, setSplits] = useState(loadSplits);
-  const [focus, setFocus] = useState<Side>("left");
+  const [dividers, setDividers] = useState(loadDividers);
+  const [focused, setFocused] = useState<Side>("left");
   // How many open requests are in flight.
   const [opening, setOpening] = useState(0);
   const open = useCallback(
@@ -219,7 +219,7 @@ export function useWorkspaceView(
 
   const openedOnLoad = useOpenOnLoad(state, open);
 
-  useEffect(() => saveSplits(splits), [splits]);
+  useEffect(() => saveDividers(dividers), [dividers]);
 
   useEffect(() => {
     try {
@@ -242,11 +242,11 @@ export function useWorkspaceView(
   }, [title]);
 
   const openId = workspace?.id;
-  const split = (openId && splits[openId]) || HALF_AND_HALF;
+  const divider = (openId && dividers[openId]) || HALF_AND_HALF;
 
   /** Reopens a Workspace's Pane if it is shut, where the divider was before. */
   const reopen = useCallback((workspaceId: string, side: Side) => {
-    setSplits((current) => {
+    setDividers((current) => {
       const was = current[workspaceId];
       if (was?.shut !== side) return current;
       return { ...current, [workspaceId]: { ratio: was.ratio, shut: null } };
@@ -269,27 +269,27 @@ export function useWorkspaceView(
         shown,
         tabs: shown === null || tabs.includes(shown) ? tabs : [...tabs, shown],
       }));
-      setFocus("right");
+      setFocused("right");
       reopen(workspaceId, "right");
     },
     [changeRightPane, reopen],
   );
 
   const showPrimeOf = (workspaceId: string) => {
-    setFocus("left");
+    setFocused("left");
     reopen(workspaceId, "left");
   };
 
   const openWorkspace = (id: string) => {
-    setFocus("left");
+    setFocused("left");
     // The Workspace's name brings back the Worker, so a shut right Pane opens again.
     reopen(id, "right");
     open(id, { showWorker: true });
   };
 
   const shown = new Set<string>();
-  if (split.shut !== "left" && left.kind === "session") shown.add(left.session.id);
-  if (split.shut !== "right" && right.kind === "session") shown.add(right.session.id);
+  if (divider.shut !== "left" && left.kind === "session") shown.add(left.session.id);
+  if (divider.shut !== "right" && right.kind === "session") shown.add(right.session.id);
 
   return {
     workspace,
@@ -297,9 +297,9 @@ export function useWorkspaceView(
     right,
     worker,
     tabs,
-    ratio: split.ratio,
-    shut: split.shut,
-    focus: focus === split.shut ? otherSide(focus) : focus,
+    ratio: divider.ratio,
+    shut: divider.shut,
+    focusedTerminal: focused === divider.shut ? otherSide(focused) : focused,
     starting: !openedOnLoad || opening > 0,
     shown,
     openWorkspace,
@@ -323,10 +323,10 @@ export function useWorkspaceView(
       else if (session.role === null) showOnRight(workspaceId, session.id);
       else showPrimeOf(workspaceId);
     },
-    focusPane: setFocus,
-    setRatio: (ratio, reopenAt = split.ratio) => {
+    focusTerminal: setFocused,
+    setRatio: (ratio, reopenAt = divider.ratio) => {
       if (!openId) return;
-      setSplits((current) => ({ ...current, [openId]: moveDivider(ratio, reopenAt) }));
+      setDividers((current) => ({ ...current, [openId]: moveDivider(ratio, reopenAt) }));
     },
     reopen: (side) => {
       if (openId) reopen(openId, side);

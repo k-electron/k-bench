@@ -93,15 +93,15 @@ test("dragging the divider resizes the right Pane's terminal and its shell sees 
     .toBeLessThan(before);
 });
 
-test("dragging the divider to an edge shuts the left Pane to a rail, and opening it again brings back the split it had", async ({
+test("dragging the divider to an edge shuts the left Pane to a rail, and opening it again brings back the divider where it was", async ({
   app,
   kbench,
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
   await expect(app.terminalIn("left", "Prime")).toBeVisible();
   await app.dragDivider(-200);
-  const split = await app.dividerPercent();
-  expect(split).toBeLessThan(40);
+  const ratio = await app.dividerPercent();
+  expect(ratio).toBeLessThan(40);
 
   await app.shutPane("left");
 
@@ -112,21 +112,21 @@ test("dragging the divider to an edge shuts the left Pane to a rail, and opening
   await app.rail("left", "Prime").click();
 
   await expect(app.terminalIn("left", "Prime")).toBeVisible();
-  expect(await app.dividerPercent()).toBe(split);
+  expect(await app.dividerPercent()).toBe(ratio);
 
   // Opening the Prime from the sidebar reopens its shut Pane too.
   await app.shutPane("left");
   await expect(app.rail("left", "Prime")).toBeVisible();
   await app.session("Prime").click();
   await expect(app.terminalIn("left", "Prime")).toBeVisible();
-  expect(await app.dividerPercent()).toBe(split);
+  expect(await app.dividerPercent()).toBe(ratio);
 
   // Double-clicking the divider gives half and half.
   await app.divider.dblclick();
   await expect(app.divider).toHaveAttribute("aria-valuenow", "50");
 });
 
-test("each Workspace's split and shut Pane are kept on this device across a reload, and not on another device", async ({
+test("each Workspace's divider and shut Pane are kept on this device across a reload, and not on another device", async ({
   app,
   otherDevice,
   kbench,
@@ -136,7 +136,7 @@ test("each Workspace's split and shut Pane are kept on this device across a relo
   await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
   await expect(app.terminalIn("left", "Prime")).toBeVisible();
   await app.dragDivider(-200);
-  const alphaSplit = await app.dividerPercent();
+  const alphaRatio = await app.dividerPercent();
   await app.openWorkspace("beta");
   await expect(app.workspaceTitle).toHaveText("beta");
   await app.shutPane("right");
@@ -150,7 +150,7 @@ test("each Workspace's split and shut Pane are kept on this device across a relo
   await expect(otherDevice.terminalIn("right", "Worker")).toBeVisible();
   await app.openWorkspace("alpha");
   await expect(app.terminalIn("right", "Worker")).toBeVisible();
-  expect(await app.dividerPercent()).toBe(alphaSplit);
+  expect(await app.dividerPercent()).toBe(alphaRatio);
 
   // Opening a Workspace by its name reopens its shut right Pane.
   await app.openWorkspace("beta");
