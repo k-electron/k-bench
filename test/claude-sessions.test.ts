@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
-import { createTestInstance, type TestServer } from "./harness/instance.ts";
+import {
+  createTestInstance,
+  otherSessions,
+  type TestServer,
+} from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { typeIntoSession } from "./harness/tmux.ts";
 
@@ -38,7 +42,7 @@ describe("Claude Sessions", () => {
 
     const claude = await server.createClaudeSession(workspace.id);
 
-    const sessions = (await server.state()).workspaces[0]?.sessions;
+    const sessions = otherSessions((await server.state()).workspaces[0]);
     expect(sessions).toMatchObject([
       { id: shell.id, kind: "shell", status: "running" },
       { id: claude.id, name: "session 2", kind: "claude", status: "running" },
@@ -77,7 +81,7 @@ describe("Claude Sessions", () => {
 
     expect(taken.status).toBe(409);
     expect(unnamed.name).toBe("session 1");
-    expect((await server.state()).workspaces[0]?.sessions).toHaveLength(2);
+    expect(otherSessions((await server.state()).workspaces[0])).toHaveLength(2);
   });
 
   it("refuses launch options that are not an object, and creates no Session", async () => {
@@ -89,7 +93,7 @@ describe("Claude Sessions", () => {
 
     expect(response.status).toBe(422);
     expect(((await response.json()) as { error: string }).error).toContain("claude");
-    expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
+    expect(otherSessions((await server.state()).workspaces[0])).toEqual([]);
   });
 
   it("is Stopped when Claude Code quits with status 0, with no shell left underneath", async () => {

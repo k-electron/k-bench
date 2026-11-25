@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 
 describe("Workspaces and Sessions over the API", () => {
   it("creates a Workspace and a Session, and state lists the Session as running", async () => {
@@ -19,7 +19,7 @@ describe("Workspaces and Sessions over the API", () => {
       name: "My project",
       folder,
     });
-    expect(state.workspaces[0]?.sessions).toMatchObject([
+    expect(otherSessions(state.workspaces[0])).toMatchObject([
       { id: session.id, name: "session 1", status: "running" },
     ]);
   });

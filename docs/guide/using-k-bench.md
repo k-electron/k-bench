@@ -8,6 +8,8 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Create a Workspace.** Choose **New Workspace** and pick a project folder on your Mac. The picker opens in the folder your newest Workspace is in (Home when you have none) and shows one folder's subfolders at a time: choose a subfolder to step into it, a breadcrumb above the list to step back up, or type in **Filter** to narrow a long list. **Places**, on the left (a row of chips on a phone), jumps to Home, to the folders that hold your Workspaces (the ones holding most first, up to five) or to Computer, the top of the disk. A folder that already has a Workspace shows that Workspace's name. The folder shown is the one you get. The name defaults to the folder's name, shown greyed in the **Name** box; type another one if you like. A folder has at most one Workspace, so a project never gets two sets of Claudes editing the same files: creating a Workspace on a folder that already has one is refused with a message naming that Workspace, and so is changing a Workspace's folder to one. **Change folder** in a Workspace's menu uses the same picker.
 
+**Its Prime and Worker.** Every new Workspace comes with two Claude Sessions, the **Prime** and the **Worker**, made with it and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, for planning, and the Worker runs Sonnet at high effort with an Opus advisor, for doing the work, both in Focus view. They're passed again on every launch. Both start out Stopped; start each with **Restart** from its **...** menu, and the first start begins its Claude conversation, which later restarts resume. They're always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
+
 **Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the Focused Pane and starts in the Workspace's folder.
 
 - **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
@@ -18,7 +20,7 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 **Manage them.** Each row has a **...** menu.
 
 - A Workspace's menu has **Rename**, **Change folder** and **Delete**. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace by its grip to reorder it (on a phone, press and hold first), and use the chevron to collapse it.
-- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
+- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. The Prime's and Worker's menus have no **Rename** or **Delete**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
 
 A green dot next to a Session means its program is running. A hollow dot means it is Stopped.
 

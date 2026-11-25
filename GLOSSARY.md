@@ -13,8 +13,12 @@ The owner's Mac that runs k-bench and every Session.
 _Avoid_: server, box, machine
 
 **Workspace**:
-A named entry pointing at a project folder on the Host. A folder has at most one Workspace. A Workspace lasts until the owner deletes it, through Host reboots and whether or not it has any Sessions.
+A named entry pointing at a project folder on the Host. A folder has at most one Workspace. Every Workspace has a Prime and a Worker. A Workspace lasts until the owner deletes it, through Host reboots and whether or not its Sessions are running.
 _Avoid_: project, repo, folder
+
+**Open Workspace**:
+The one Workspace the main view shows. No Pane ever shows a Session from another Workspace. It follows the owner between devices: a device opens on whichever Workspace the owner last opened, on any device.
+_Avoid_: current workspace, active workspace
 
 **Missing**:
 The state of a Workspace whose folder no longer exists on the Host. Its Sessions can't be started until the folder is fixed. Every other Workspace and Session keeps working.
@@ -25,8 +29,16 @@ A named, persistent program belonging to one Workspace, started in that Workspac
 _Avoid_: terminal, tab, tmux session
 
 **Claude Session**:
-A Session that runs one Claude conversation at a time, started from the New Claude dialog with the owner's Launch options; restarting it resumes the one last running in it.
+A Session that runs one Claude conversation at a time. It is either started from the New Claude dialog with the owner's Launch options, or made by k-bench as a Workspace's Prime or Worker. Restarting it resumes the one last running in it.
 _Avoid_: Claude terminal, agent session
+
+**Prime**:
+The Claude Session in a Workspace's left Pane. Every Workspace has exactly one, made with the Workspace and lasting as long as it does. It can't be renamed or deleted. Opening the Workspace starts it, or restarts it when Stopped. Its Launch options are set by k-bench.
+_Avoid_: prime agent, main session
+
+**Worker**:
+The Claude Session a Workspace's right Pane shows by default. Every Workspace has exactly one, and in every other way it behaves like the Prime.
+_Avoid_: worker agent
 
 **Launch options**:
 The model, effort, advisor and Focus view a Claude Session starts with. They are fixed for the Claude Session's life.

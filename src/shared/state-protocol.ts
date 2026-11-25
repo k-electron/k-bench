@@ -11,10 +11,17 @@
 /** What a Session runs: the owner's shell, or Claude Code (a Claude Session). */
 export type SessionKind = "shell" | "claude";
 
+/**
+ * Which of a Workspace's two fixed Claude Sessions a Session is: its Prime or its Worker.
+ * A Session with no role is an Other Session.
+ */
+export type SessionRole = "prime" | "worker";
+
 export interface SessionState {
   id: string;
   name: string;
   kind: SessionKind;
+  role: SessionRole | null;
   status: "running" | "stopped";
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;

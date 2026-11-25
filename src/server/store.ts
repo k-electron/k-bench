@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { LaunchOptions } from "../shared/launch-options.ts";
-import type { SessionKind } from "../shared/state-protocol.ts";
+import type { SessionKind, SessionRole } from "../shared/state-protocol.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
@@ -43,6 +43,13 @@ const MIGRATIONS: string[] = [
     options TEXT NOT NULL
   );
   `,
+  // A Session's role: 'prime' or 'worker' for a Workspace's two fixed Claude Sessions, null
+  // for an Other Session. A Workspace has at most one of each.
+  `
+  ALTER TABLE sessions ADD COLUMN role TEXT;
+  CREATE UNIQUE INDEX sessions_one_per_role ON sessions (workspace_id, role)
+    WHERE role IS NOT NULL;
+  `,
   // When each Workspace was created (milliseconds), so the folder picker can open next to the
   // newest. Workspaces from before this get their row order, which sorts them before any new one.
   `
@@ -64,6 +71,8 @@ export interface SessionRow {
   workspaceId: string;
   name: string;
   kind: SessionKind;
+  /** Whether it is the Workspace's Prime or Worker; null for an Other Session. */
+  role: SessionRole | null;
   /** The Claude conversation a Claude Session runs; null for a shell Session. */
   conversationId: string | null;
   /** The Launch options a Claude Session was created with; null for a shell Session. */
@@ -109,6 +118,19 @@ export class Store {
 
   close(): void {
     this.db.close();
+  }
+
+  /** Runs `change` in one transaction: every write in it is kept, or none is. */
+  transaction<T>(change: () => T): T {
+    this.db.exec("BEGIN");
+    try {
+      const result = change();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   listWorkspaces(): WorkspaceRow[] {
@@ -177,22 +199,17 @@ export class Store {
   /** Gives each Workspace the position of its index in `ids`, in one transaction. */
   setWorkspaceOrder(ids: string[]): void {
     const update = this.db.prepare("UPDATE workspaces SET position = ? WHERE id = ?");
-    this.db.exec("BEGIN");
-    try {
+    this.transaction(() => {
       ids.forEach((id, index) => {
         update.run(index, id);
       });
-      this.db.exec("COMMIT");
-    } catch (error) {
-      this.db.exec("ROLLBACK");
-      throw error;
-    }
+    });
   }
 
   listSessions(workspaceId: string): SessionRow[] {
     const rows = this.db
       .prepare(
-        `SELECT id, workspace_id AS workspaceId, name, kind,
+        `SELECT id, workspace_id AS workspaceId, name, kind, role,
                 conversation_id AS conversationId, launch_options AS launchOptions
          FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid`,
       )
@@ -203,7 +220,7 @@ export class Store {
   getSession(id: string): (SessionRow & { folder: string }) | undefined {
     const row = this.db
       .prepare(
-        `SELECT s.id, s.workspace_id AS workspaceId, s.name, s.kind,
+        `SELECT s.id, s.workspace_id AS workspaceId, s.name, s.kind, s.role,
                 s.conversation_id AS conversationId,
                 s.launch_options AS launchOptions, w.folder
          FROM sessions s JOIN workspaces w ON w.id = s.workspace_id WHERE s.id = ?`,
@@ -258,15 +275,18 @@ export class Store {
     conversationId?: string;
     /** The Launch options of a Claude Session. */
     launchOptions?: LaunchOptions;
+    /** Makes it the Workspace's Prime or Worker. */
+    role?: SessionRole;
   }): SessionRow {
     const conversationId = input.conversationId ?? null;
     const launchOptions = conversationId === null ? null : (input.launchOptions ?? null);
     const kind = conversationId === null ? "shell" : "claude";
+    const role = input.role ?? null;
     this.db
       .prepare(
         `INSERT INTO sessions
-           (id, workspace_id, name, created_at, kind, conversation_id, launch_options)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -274,6 +294,7 @@ export class Store {
         input.name,
         Date.now(),
         kind,
+        role,
         conversationId,
         launchOptions && JSON.stringify(launchOptions),
       );
@@ -282,6 +303,7 @@ export class Store {
       workspaceId: input.workspaceId,
       name: input.name,
       kind,
+      role,
       conversationId,
       launchOptions,
     };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
 import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
-import type { TestServer } from "./harness/instance.ts";
+import { otherSessions, type TestServer } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 
 // What reaches Claude Code is the contract with it (ADR-0005), so these tests read the flags,
@@ -117,7 +117,7 @@ describe("Launch options", () => {
       );
     }
 
-    expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
+    expect(otherSessions((await server.state()).workspaces[0])).toEqual([]);
   });
 
   it("survive a k-bench restart: the Session started again launches with them", async () => {
@@ -135,7 +135,7 @@ describe("Launch options", () => {
     terminal.run("exit 0");
     await pollUntil(
       async () =>
-        (await restarted.state()).workspaces[0]?.sessions[0]?.status === "stopped",
+        otherSessions((await restarted.state()).workspaces[0])[0]?.status === "stopped",
       { description: "the Session to be Stopped" },
     );
 

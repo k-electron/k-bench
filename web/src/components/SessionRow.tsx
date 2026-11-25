@@ -97,14 +97,19 @@ export function SessionRow({
               Restart
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={() => setRenaming(true)}>
-            <PencilIcon />
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
-            <Trash2Icon />
-            Delete
-          </DropdownMenuItem>
+          {/* The Prime and Worker keep their names and last as long as their Workspace. */}
+          {session.role === null && (
+            <>
+              <DropdownMenuItem onSelect={() => setRenaming(true)}>
+                <PencilIcon />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
+                <Trash2Icon />
+                Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <RenameSessionDialog

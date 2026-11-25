@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Added
+
+- Every new Workspace comes with a **Prime** and a **Worker**: two Claude Sessions made with the Workspace and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, and the Worker runs Sonnet at high effort with an Opus advisor, both in Focus view. They're passed again on every launch, so a restart never drifts. Neither is started when the Workspace is created; for now, start each with **Restart** from its row menu. They can't be renamed or deleted (their rows have no **Rename** or **Delete**), and no other Session can be named "Prime" or "Worker". Deleting the Workspace ends them with its other Sessions.
+
 ### Changed
 
 - **New Workspace** and **Change folder** pick the folder with a proper folder picker instead of a pasted path or the bare **Browse folders** list. It opens in the folder your newest Workspace is in (or Home), shows one folder's subfolders at a time with breadcrumbs above them and a **Filter** box, and lists **Places**: Home, the folders that hold your Workspaces (most Workspaces first, up to five) and Computer. A folder that already has a Workspace is marked with its name, and the Workspace's name follows the folder you pick until you type your own. On a phone the picker fills the screen, with Places as a row of chips.

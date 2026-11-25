@@ -11,8 +11,10 @@ import {
 } from "../../src/server/server.ts";
 import {
   EVENTS_PATH,
+  type SessionState,
   type Snapshot,
   type State,
+  type WorkspaceState,
 } from "../../src/shared/state-protocol.ts";
 import { createStateClient, type StateClient } from "../../web/src/stateClient.ts";
 import { createTerminalConnection } from "../../web/src/terminalConnection.ts";
@@ -35,6 +37,14 @@ export interface SessionInfo {
 }
 /** The Launch options a Claude Session is created with (see docs/internals/api.md). */
 export type ClaudeLaunch = Record<string, unknown>;
+/**
+ * A Workspace's Other Sessions: every Session but the Prime and Worker it was created with.
+ * For tests about the Sessions the owner makes. Empty when there is no Workspace.
+ */
+export function otherSessions(workspace: WorkspaceState | undefined): SessionState[] {
+  return workspace?.sessions.filter((session) => session.role === null) ?? [];
+}
+
 /** The header `tailscale serve` adds to every request it proxies. */
 export const LOGIN_HEADER = "Tailscale-User-Login";
 

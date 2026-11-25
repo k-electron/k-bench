@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
-import type { State } from "../shared/state-protocol.ts";
+import {
+  DEFAULT_LAUNCH_OPTIONS,
+  type LaunchOptions,
+  ROLE_LAUNCH_OPTIONS,
+} from "../shared/launch-options.ts";
+import type { SessionRole, State } from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
@@ -25,6 +29,26 @@ export class ServiceError extends Error {
     super(message);
     this.kind = kind;
     this.details = details;
+  }
+}
+
+/** A Workspace's Prime and Worker, in the order they are listed. */
+const ROLES: readonly SessionRole[] = ["prime", "worker"];
+
+/** The fixed names of the Prime and Worker, which no Other Session may take. */
+const ROLE_NAMES: Record<SessionRole, string> = { prime: "Prime", worker: "Worker" };
+
+function isRoleName(name: string): boolean {
+  return ROLES.some((role) => ROLE_NAMES[role] === name);
+}
+
+/** The Prime and Worker last as long as their Workspace, under their fixed names. */
+function assertNoRole(session: { role: SessionRole | null }, change: string): void {
+  if (session.role) {
+    throw new ServiceError(
+      "conflict",
+      `The ${ROLE_NAMES[session.role]} can't be ${change}`,
+    );
   }
 }
 
@@ -68,7 +92,21 @@ export class Service {
     const explicit = input.name?.trim();
     if (explicit) this.assertWorkspaceNameFree(explicit);
     const name = explicit || availableName(basename(folder), this.workspaceNames());
-    const { id } = this.store.addWorkspace({ name, folder });
+    // The Prime and Worker are recorded with the Workspace and started only when asked to.
+    const { id } = this.store.transaction(() => {
+      const workspace = this.store.addWorkspace({ name, folder });
+      for (const role of ROLES) {
+        this.store.addSession({
+          id: randomUUID(),
+          workspaceId: workspace.id,
+          name: ROLE_NAMES[role],
+          role,
+          conversationId: randomUUID(),
+          launchOptions: ROLE_LAUNCH_OPTIONS[role],
+        });
+      }
+      return workspace;
+    });
     return { id, name, folder };
   }
 
@@ -196,7 +234,7 @@ export class Service {
       let n = 1;
       while (taken.has(`session ${n}`)) n++;
       name = `session ${n}`;
-    } else if (taken.has(name)) {
+    } else if (taken.has(name) || isRoleName(name)) {
       throw new ServiceError("conflict", `A Session named "${name}" already exists`);
     }
     const id = randomUUID();
@@ -234,12 +272,13 @@ export class Service {
   renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
     const session = this.store.getSession(sessionId);
     if (!session) throw new ServiceError("not_found", "Unknown Session");
+    assertNoRole(session, "renamed");
     const name = requestedName.trim();
     if (!name) throw new ServiceError("invalid", "name is required");
     const clash = this.store
       .listSessions(session.workspaceId)
       .some((other) => other.id !== sessionId && other.name === name);
-    if (clash) {
+    if (clash || isRoleName(name)) {
       throw new ServiceError("conflict", `A Session named "${name}" already exists`);
     }
     this.store.renameSession(sessionId, name);
@@ -248,9 +287,9 @@ export class Service {
 
   /** Ends the Session's shell and everything in it, then forgets the Session. */
   async deleteSession(sessionId: string): Promise<void> {
-    if (!this.store.getSession(sessionId)) {
-      throw new ServiceError("not_found", "Unknown Session");
-    }
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    assertNoRole(session, "deleted");
     await this.tmux.killSession(sessionId);
     this.store.deleteSession(sessionId);
   }
@@ -265,6 +304,7 @@ export class Service {
           id: session.id,
           name: session.name,
           kind: session.kind,
+          role: session.role,
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
         })),
@@ -293,6 +333,7 @@ export class Service {
   private async startStopped(session: {
     id: string;
     folder: string;
+    role: SessionRole | null;
     conversationId: string | null;
     launchOptions: LaunchOptions | null;
   }): Promise<void> {
@@ -309,8 +350,11 @@ export class Service {
           : {
               conversationId: session.conversationId,
               mode: "resume",
-              // Every Launch option is passed again each time (ADR-0005).
-              options: session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
+              // Every Launch option is passed again each time (ADR-0005). A Prime's or
+              // Worker's are k-bench's fixed ones, whatever was stored with it.
+              options: session.role
+                ? ROLE_LAUNCH_OPTIONS[session.role]
+                : (session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS),
             },
       ),
     );
