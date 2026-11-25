@@ -17,7 +17,7 @@ A named entry pointing at a project folder on the Host. A folder has at most one
 _Avoid_: project, repo, folder
 
 **Places**:
-The folder picker's shortcuts to where a **Workspace** is likely to be made: Home, the folders that hold the most Workspaces, and Computer, the top of the disk. They are worked out from the Workspaces, never pinned.
+The folder picker's shortcuts to where a Workspace is likely to be made: Home, the folders that hold the most Workspaces, and Computer, the top of the disk. They are worked out from the Workspaces, never pinned.
 _Avoid_: favourites, bookmarks
 
 **Open Workspace**:
@@ -45,7 +45,7 @@ The Claude Session a Workspace's right Pane shows by default. Every Workspace ha
 _Avoid_: worker agent
 
 **Other Session**:
-A **Session** of a **Workspace** that is neither its **Prime** nor its **Worker**: a shell or a **Claude Session** the owner made. The owner names, orders and deletes them, and opens them in the right **Pane**.
+A Session of a Workspace that is neither its Prime nor its Worker: a shell or a Claude Session the owner made. The owner names, orders and deletes them, and opens them in the right Pane.
 _Avoid_: extra session, side session
 
 **Launch options**:
@@ -73,11 +73,11 @@ One of two side-by-side slots in the main view on a desktop or tablet. The left 
 _Avoid_: split, window
 
 **Tab**:
-An entry in the right **Pane**'s tab bar that shows its **Session** there: the **Worker**'s, which always comes first, then one for each **Other Session** the owner opened there. Removing a Tab leaves its Session running; it is not a browser tab.
+An entry in the right Pane's tab bar that shows its Session there: the Worker's, which always comes first, then one for each Other Session the owner opened there. Removing a Tab leaves its Session running; it is not a browser tab.
 _Avoid_: page, slot
 
 **Rail**:
-The thin strip a shut **Pane** leaves, naming its **Session** and showing its **Bell**. Choosing it opens the Pane again.
+The thin strip a shut Pane leaves, naming its Session and showing its Bell. Choosing it opens the Pane again.
 _Avoid_: collapsed pane, gutter
 
 **Extra keys**:
