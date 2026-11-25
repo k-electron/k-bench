@@ -264,8 +264,9 @@ test("text typed in one Session is not carried into the next: only the new text 
   // nothing of the first Session's "ab" is deleted or retyped here.
   await keyboardEdit(app, 0, 1, "d");
 
-  await expect(other).toContainText("c^?d");
-  await expect(other).not.toContainText("ab");
+  // All that `cat` printed after its marker is the "c", the Backspace and the "d". Only its
+  // output is checked: the prompt above it shows the host name, which can hold any letters.
+  await expect(other).toContainText(/cat-42\s*c\^\?d\s*$/);
 });
 
 test("Return with a pending correction sends the correction, then Enter, and no line feed", async ({
