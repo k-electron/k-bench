@@ -72,6 +72,50 @@ test("make nested New folders in the picker; Create makes them, then the Workspa
   expect(existsSync(join(projects, "acme", "client", "web"))).toBe(true);
 });
 
+test("type a path in the picker: Tab completes a folder, Enter goes there, and a tail that doesn't exist becomes new folders", async ({
+  app,
+  kbench,
+}) => {
+  const projects = kbench.instance.makeFolder("projects");
+  mkdirSync(join(projects, "billing"));
+  mkdirSync(join(projects, ".secret"));
+  const picker = app.folderPicker;
+  const field = picker.getByRole("combobox", { name: "Folder path" });
+  const suggestion = (name: string) => picker.getByRole("option", { name, exact: true });
+
+  await app.page.getByRole("button", { name: "New Workspace" }).click();
+  await picker.getByRole("button", { name: "Type a path" }).click();
+  await field.fill("~/pro");
+  await expect(suggestion("projects")).toBeVisible();
+  await field.press("Tab");
+  await expect(field).toHaveValue("~/projects/");
+  await expect(suggestion("billing")).toBeVisible();
+  // Hidden folders are offered only once a `.` is typed.
+  await expect(suggestion(".secret")).toHaveCount(0);
+  await field.press(".");
+  await expect(suggestion(".secret")).toBeVisible();
+  await field.press("Backspace");
+  await field.pressSequentially("bil");
+  await field.press("Tab");
+  await field.press("Enter");
+
+  await expect(app.breadcrumb("billing")).toHaveAttribute("aria-current", "location");
+  await expect(field).toHaveCount(0);
+
+  await picker.getByRole("button", { name: "Type a path" }).click();
+  await field.fill("~/projects/billing/api/v2");
+  await field.press("Enter");
+  await expect(picker.getByText("v2 doesn't exist yet")).toBeVisible();
+  // Enter never creates anything.
+  expect(existsSync(join(projects, "billing", "api"))).toBe(false);
+  await app.page.getByRole("button", { name: "Create 2 folders and Workspace" }).click();
+
+  await expect(app.workspace("v2")).toHaveAttribute(
+    "title",
+    join(projects, "billing", "api", "v2"),
+  );
+});
+
 test("a second Workspace on the same folder is refused, naming the one that has it", async ({
   app,
   kbench,

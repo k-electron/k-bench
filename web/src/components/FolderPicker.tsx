@@ -5,17 +5,23 @@ import {
   HomeIcon,
   MonitorIcon,
   SearchIcon,
+  TextCursorInputIcon,
 } from "lucide-react";
-import { Fragment, useEffect, useId, useRef, useState } from "react";
+import { Fragment, type RefObject, useEffect, useId, useRef, useState } from "react";
 import { api, type DirectoryListing } from "@/api";
 import {
+  basename,
+  choicePath,
   crumbs,
   dirname,
+  expandPath,
   type FolderChoice,
   folderNameProblem,
   join,
   type Place,
   places,
+  tildePath,
+  typedPath,
 } from "@/folders";
 import { cn } from "@/lib/utils";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
@@ -32,9 +38,13 @@ export const FOLDER_DIALOG_CLASS =
 /**
  * The listing of `path`, or of the picker's starting folder when `path` is undefined. Cleared
  * while a new one loads, so the list never shows one folder's subfolders under another's name.
- * With `climb`, a path that can't be listed gives way to its nearest ancestor that can.
+ * With `climb`, a path that can't be listed gives way to its nearest ancestor that can. With
+ * `hidden`, it includes hidden folders (names starting with `.`).
  */
-function useDirectoryListing(path: string | undefined, climb: boolean) {
+function useDirectoryListing(
+  path: string | undefined,
+  { climb = false, hidden = false }: { climb?: boolean; hidden?: boolean } = {},
+) {
   const [listing, setListing] = useState<DirectoryListing>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -42,7 +52,7 @@ function useDirectoryListing(path: string | undefined, climb: boolean) {
     setError(undefined);
     let live = true;
     const load = (at: string | undefined): Promise<DirectoryListing> =>
-      api.listDirectories(at).catch((e: unknown) => {
+      api.listDirectories(at, { hidden }).catch((e: unknown) => {
         if (climb && at !== undefined && at !== "/") return load(dirname(at));
         throw e;
       });
@@ -53,14 +63,49 @@ function useDirectoryListing(path: string | undefined, climb: boolean) {
     return () => {
       live = false;
     };
-  }, [path, climb]);
+  }, [path, climb, hidden]);
   return { listing, error };
 }
 
 /**
- * Picks a folder on the Host: Places to jump to, breadcrumbs for the folder shown, a filter,
- * that folder's subfolders, and New folder to name folders that don't exist yet (nothing is
- * made here; the dialog's request makes them). The choice is reported through `onChange`,
+ * The folder a typed path means, as a choice: its deepest folder that exists, and the rest as
+ * new folders. Nothing is made.
+ */
+async function resolveTypedPath(path: string): Promise<FolderChoice> {
+  const newFolders: string[] = [];
+  for (let at = path; ; at = dirname(at)) {
+    try {
+      return { base: (await api.listDirectories(at)).path, newFolders };
+    } catch (e) {
+      if (at === "/") throw e;
+      newFolders.unshift(basename(at));
+    }
+  }
+}
+
+/**
+ * Calls `onEscape` for Escape pressed in `input`. The dialog closes on Escape in a capturing
+ * listener on the document, so it has to be caught before that, on the window.
+ */
+function useEscapeIn(input: RefObject<HTMLInputElement | null>, onEscape: () => void) {
+  const callback = useRef(onEscape);
+  callback.current = onEscape;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.target !== input.current) return;
+      event.stopPropagation();
+      callback.current();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [input]);
+}
+
+/**
+ * Picks a folder on the Host: Places to jump to, breadcrumbs for the folder shown (which turn
+ * into a path field to type or paste a path), a filter, that folder's subfolders, and New
+ * folder to name folders that don't exist yet (nothing is made here; the dialog's request
+ * makes them). The choice is reported through `onChange`,
  * with whether the owner has moved since it opened. It opens at `start`, or the nearest
  * folder above it that exists, or else where the server says (beside the newest Workspace,
  * or Home).
@@ -83,7 +128,7 @@ export function FolderPicker({
   const [picked, setPicked] = useState(false);
   const [filter, setFilter] = useState("");
   const [adding, setAdding] = useState(false);
-  const { listing, error } = useDirectoryListing(base, opening);
+  const { listing, error } = useDirectoryListing(base, { climb: opening });
   const [root, setRoot] = useState<string>();
   const here = base === undefined || opening ? listing?.path : base;
 
@@ -141,14 +186,7 @@ export function FolderPicker({
         onGo={go}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-        <Breadcrumbs
-          choice={{ base: here, newFolders }}
-          root={root}
-          onGo={go}
-          onTrim={(count) =>
-            choose({ base: here, newFolders: newFolders.slice(0, count) })
-          }
-        />
+        <PathBar choice={{ base: here, newFolders }} root={root} onChoose={choose} />
         <div className="flex gap-2">
           {!inNewFolder && (
             <div className="relative flex-1">
@@ -242,9 +280,208 @@ function Places({
   );
 }
 
-function tildePath(path: string, root: string): string {
-  if (path === root) return "~";
-  return path.startsWith(`${root}/`) ? `~${path.slice(root.length)}` : path;
+/**
+ * The breadcrumbs, or, once the bar is clicked or tapped, a path field in their place, like a
+ * file manager's address bar.
+ */
+function PathBar({
+  choice,
+  root,
+  onChoose,
+}: {
+  choice: FolderChoice;
+  root: string;
+  onChoose: (choice: FolderChoice) => void;
+}) {
+  const [typing, setTyping] = useState(false);
+  if (typing) {
+    return (
+      <PathField
+        choice={choice}
+        root={root}
+        onChoose={(next) => {
+          setTyping(false);
+          onChoose(next);
+        }}
+        onCancel={() => setTyping(false)}
+      />
+    );
+  }
+  return (
+    <div className="flex min-h-8 items-center rounded-md border px-1">
+      <Breadcrumbs
+        choice={choice}
+        root={root}
+        onGo={(folder) => onChoose({ base: folder, newFolders: [] })}
+        onTrim={(count) =>
+          onChoose({ base: choice.base, newFolders: choice.newFolders.slice(0, count) })
+        }
+      />
+      {/* The rest of the bar: clicking or tapping it turns the bar into the path field. */}
+      <button
+        type="button"
+        aria-label="Type a path"
+        title="Type a path"
+        onClick={() => setTyping(true)}
+        className="flex min-h-7 min-w-8 flex-1 items-center justify-end self-stretch rounded-sm px-1 text-muted-foreground hover:bg-accent"
+      >
+        <TextCursorInputIcon className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A path to type or paste, with suggestions from the typed path's parent folder (hidden ones,
+ * greyed, once the name being typed starts with `.`). Tab completes the highlighted
+ * suggestion, or the first; Enter goes to the typed path, or to a suggestion picked with the
+ * arrow keys, and never makes anything: a part of the path that doesn't exist becomes new
+ * folders. Escape, or leaving the field, goes back to the breadcrumbs unchanged.
+ */
+function PathField({
+  choice,
+  root,
+  onChoose,
+  onCancel,
+}: {
+  choice: FolderChoice;
+  root: string;
+  onChoose: (choice: FolderChoice) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(() => {
+    const shown = tildePath(choicePath(choice), root);
+    return shown.endsWith("/") ? shown : `${shown}/`;
+  });
+  // Set only by the arrow keys, so Enter goes where was typed unless a suggestion was picked.
+  const [highlight, setHighlight] = useState<number>();
+  const [problem, setProblem] = useState<string>();
+  const input = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const problemId = useId();
+  useEscapeIn(input, onCancel);
+
+  const { head, parent, partial } = typedPath(text, root);
+  const { listing } = useDirectoryListing(parent, { hidden: partial.startsWith(".") });
+  const typed = partial.toLowerCase();
+  const later = (name: string) => Number(!name.toLowerCase().startsWith(typed));
+  // Names that start with what was typed first, each group in name order.
+  const suggestions = (listing?.directories ?? [])
+    .filter((d) => d.name.toLowerCase().includes(typed))
+    .sort((a, b) => later(a.name) - later(b.name));
+  const tabTarget = highlight ?? 0;
+
+  const edit = (next: string) => {
+    setText(next);
+    setHighlight(undefined);
+    setProblem(undefined);
+  };
+  const complete = (name: string) => {
+    edit(`${head}${name}/`);
+    input.current?.focus();
+  };
+  const go = (path: string) => {
+    resolveTypedPath(path).then(onChoose, (e: unknown) =>
+      setProblem(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  return (
+    <div className="grid gap-1">
+      <div className="relative">
+        <Input
+          ref={input}
+          autoFocus
+          role="combobox"
+          aria-label="Folder path"
+          aria-autocomplete="list"
+          aria-expanded={suggestions.length > 0}
+          aria-controls={listId}
+          aria-activedescendant={
+            highlight === undefined ? undefined : `${listId}-${highlight}`
+          }
+          aria-invalid={problem !== undefined}
+          aria-describedby={problem === undefined ? undefined : problemId}
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="~/projects/new-app"
+          className="h-8 font-mono text-sm"
+          value={text}
+          onFocus={(event) => event.target.select()}
+          onBlur={onCancel}
+          onChange={(event) => edit(event.target.value)}
+          onKeyDown={(event) => {
+            const count = suggestions.length;
+            if (event.key === "Enter") {
+              // Enter here must not submit the dialog's form.
+              event.preventDefault();
+              const picked = highlight === undefined ? undefined : suggestions[highlight];
+              go(picked ? join(parent, picked.name) : expandPath(text, root));
+            } else if (event.key === "Tab" && !event.shiftKey && count > 0) {
+              event.preventDefault();
+              const pick = suggestions[tabTarget];
+              if (pick) complete(pick.name);
+            } else if (event.key === "ArrowDown" && count > 0) {
+              event.preventDefault();
+              setHighlight((h) => (h === undefined ? 0 : (h + 1) % count));
+            } else if (event.key === "ArrowUp" && count > 0) {
+              event.preventDefault();
+              setHighlight((h) =>
+                h === undefined ? count - 1 : (h - 1 + count) % count,
+              );
+            }
+          }}
+        />
+        {suggestions.length > 0 && (
+          <div
+            id={listId}
+            role="listbox"
+            aria-label="Suggestions"
+            className="absolute top-full z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
+          >
+            {suggestions.map((directory, index) => (
+              // The field handles the keys; a click or tap completes the suggestion.
+              // biome-ignore lint/a11y/useKeyWithClickEvents: the field handles the keys
+              <div
+                key={directory.path}
+                id={`${listId}-${index}`}
+                role="option"
+                tabIndex={-1}
+                aria-selected={index === highlight}
+                // Keeps the focus, and so the field, where it is.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => complete(directory.name)}
+                className={cn(
+                  "flex cursor-default items-center gap-2 rounded-sm px-2 py-1 text-sm",
+                  index === highlight ? "bg-accent" : "hover:bg-accent",
+                  directory.name.startsWith(".") && "text-muted-foreground",
+                )}
+              >
+                <FolderIcon className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                  {directory.name}
+                </span>
+                {index === tabTarget && (
+                  <kbd
+                    aria-hidden
+                    className="rounded border px-1 text-[10px] text-muted-foreground"
+                  >
+                    Tab
+                  </kbd>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {problem && (
+        <p id={problemId} role="alert" className="text-xs text-destructive">
+          {problem}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -276,7 +513,7 @@ function Breadcrumbs({
   return (
     <nav
       aria-label="Breadcrumbs"
-      className="flex min-h-7 flex-wrap items-center gap-0.5 text-sm"
+      className="flex min-h-7 min-w-0 flex-wrap items-center gap-0.5 text-sm"
     >
       {all.map((crumb, index) => (
         <span key={crumb.path} className="flex items-center gap-0.5">
@@ -430,20 +667,7 @@ function NewFolderInput({
   const [problem, setProblem] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
   const problemId = useId();
-  const cancel = useRef(onCancel);
-  cancel.current = onCancel;
-
-  // The dialog closes on Escape in a capturing listener on the document, so Escape here has
-  // to be caught before that, on the window.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.target !== input.current) return;
-      event.stopPropagation();
-      cancel.current();
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, []);
+  useEscapeIn(input, onCancel);
 
   return (
     <div className="grid gap-1 px-1 py-1">
