@@ -54,9 +54,17 @@ export class AppPage {
       .getByRole("button", { name, exact: true });
   }
 
-  /** A Session's row in the sidebar. */
+  /** A Session's row in the sidebar: the button that opens it. */
   session(name: string): Locator {
     return this.sidebar.getByRole("button", { name, exact: true });
+  }
+
+  /** A Session's whole row in the sidebar: its icon, name, "stopped" label, Bell and menu. */
+  sessionRow(name: string): Locator {
+    return this.sidebar
+      .getByRole("listitem")
+      .filter({ has: this.page.getByRole("button", { name, exact: true }) })
+      .filter({ hasNot: this.page.getByRole("list") });
   }
 
   /** Opens a Session row's menu and picks `item` (for example "Rename" or "Delete"). */
@@ -126,9 +134,11 @@ export class AppPage {
     await this.page.mouse.up();
   }
 
-  /** The running/Stopped indicator beside a Session in the sidebar. */
+  /** A Session's row, found only while it is running, or only while it is Stopped. */
   sessionStatus(name: string, status: "running" | "stopped"): Locator {
-    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+    return status === "stopped"
+      ? this.sessionRow(name).filter({ hasText: "stopped" })
+      : this.sessionRow(name).filter({ hasNotText: "stopped" });
   }
 
   private sizeProbes = 0;
@@ -227,7 +237,7 @@ export class AppPage {
     });
   }
 
-  /** The hint on a Workspace row saying some Session in it rang the bell. */
+  /** The Bell dot on a folded Workspace's tile: some Session in it rang the bell. */
   workspaceBellHint(workspaceName: string): Locator {
     return this.sidebar.getByRole("img", {
       name: `${workspaceName} has a session that rang the bell`,
@@ -235,21 +245,18 @@ export class AppPage {
     });
   }
 
-  /** Collapses a Workspace's Sessions out of view. */
-  async collapseWorkspace(workspaceName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Collapse ${workspaceName}`, exact: true })
-      .click();
+  /** The warning mark on a Missing Workspace's tile. */
+  missingMark(workspaceName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${workspaceName} is Missing`,
+      exact: true,
+    });
   }
 
-  /** Shows a collapsed Workspace's Sessions again. */
-  async expandWorkspace(workspaceName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Expand ${workspaceName}`, exact: true })
-      .click();
-  }
-
-  /** The notice on a Workspace that is Missing; absent when its folder exists. */
+  /**
+   * The note under the Open Workspace when it is Missing, with its Change folder button;
+   * absent when its folder exists or it is folded.
+   */
   missingNotice(workspaceName: string): Locator {
     return this.sidebar
       .getByRole("listitem")
@@ -266,35 +273,46 @@ export class AppPage {
 
   /** Opens a Workspace's row menu and picks `item` (Rename, Change folder, Delete). */
   async workspaceAction(workspaceName: string, item: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Actions for ${workspaceName}`, exact: true })
-      .click();
+    await this.workspaceActions(workspaceName).click();
     await this.page.getByRole("menuitem", { name: item, exact: true }).click();
   }
 
-  /** Drags a Workspace by its handle onto the row of the Workspace named `target`. */
+  /** Drags a Workspace by its row onto the row of the Workspace named `target`. */
   async dragWorkspaceOnto(workspaceName: string, target: string): Promise<void> {
-    const handle = this.sidebar.getByRole("button", {
-      name: `Reorder ${workspaceName}`,
-      exact: true,
-    });
-    const from = await handle.boundingBox();
+    const from = await this.workspace(workspaceName).boundingBox();
     const dest = await this.workspace(target).boundingBox();
     if (!from || !dest) throw new Error("Workspace rows are not visible");
     const { mouse } = this.page;
     await mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await mouse.down();
     // Pointer-driven drags need intermediate moves to register.
-    await mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 5, { steps: 3 });
+    // Past the few pixels a row needs before a press becomes a drag.
+    await mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, {
+      steps: 3,
+    });
     await mouse.move(dest.x + dest.width / 2, dest.y + dest.height / 2, { steps: 10 });
     await mouse.up();
   }
 
+  /** The **+** on a Workspace's row; only the Open Workspace's row has one. */
+  newSessionButton(workspaceName: string): Locator {
+    return this.sidebar.getByRole("button", {
+      name: `New session in ${workspaceName}`,
+      exact: true,
+    });
+  }
+
+  /** The **...** on a Workspace's row; only the Open Workspace's row has one. */
+  workspaceActions(workspaceName: string): Locator {
+    return this.sidebar.getByRole("button", {
+      name: `Actions for ${workspaceName}`,
+      exact: true,
+    });
+  }
+
   /** Opens the **+** menu on a Workspace's row; it offers New shell and New Claude…. */
   async openNewSessionMenu(workspaceName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `New session in ${workspaceName}`, exact: true })
-      .click();
+    await this.newSessionButton(workspaceName).click();
   }
 
   /** The **+** menu's entries, once it is open. */
@@ -361,7 +379,7 @@ export class AppPage {
     await this.launchClaude(options);
   }
 
-  /** The Claude glyph on a Session's row; present on Claude Sessions only. */
+  /** The sparkle (or, for the Prime and Worker, crown or hammer) of a Claude Session's row. */
   claudeGlyph(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {
       name: `${sessionName} is a Claude Session`,

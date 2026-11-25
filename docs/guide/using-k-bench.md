@@ -12,21 +12,28 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Its Prime and Worker.** Every new Workspace comes with two Claude Sessions, the **Prime** and the **Worker**, made with it and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, for planning, and the Worker runs Sonnet at high effort with an Opus advisor, for doing the work, both in Focus view. They're passed again on every launch. Both start out Stopped. **Opening the Workspace**, by clicking its name in the sidebar, starts them: the first start begins each one's Claude conversation, and opening it again later starts a Stopped one again, resuming its conversation. One that is already running is left alone. If you quit one (`/exit`) or it crashes, it stays Stopped until you open the Workspace again or choose **Restart** from its **...** menu; k-bench never restarts it by itself. A Missing Workspace starts nothing when opened, and its Prime and Worker start as soon as you change its folder to one that exists.
 
-**The Open Workspace** is the one you last opened, on any device: k-bench keeps it on your Mac, so your phone and your laptop agree on it, and opening another on one device switches the others too. Loading k-bench opens it, so its Stopped Prime and Worker start when you arrive. Until you open one, it's the first Workspace in your order, and deleting it makes the first one open. Clicking a Session of another Workspace in the sidebar opens that Workspace too. They're always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
+**The Open Workspace** is the one you last opened, on any device: k-bench keeps it on your Mac, so your phone and your laptop agree on it, and opening another on one device switches the others too. Loading k-bench opens it, so its Stopped Prime and Worker start when you arrive. Until you open one, it's the first Workspace in your order, and deleting it makes the first one open. The Prime and Worker are always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
 
-**Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the right Pane and starts in the Workspace's folder.
+**The sidebar** lists every Workspace in your order, each with a coloured tile of two letters from its name (the first letters of its first two words, or the first two letters of a one-word name), its colour worked out from the name. Only the Open Workspace is unfolded, showing its Prime, its Worker, a divider, then its other Sessions. Click another Workspace's name to open it. The header holds **New Workspace** (**+**).
+
+- Each Session has an icon: a crown for the Prime, a hammer for the Worker, a sparkle for another Claude Session and `>_` for a shell.
+- The Sessions on screen, in a Pane, are highlighted.
+- A Stopped Session is dimmed and labelled "stopped".
+- A Session with a [Bell](#bells) shows a bell icon. A Workspace that isn't open shows an amber dot on its tile when any of its Sessions has a Bell.
+- A [Missing](#missing-workspaces) Workspace has a warning mark on its tile.
+
+**Create a Session.** Choose the **+** next to the Open Workspace's name. It is a menu with two choices, and either way the new Session opens in the right Pane and starts in the Workspace's folder.
 
 - **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
-- **New Claude…** opens a dialog where you choose a name (optional), the model, the effort, the advisor and Focus view, then launches a Claude Session. It runs Claude Code itself, and the sidebar marks it with a small orange glyph. A blank name gives "session N" too. [Using k-bench with Claude Code](claude-code.md) explains the dialog.
+- **New Claude…** opens a dialog where you choose a name (optional), the model, the effort, the advisor and Focus view, then launches a Claude Session. It runs Claude Code itself, and the sidebar marks it with a sparkle. A blank name gives "session N" too. [Using k-bench with Claude Code](claude-code.md) explains the dialog.
 
 ![The sidebar: shell Sessions, and Claude Sessions marked with a glyph](../images/claude-sidebar.png)
 
-**Manage them.** Each row has a **...** menu.
+**Manage them** from the **...** menus in the sidebar.
 
-- A Workspace's menu has **Rename**, **Change folder** and **Delete**. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace by its grip to reorder it (on a phone, press and hold first), and use the chevron to collapse it.
-- A Session's menu has **Rename**, **Delete** and, for a Stopped Session, **Restart**. The Prime's and Worker's menus have no **Rename** or **Delete**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
-
-A green dot next to a Session means its program is running. A hollow dot means it is Stopped.
+- The Open Workspace's row has one, with **Rename**, **Change folder** and **Delete**; open a Workspace to manage it. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace's row to reorder it (on a phone, press and hold first); a short click still opens it.
+- An Other Session's menu has **Rename**, **Delete** and, when it's Stopped, **Restart**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
+- The Prime and Worker can't be renamed or deleted, so they have a menu only while Stopped, offering **Restart**.
 
 **Sessions keep running.** A Session is a program running on your Mac, not a page in your browser. Close the tab, lock your phone, lose your connection, or restart k-bench to update it: the Session carries on, and your tabs reconnect on their own (a "reconnecting..." badge shows while they do). You can open the same Session on several devices at once. The terminal then takes the size of the device you used most recently.
 
@@ -48,7 +55,7 @@ Two things to know:
 
 ## Missing Workspaces
 
-A Workspace is **Missing** when its folder no longer exists on your Mac, because you moved, renamed or deleted it. The sidebar shows a note under it: "Missing: its folder is gone from the Host, so Sessions can't start. Running Sessions carry on. Change the folder to fix it."
+A Workspace is **Missing** when its folder no longer exists on your Mac, because you moved, renamed or deleted it. Its tile in the sidebar shows a warning mark, and while it's the Open Workspace a note under its name says "Missing: its folder is gone, so Sessions can't start. Running ones carry on." with a **Change folder** button.
 
 What that means in practice:
 
@@ -56,7 +63,7 @@ What that means in practice:
 - Starting a new Session, or restarting a Stopped one (a Claude Session too), fails and the sidebar says "Folder does not exist".
 - Every other Workspace and Session keeps working.
 
-To fix it, open the Workspace's **...** menu, choose **Change folder** and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
+To fix it, open the Workspace, choose **Change folder** in the note (or in its **...** menu) and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
 
 ## Panes
 
@@ -78,7 +85,7 @@ A narrow screen has a single Pane instead (see [the phone layout](#the-phone-lay
 
 ![A Bell on the "tests" Session in the sidebar](../images/bell.png)
 
-A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a collapsed Workspace shows one too if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
+A Session raises a **Bell** when the program in it rings the terminal bell, which any program does by printing the bell character. The Session's row in the sidebar then shows a bell icon, and a Workspace that isn't open shows an amber dot on its tile if any of its Sessions has a Bell. The Bell clears when you view that Session, which means opening it in a Pane.
 
 To see one, create two Sessions. In the first, run `sleep 5; printf '\a'`, then open the second in the same Pane and wait: the first shows a Bell.
 
@@ -105,7 +112,7 @@ On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-be
 
 ![The phone drawer listing Workspaces and Sessions](../images/phone-drawer.png)
 
-- The **drawer** holds your Workspaces and Sessions. Open it with the menu button at the top left. Choosing a Session closes it and shows that Session. Tap outside it to close it without choosing.
+- The **drawer** holds [the sidebar](#workspaces-and-sessions), with taller rows. Open it with the menu button at the top left. Choosing a Session closes it and shows that Session. Tap outside it to close it without choosing.
 - The **Pane** shows the Session you opened last on this phone, from any Workspace, and its `Workspace › Session` label sits beside the menu button.
 
 ![A phone Session with the extra keys along the bottom](../images/phone-terminal.png)

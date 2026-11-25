@@ -18,7 +18,8 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
 
   await expect(app.missingNotice("project")).toContainText("Missing");
   await expect(app.missingNotice("project")).toContainText("Sessions can't start");
-  await expect(app.missingNotice("other")).toHaveCount(0);
+  await expect(app.missingMark("project")).toBeVisible();
+  await expect(app.missingMark("other")).toHaveCount(0);
   // The Session that was already running carries on.
   await expect(app.sessionStatus("session 1", "running")).toBeVisible();
   await app.session("session 1").click();
@@ -27,18 +28,19 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
   await app.createSession("project");
   await expect(app.sidebar.getByRole("alert")).toContainText("Folder does not exist");
   // Other Workspaces keep working.
+  await app.openWorkspace("other");
+  await expect(app.missingNotice("project")).toHaveCount(0);
   await app.createSession("other");
-  // Both Workspaces now have a "session 1": wait until the new one is the open Session.
-  await expect(
-    app.sidebar
-      .getByRole("listitem")
-      .filter({ has: app.page.getByRole("heading", { name: "other", exact: true }) })
-      .getByRole("button", { name: "session 1", exact: true }),
-  ).toHaveAttribute("aria-current", "true");
+  await expect(app.session("session 1")).toHaveAttribute("aria-current", "true");
   await app.runMarker(app.terminal("session 1"), "kb-other-ok-5353");
 
+  // The note under the Open Workspace offers Change folder.
   const restored = kbench.instance.makeFolder("restored");
-  await app.workspaceAction("project", "Change folder");
+  await app.openWorkspace("project");
+  await app
+    .missingNotice("project")
+    .getByRole("button", { name: "Change folder" })
+    .click();
   // It opens at the nearest folder above the missing one, with nothing to save yet.
   await expect(app.breadcrumb("~")).toHaveAttribute("aria-current", "location");
   await expect(app.page.getByRole("button", { name: "Save" })).toBeDisabled();
@@ -46,6 +48,7 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
   await app.page.getByRole("button", { name: "Save" }).click();
 
   await expect(app.missingNotice("project")).toHaveCount(0);
+  await expect(app.missingMark("project")).toHaveCount(0);
   await app.createSession("project");
   await expect(app.sessionStatus("session 2", "running")).toBeVisible();
 });

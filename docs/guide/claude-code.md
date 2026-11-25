@@ -42,11 +42,11 @@ Focus view is for small screens, where Claude Code's output is hard to follow. C
 
 Focus view applies to that launch only. k-bench does not change your Claude Code settings, so terminals outside k-bench are not affected. Claude Code runs full-screen in a Focus view Session and keeps its own scrollback, so k-bench's [History](using-k-bench.md#scrolling-selecting-and-copying) stays empty while it runs.
 
-## The Claude glyph
+## The Claude icon
 
 ![A sidebar with two Claude Sessions, each marked with a small orange glyph, next to a shell Session](../images/claude-sidebar.png)
 
-A Claude Session shows a small orange glyph beside its name in the sidebar, and its accessible name is "_name_ is a Claude Session". Only Claude Sessions have it.
+In the sidebar a Claude Session shows a sparkle before its name where a shell shows `>_`, and the icon's accessible name is "_name_ is a Claude Session". The Prime and Worker, also Claude Sessions, show a crown and a hammer.
 
 ## Quitting, errors and restarting
 
@@ -70,7 +70,7 @@ Deleting a Claude Session ends it but leaves its conversation alone, so you can 
 
 ## Typing `claude` in an ordinary Session
 
-An ordinary Session, from **New shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no glyph and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
+An ordinary Session, from **New shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no sparkle and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
 
 ## Two things that can surprise you
 

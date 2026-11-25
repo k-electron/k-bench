@@ -1,5 +1,4 @@
-import { PlusIcon } from "lucide-react";
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { basename, choicePath, type FolderChoice } from "@/folders";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { FOLDER_DIALOG_CLASS, FolderPicker } from "./FolderPicker";
@@ -22,8 +21,11 @@ import { Input } from "./ui/input";
 export function NewWorkspaceDialog({
   workspaces,
   onCreate,
+  trigger,
 }: {
   workspaces: WorkspaceState[];
+  /** The button that opens it, labelled "New Workspace". */
+  trigger: ReactNode;
   onCreate: (input: {
     folder: string;
     name?: string;
@@ -63,12 +65,7 @@ export function NewWorkspaceDialog({
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="secondary" size="sm">
-          <PlusIcon />
-          New Workspace
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className={FOLDER_DIALOG_CLASS}>
         <form
           className="flex min-h-0 flex-1 flex-col gap-4"

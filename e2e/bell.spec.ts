@@ -22,34 +22,6 @@ test("a Bell rung in a Session nobody is viewing shows a badge, and opening that
   await expect(app.bellBadge("session 1")).toHaveCount(0);
 });
 
-test("a collapsed Workspace shows a rolled-up hint while any of its Sessions has a Bell", async ({
-  app,
-  kbench,
-}) => {
-  await app.createWorkspace(kbench.instance.makeFolder("project"));
-  await app.createWorkspace(kbench.instance.makeFolder("other"));
-  await app.createSessions("project", 2);
-  await expect(app.workspaceBellHint("project")).toHaveCount(0);
-  await app.collapseWorkspace("project");
-  await expect(app.session("session 1")).toBeHidden();
-
-  await kbench.ringBell("session 1");
-
-  await expect(app.workspaceBellHint("project")).toBeVisible();
-  await expect(app.workspaceBellHint("other")).toHaveCount(0);
-
-  await app.expandWorkspace("project");
-
-  await expect(app.bellBadge("session 1")).toBeVisible();
-  // Expanded, the Sessions show their own badges instead of the roll-up.
-  await expect(app.workspaceBellHint("project")).toHaveCount(0);
-
-  await app.session("session 1").click();
-  await app.collapseWorkspace("project");
-
-  await expect(app.workspaceBellHint("project")).toHaveCount(0);
-});
-
 test("opening a Session with a Bell clears its badge on another device, without a reload", async ({
   app,
   otherDevice,

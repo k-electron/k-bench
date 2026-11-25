@@ -23,7 +23,8 @@ test("renaming to a name that is taken shows the message and keeps the dialog op
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("a"), { name: "Billing" });
   await app.createWorkspace(kbench.instance.makeFolder("b"), { name: "Search" });
-  await expect(app.workspace("Search")).toBeVisible();
+  // Only the Open Workspace's row has the menu.
+  await app.openWorkspace("Search");
 
   await app.workspaceAction("Search", "Rename");
   await app.page.getByRole("textbox", { name: "Name" }).fill("Billing");

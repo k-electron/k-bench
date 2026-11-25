@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   SessionState,
   State,
@@ -46,14 +46,11 @@ export interface WorkspaceView {
   showPrime(): void;
   /** Shows the Worker in the right Pane. */
   showWorker(): void;
-  /**
-   * Opens an Other Session into the right Pane. Its Workspace is opened first if it is
-   * not the Open Workspace.
-   */
+  /** Opens an Other Session of the Open Workspace into the right Pane. */
   openOtherSession(workspaceId: string, sessionId: string): void;
   /**
-   * A Session chosen in the sidebar, of any role and any Workspace: the Prime, the Worker
-   * or an Other Session, opening its Workspace first if it is not the Open Workspace.
+   * A Session of the Open Workspace chosen in the sidebar: the Prime, the Worker or an
+   * Other Session.
    */
   chooseSession(workspaceId: string, session: SessionState): void;
   /** The owner clicked into a Pane. */
@@ -133,14 +130,10 @@ export function useWorkspaceView(
   }, [title]);
 
   const openId = workspace?.id;
-  const showOnRight = useCallback(
-    (workspaceId: string, shown: RightPaneShown) => {
-      setRightShown((current) => ({ ...current, [workspaceId]: shown }));
-      setFocus("right");
-      if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
-    },
-    [actions, openId],
-  );
+  const showOnRight = (workspaceId: string, shown: RightPaneShown) => {
+    setRightShown((current) => ({ ...current, [workspaceId]: shown }));
+    setFocus("right");
+  };
 
   const openWorkspace = (id: string) => {
     setRightShown((current) => ({ ...current, [id]: null }));
@@ -168,11 +161,7 @@ export function useWorkspaceView(
     chooseSession: (workspaceId, session) => {
       if (session.role === "worker") showOnRight(workspaceId, null);
       else if (session.role === null) showOnRight(workspaceId, session.id);
-      else {
-        // The Prime. Another Workspace's opens it, keeping what its right Pane showed.
-        setFocus("left");
-        if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
-      }
+      else setFocus("left");
     },
     focusPane: setFocus,
     setRatio: (ratio) => {

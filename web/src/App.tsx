@@ -70,6 +70,7 @@ export function App() {
               : "w-64",
             phone && !drawerOpen && "invisible -translate-x-full",
           )}
+          mode={phone ? "drawer" : "sidebar"}
           state={state}
           shown={phone ? new Set(phoneSessionId ? [phoneSessionId] : []) : view.shown}
           onOpenSession={(workspaceId, session) => {
