@@ -74,12 +74,14 @@ export function createApp(
 
   app.get("/api/state", async (c) => c.json(await service.getState()));
 
-  // The folder picker. Defaults to the configured root.
+  // The folder picker. Without a path it lists where the picker opens; every answer names
+  // the picker root (Home), which the picker shows among its Places.
   app.get("/api/directories", (c) => {
-    const path = c.req.query("path") || options.pickerRoot;
+    const root = options.pickerRoot;
+    const path = c.req.query("path") || (root && service.pickerStart(root));
     if (!path) throw new ServiceError("invalid", "path is required");
     try {
-      return c.json(listDirectories(path));
+      return c.json({ ...listDirectories(path), ...(root ? { root } : {}) });
     } catch (error) {
       if (error instanceof DirectoryError) {
         throw new ServiceError("invalid", error.message);

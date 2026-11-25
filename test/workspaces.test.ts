@@ -1,5 +1,6 @@
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { createTestInstance } from "./harness/instance.ts";
 
@@ -23,6 +24,80 @@ describe("the folder picker's directory listing", () => {
     // `data` is the instance's own data folder, created next to the folders above.
     expect(listing.directories.map((d) => d.name)).toEqual(["Alpha", "beta", "data"]);
     expect(listing.directories[0]?.path).toBe(join(instance.root, "Alpha"));
+  });
+
+  it("starts at Home when there are no Workspaces, and names Home as the picker root", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+
+    const listing = (await (await server.request("/api/directories")).json()) as {
+      path: string;
+      root: string;
+    };
+
+    expect(listing.path).toBe(instance.root);
+    expect(listing.root).toBe(instance.root);
+  });
+
+  it("starts in the parent of the most recently created Workspace's folder, whatever the sidebar order", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const work = instance.makeFolder("work");
+    const play = instance.makeFolder("play");
+    mkdirSync(join(work, "older"));
+    mkdirSync(join(play, "newer"));
+    const older = await server.createWorkspace({ folder: join(work, "older") });
+    const newer = await server.createWorkspace({ folder: join(play, "newer") });
+    await server.put("/api/workspaces/order", { ids: [newer.id, older.id] });
+
+    const listing = (await (await server.request("/api/directories")).json()) as {
+      path: string;
+      root: string;
+    };
+
+    expect(listing.path).toBe(play);
+    expect(listing.root).toBe(instance.root);
+  });
+
+  it("knows which Workspace is newest after upgrading a store from before creation times", async () => {
+    const instance = createTestInstance();
+    const older = join(instance.makeFolder("work"), "older");
+    const newer = join(instance.makeFolder("play"), "newer");
+    mkdirSync(older);
+    mkdirSync(newer);
+    // The store as the first version of k-bench left it, the newer Workspace dragged first.
+    mkdirSync(instance.config.dataDir, { recursive: true });
+    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
+    old.exec(`
+      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
+      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+      INSERT INTO workspaces VALUES ('w1', 'older', '${older}', 1);
+      INSERT INTO workspaces VALUES ('w2', 'newer', '${newer}', 0);
+      PRAGMA user_version = 1;
+    `);
+    old.close();
+    const server = await instance.start();
+
+    const listing = (await (await server.request("/api/directories")).json()) as {
+      path: string;
+    };
+
+    expect(listing.path).toBe(join(instance.root, "play"));
+  });
+
+  it("starts at Home when the newest Workspace's parent folder is gone", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const gone = instance.makeFolder("gone");
+    mkdirSync(join(gone, "app"));
+    await server.createWorkspace({ folder: join(gone, "app") });
+    rmSync(gone, { recursive: true });
+
+    const listing = (await (await server.request("/api/directories")).json()) as {
+      path: string;
+    };
+
+    expect(listing.path).toBe(instance.root);
   });
 
   it("lists the subfolders of a given path and says where its parent is", async () => {
