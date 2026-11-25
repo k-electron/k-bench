@@ -47,6 +47,36 @@ function Rail({ session, onOpen }: { session: SessionState; onOpen: () => void }
   );
 }
 
+/**
+ * A Session's terminal in a Pane, or why it has none. A starting Prime or Worker waits for
+ * its terminal, which shows Claude Code's own startup. Otherwise a Session that isn't
+ * running offers Restart, or in a Missing Workspace, where it can't start, Change folder.
+ * The desktop's Panes and the phone's one Session on screen both show this.
+ */
+export function SessionBody({
+  session,
+  workspace,
+  workspaces,
+  focused,
+  starting,
+}: {
+  session: SessionState;
+  /** The Workspace it belongs to. */
+  workspace: WorkspaceState;
+  /** Every Workspace, for the folder picker of a Missing one's Change folder. */
+  workspaces: WorkspaceState[];
+  /** Whether its terminal should have the keyboard. */
+  focused: boolean;
+  /** The Workspace is being opened, which starts its Prime and Worker. */
+  starting: boolean;
+}) {
+  const waiting = starting && session.role !== null;
+  if (session.status !== "running" && !waiting && workspace.missing) {
+    return <MissingPane workspace={workspace} workspaces={workspaces} />;
+  }
+  return <Pane key={session.id} session={session} focused={focused} starting={waiting} />;
+}
+
 /** The slim bar naming what a Pane shows. */
 function LabelBar({ children }: { children: ReactNode }) {
   return (
@@ -81,25 +111,15 @@ export function WorkspaceView({
     );
   }
 
-  /**
-   * A Pane's Session: its terminal, or why it has none. A starting Prime or Worker waits
-   * for its terminal, which shows Claude Code's own startup. Otherwise a Session that isn't
-   * running offers Restart, or in a Missing Workspace, where it can't start, Change folder.
-   */
-  const body = (side: Side, session: SessionState) => {
-    const starting = view.starting && session.role !== null;
-    if (session.status !== "running" && !starting && workspace.missing) {
-      return <MissingPane workspace={workspace} workspaces={workspaces} />;
-    }
-    return (
-      <Pane
-        key={session.id}
-        session={session}
-        focused={view.focus === side}
-        starting={starting}
-      />
-    );
-  };
+  const body = (side: Side, session: SessionState) => (
+    <SessionBody
+      session={session}
+      workspace={workspace}
+      workspaces={workspaces}
+      focused={view.focus === side}
+      starting={view.starting}
+    />
+  );
 
   const slot = (side: Side, content: PaneContent, label: ReactNode) => (
     // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings form styling; this only names the slot

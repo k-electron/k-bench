@@ -61,7 +61,7 @@ A Claude Code conversation. A Claude Session runs one at a time and knows it by 
 _Avoid_: session, Claude session id (use conversation ID)
 
 **Pane**:
-One of two side-by-side slots in the main view on a desktop or tablet. The left Pane always shows the Prime. The right Pane shows the Worker, or another of the Workspace's Sessions that the owner opened there. On a phone there is a single Pane.
+One of two side-by-side slots in the main view on a desktop or tablet. The left Pane always shows the Prime. The right Pane shows the Worker, or another of the Workspace's Sessions that the owner opened there. On a phone the main view shows one Session of the Open Workspace at a time instead.
 _Avoid_: split, window, tab
 
 **Extra keys**:

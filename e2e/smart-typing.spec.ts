@@ -547,10 +547,12 @@ test("deleting a Session forgets its choice", async ({ app, kbench }) => {
   await app.extraKey("Smart typing").tap();
   await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
 
-  // The choice is kept on this device, next to the Session on screen, under its id.
+  // The choice is kept on this device under the Session's id, which the phone also keeps
+  // as the Session it shows in the Workspace.
   const id = await app.page.evaluate(
-    `JSON.parse(localStorage.getItem("k-bench.phone-session"))`,
+    `Object.values(JSON.parse(localStorage.getItem("k-bench.phone-sessions")))[0]`,
   );
+  expect(typeof id).toBe("string");
   const keeps = () =>
     app.page.evaluate(
       `(localStorage.getItem("k-bench.smart-typing") ?? "").includes(${JSON.stringify(id)})`,

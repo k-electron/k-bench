@@ -95,7 +95,7 @@ When the screen is tight, give one Claude the whole width by shutting the other 
 - Opening something into a shut Pane opens it too: clicking the Prime reopens the left Pane, and clicking the Workspace's name, the Worker or an Other Session reopens the right one.
 - Where the divider sits, and which Pane is shut, are kept for each Workspace on this device only, so a laptop and an iPad can each be set up their own way. They survive a reload.
 
-A narrow screen has a single Pane instead (see [the phone layout](#the-phone-layout)).
+A narrow screen shows one Session at a time instead (see [the phone layout](#the-phone-layout)).
 
 ## Bells
 
@@ -124,12 +124,15 @@ The terminal's history is kept by tmux, up to 50,000 lines per Session, so it is
 
 ## The phone layout
 
-On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-bench shows a single Pane that fills the screen.
+On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-bench shows one Session of the [Open Workspace](#workspaces-and-sessions) at a time, filling the screen. Like any device, loading k-bench on your phone opens the Open Workspace, which starts its Prime and Worker.
 
 ![The phone drawer listing Workspaces and Sessions](../images/phone-drawer.png)
 
-- The **drawer** holds [the sidebar](#workspaces-and-sessions), with taller rows. Open it with the menu button at the top left. Choosing a Session closes it and shows that Session. Tap outside it to close it without choosing.
-- The **Pane** shows the Session you opened last on this phone, from any Workspace, and its `Workspace › Session` label sits beside the menu button.
+- The **top bar** is the menu button and a `Workspace › Session ▾` title naming what's on screen, and nothing else. When the title doesn't fit, the Workspace's name is cut off first, so the Session's name always shows in full.
+- The **drawer** holds [the sidebar tree](#workspaces-and-sessions), always unfolded and with taller rows for touch. Open it with the menu button at the top left. Tap a Workspace's name to open it on its Prime, or tap a Session of the Open Workspace to show it; either closes the drawer. Tap outside it to close it without choosing. New Sessions come from the Open Workspace's **+** in the drawer, and **Rename**, **Change folder** and **Delete** from its **...**.
+- Your phone **remembers the Session it was showing** in each Workspace, on this phone only, so coming back (or reloading) puts you where you were. It is kept apart from the right Pane on your desktop, so the two never fight. A Workspace you haven't shown anything in yet, or whose remembered Session was deleted, shows its Prime.
+- A **Stopped** Session on screen shows a **Restart** button in place of the terminal. In a [Missing](#missing-workspaces) Workspace it says the folder is missing instead, with a **Change folder** button that fixes it from there.
+- Only the Session on screen has a terminal open, so every other Session can raise a [Bell](#bells).
 
 ![A phone Session with the extra keys along the bottom](../images/phone-terminal.png)
 
@@ -137,6 +140,6 @@ On a screen narrower than 768 pixels (a phone, or a narrow browser window), k-be
 - **Ctrl** is one-shot: tap it, then the next key you press, on the extra row or on your keyboard, is sent with Ctrl held. Ctrl then `c` is Ctrl-C. It un-arms after that one key.
 - **Smart typing** (iPhone only) lets your keyboard's typing aids work in a Session: autocorrect, tapping a suggestion to swap a word, swipe typing, automatic spacing, double-space for a period and hold to delete. Your keyboard's changes reach the program as Backspaces followed by the new text, so Claude Code's `/` menu and your shell's Tab completion still work. In shell Sessions you get suggestions but no automatic word replacement or capitals (so `ls` stays `ls`); Claude Sessions get all of the keyboard's aids. Curly quotes, long dashes and non-breaking spaces reach the program as plain `'`, `"`, `--` and spaces. Pasting works as it always did.
 - The **Smart typing switch**, the last key in the extra keys row, turns Smart typing on or off for the Session you are in. It is filled while Smart typing is on, which is how every new Session starts. Turn it off for a Session where you run a full-screen program such as vim or less, so the keyboard's edits are never sent to a program that would read them as commands; typing there is then exactly as it is without Smart typing. Each Session keeps its own choice on this phone (it survives a reload, and is forgotten when you delete the Session). The switch is only on the full row, so change it with the keyboard closed: it takes effect the next time the keyboard opens. Smart typing and its switch are not offered on desktop or Android.
-- While your **on-screen keyboard is up**, k-bench fits into the space above it, so the line you're typing on stays visible. To make room, the menu button and the extra keys row are hidden, and a few of the extra keys float in the terminal's top-right corner instead: **Esc**, **Tab**, **Enter**, **Paste**, the four arrows and, in a row of its own at the right, **⌄** (close the keyboard). **Paste** pastes your clipboard's text into the Session, the way a paste on desktop does; on an iPhone the system may show a small "Paste" prompt first, which you tap to allow it; dismissing the prompt does nothing. It is only there where the browser lets a page read the clipboard. Close the keyboard with **⌄** to get the menu button and the full row back, including **Ctrl** and **⇤** (Shift-Tab). While the keyboard is up, the Session takes the smaller size, so another device viewing it sees it shrink too, until that device is used again.
+- While your **on-screen keyboard is up**, k-bench fits into the space above it, so the line you're typing on stays visible. To make room, the top bar and the extra keys row are hidden, and a few of the extra keys float in the terminal's top-right corner instead: **Esc**, **Tab**, **Enter**, **Paste**, the four arrows and, in a row of its own at the right, **⌄** (close the keyboard). **Paste** pastes your clipboard's text into the Session, the way a paste on desktop does; on an iPhone the system may show a small "Paste" prompt first, which you tap to allow it; dismissing the prompt does nothing. It is only there where the browser lets a page read the clipboard. Close the keyboard with **⌄** to get the top bar and the full row back, including **Ctrl** and **⇤** (Shift-Tab). While the keyboard is up, the Session takes the smaller size, so another device viewing it sees it shrink too, until that device is used again.
 
 Next: [Using k-bench with Claude Code](claude-code.md).

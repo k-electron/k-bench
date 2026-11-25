@@ -83,14 +83,9 @@ export class AppPage {
     });
   }
 
-  /** On a phone: its one Pane. */
-  get phonePane(): Locator {
-    return this.page.getByRole("group", { name: "Pane", exact: true });
-  }
-
-  /** On a phone: the `Workspace › Session` label beside the Menu button. */
-  get phonePaneLabel(): Locator {
-    return this.page.getByRole("note", { name: "Pane label", exact: true });
+  /** On a phone: the `Workspace › Session` title beside the Menu button. */
+  get phoneTitle(): Locator {
+    return this.page.getByRole("main").getByRole("heading", { level: 1 });
   }
 
   /** On a desktop or tablet: the left Pane (always the Prime) or the right one. */

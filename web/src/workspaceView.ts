@@ -52,6 +52,12 @@ export interface WorkspaceView {
    */
   openWorkspace(id: string): void;
   /**
+   * Makes a Workspace the Open Workspace on the Host, which starts its Stopped Prime and
+   * Worker, leaving its right Pane and this device's split alone: the phone's open by name.
+   * `starting` covers it as for `openWorkspace`.
+   */
+  open(id: string): void;
+  /**
    * Shows the Prime (it is always in the left Pane, so this gives it the keyboard).
    * Opening anything into a shut Pane reopens it.
    */
@@ -297,6 +303,7 @@ export function useWorkspaceView(
     starting: !openedOnLoad || opening > 0,
     shown,
     openWorkspace,
+    open: (id) => open(id),
     showPrime: () => {
       if (openId) showPrimeOf(openId);
     },

@@ -1,22 +1,22 @@
 import { MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ExtraKeys } from "@/components/ExtraKeys";
-import { PhonePane, PhonePaneLabel } from "@/components/PhonePane";
+import { PhoneTitle, PhoneView } from "@/components/PhoneView";
 import { Sidebar } from "@/components/Sidebar";
 import { TypingKeys } from "@/components/TypingKeys";
 import { Button } from "@/components/ui/button";
 import { WorkspaceView } from "@/components/WorkspaceView";
 import { cn } from "@/lib/utils";
+import { usePhoneView } from "./phoneView";
 import { ActionsProvider, useAppState } from "./useAppState";
 import { useIsPhone } from "./useIsPhone";
 import { useKeyboardUp } from "./useKeyboardUp";
-import { usePhonePane } from "./usePhonePane";
 import { useWorkspaceView } from "./workspaceView";
 
 /**
  * The app shell. On a desktop or tablet, the sidebar beside the Open Workspace's two Panes.
- * On a phone, one Pane filling the screen, the sidebar in a slide-out drawer, and the
- * extra keys.
+ * On a phone, one Session of the Open Workspace filling the screen, under a
+ * `Workspace › Session` title, with the sidebar in a slide-out drawer and the extra keys.
  */
 export function App() {
   const { state, actions, error } = useAppState();
@@ -26,7 +26,7 @@ export function App() {
   const keyboardUp = useKeyboardUp(phone);
   // Both run whatever the size, so resizing the window keeps each one's state.
   const view = useWorkspaceView(state, actions);
-  const phonePane = usePhonePane(state);
+  const phoneView = usePhoneView(state, view);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerShown = phone && drawerOpen;
   useEffect(() => {
@@ -41,11 +41,11 @@ export function App() {
   /** Shows a new Other Session, once it is in state. */
   const openCreated = (workspaceId: string, id: string | undefined) => {
     if (id === undefined) return;
-    if (phone) phonePane.open(id);
+    if (phone) phoneView.show(workspaceId, id);
     else view.openOtherSession(workspaceId, id);
     setDrawerOpen(false);
   };
-  const phoneSessionId = phonePane.sessionId;
+  const phoneSessionId = phoneView.session?.id;
 
   return (
     <ActionsProvider value={actions}>
@@ -66,7 +66,7 @@ export function App() {
         <Sidebar
           className={cn(
             phone
-              ? "fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] border-r transition-[transform,visibility]"
+              ? "fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] border-r transition-[transform,visibility]"
               : "w-64",
             phone && !drawerOpen && "invisible -translate-x-full",
           )}
@@ -74,15 +74,15 @@ export function App() {
           state={state}
           shown={phone ? new Set(phoneSessionId ? [phoneSessionId] : []) : view.shown}
           onOpenSession={(workspaceId, session) => {
-            if (phone) phonePane.open(session.id);
+            if (phone) phoneView.show(workspaceId, session.id);
             else view.chooseSession(workspaceId, session);
             setDrawerOpen(false);
           }}
-          onOpenWorkspace={(workspaceId) =>
-            phone
-              ? void actions.openWorkspace(workspaceId)
-              : view.openWorkspace(workspaceId)
-          }
+          onOpenWorkspace={(workspaceId) => {
+            if (phone) phoneView.openWorkspace(workspaceId);
+            else view.openWorkspace(workspaceId);
+            setDrawerOpen(false);
+          }}
           onCreateSession={async (workspaceId) => {
             openCreated(workspaceId, await actions.createSession(workspaceId));
           }}
@@ -109,7 +109,7 @@ export function App() {
                   >
                     <MenuIcon />
                   </Button>
-                  <PhonePaneLabel content={phonePane.content} />
+                  <PhoneTitle view={phoneView} />
                 </>
               ) : (
                 view.workspace && (
@@ -124,18 +124,12 @@ export function App() {
             </div>
           )}
           <div className="relative flex min-h-0 flex-1 flex-col">
-            {phone ? (
-              <PhonePane
-                content={phonePane.content}
-                emptyMessage={
-                  state?.workspaces.length === 0
-                    ? "Create a Workspace to get started."
-                    : "Select a Session."
-                }
-              />
-            ) : (
-              state && <WorkspaceView view={view} workspaces={state.workspaces} />
-            )}
+            {state &&
+              (phone ? (
+                <PhoneView view={phoneView} workspaces={state.workspaces} />
+              ) : (
+                <WorkspaceView view={view} workspaces={state.workspaces} />
+              ))}
             {keyboardUp && phoneSessionId && <TypingKeys />}
           </div>
           {phone && !keyboardUp && phoneSessionId && (
