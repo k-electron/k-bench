@@ -3,6 +3,7 @@ import { expect, test } from "./harness.ts";
 test("an Other Session opened from the sidebar gets a tab in the right Pane; × removes only the tab, and the Workspace's name brings back the Worker", async ({
   app,
   kbench,
+  page,
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("project"));
   await app.createSessions("project", 2);
@@ -28,6 +29,9 @@ test("an Other Session opened from the sidebar gets a tab in the right Pane; × 
   await expect(app.session("session 1")).toBeVisible();
 
   await app.rightTab("session 2").click();
+  await expect(app.terminalIn("right", "session 2")).toBeVisible();
+  // Loading k-bench again brings back what the right Pane showed.
+  await page.reload();
   await expect(app.terminalIn("right", "session 2")).toBeVisible();
 
   // The Workspace's name brings back Prime with Worker, keeping the tabs.
