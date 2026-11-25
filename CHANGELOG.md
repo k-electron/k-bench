@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- A folder can have only one Workspace, so a project never gets two sets of Claudes editing the same files. Creating a Workspace on a folder that already has one is refused with a message naming that Workspace, and so is changing a Workspace's folder to one. Workspaces that already share a folder are left as they are.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

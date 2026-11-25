@@ -54,7 +54,7 @@ export function createApp(
     if (error instanceof ServiceError) {
       const status =
         error.kind === "not_found" ? 404 : error.kind === "conflict" ? 409 : 422;
-      return c.json({ error: error.message }, status);
+      return c.json({ ...error.details, error: error.message }, status);
     }
     console.error(error);
     return c.json({ error: "Internal error" }, 500);

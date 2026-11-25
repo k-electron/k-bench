@@ -9,13 +9,22 @@ import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
-/** A failure the HTTP layer maps to a status code. */
+/**
+ * A failure the HTTP layer maps to a status code. `details` go into the response body
+ * next to the message, for a client that acts on the refusal.
+ */
 export class ServiceError extends Error {
   readonly kind: "not_found" | "conflict" | "invalid";
+  readonly details: Record<string, unknown>;
 
-  constructor(kind: "not_found" | "conflict" | "invalid", message: string) {
+  constructor(
+    kind: "not_found" | "conflict" | "invalid",
+    message: string,
+    details: Record<string, unknown> = {},
+  ) {
     super(message);
     this.kind = kind;
+    this.details = details;
   }
 }
 
@@ -51,6 +60,7 @@ export class Service {
     if (!isDirectory(folder)) {
       throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
     }
+    this.assertFolderFree(folder);
     const explicit = input.name?.trim();
     if (explicit) this.assertWorkspaceNameFree(explicit);
     const name = explicit || availableName(basename(folder), this.workspaceNames());
@@ -74,6 +84,7 @@ export class Service {
       if (!isDirectory(folder)) {
         throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
       }
+      this.assertFolderFree(folder, id);
       update.folder = folder;
     }
     this.store.updateWorkspace(id, update);
@@ -117,6 +128,24 @@ export class Service {
   private assertWorkspaceNameFree(name: string, exceptId?: string): void {
     if (this.workspaceNames(exceptId).has(name)) {
       throw new ServiceError("conflict", `A Workspace named "${name}" already exists`);
+    }
+  }
+
+  /**
+   * A folder has at most one Workspace, so a project never gets two sets of Claudes. The
+   * refusal names the Workspace that has it, so a client can take the owner there.
+   * `folder` is already resolved. Changing a folder passes the Workspace being moved.
+   */
+  private assertFolderFree(folder: string, exceptId?: string): void {
+    const owner = this.store
+      .listWorkspaces()
+      .find((w) => w.id !== exceptId && resolve(w.folder) === folder);
+    if (owner) {
+      throw new ServiceError(
+        "conflict",
+        `A Workspace for this folder already exists: "${owner.name}"`,
+        { workspace: { id: owner.id, name: owner.name } },
+      );
     }
   }
 

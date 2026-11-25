@@ -103,32 +103,24 @@ describe("Workspace names", () => {
     expect((await server.state()).workspaces.map((w) => w.name)).toEqual(["my-project"]);
   });
 
-  it("gets a (2)-style suffix when the default name is taken, several Workspaces sharing one folder", async () => {
+  it("gets a (2)-style suffix when another folder of the same name has one", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
-    const folder = instance.makeFolder("app");
 
-    const first = await server.createWorkspace({ folder });
-    const second = await server.createWorkspace({ folder });
-    const third = await server.createWorkspace({ folder });
+    const first = await server.createWorkspace({ folder: instance.makeFolder("a/app") });
+    const second = await server.createWorkspace({ folder: instance.makeFolder("b/app") });
+    const third = await server.createWorkspace({ folder: instance.makeFolder("c/app") });
 
     expect([first.name, second.name, third.name]).toEqual(["app", "app (2)", "app (3)"]);
-    const state = await server.state();
-    expect(state.workspaces.map((w) => [w.name, w.folder])).toEqual([
-      ["app", folder],
-      ["app (2)", folder],
-      ["app (3)", folder],
-    ]);
   });
 
   it("skips a suffixed name that is already taken", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
-    const folder = instance.makeFolder("app");
-    await server.createWorkspace({ folder, name: "app (2)" });
+    await server.createWorkspace({ folder: instance.makeFolder("x"), name: "app (2)" });
 
-    const a = await server.createWorkspace({ folder });
-    const b = await server.createWorkspace({ folder });
+    const a = await server.createWorkspace({ folder: instance.makeFolder("a/app") });
+    const b = await server.createWorkspace({ folder: instance.makeFolder("b/app") });
 
     expect([a.name, b.name]).toEqual(["app", "app (3)"]);
   });
@@ -182,5 +174,29 @@ describe("Workspace names", () => {
     });
 
     expect(response.status).toBe(422);
+  });
+});
+
+describe("One Workspace per folder", () => {
+  it("refuses a Workspace on a folder another Workspace has, naming that Workspace", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("app");
+    const owner = await server.createWorkspace({ folder, name: "Billing" });
+
+    // The same folder, written another way.
+    const response = await server.post("/api/workspaces", {
+      folder: `${instance.root}/./app/`,
+      name: "Other",
+    });
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as {
+      error: string;
+      workspace: { id: string; name: string };
+    };
+    expect(body.workspace).toEqual({ id: owner.id, name: "Billing" });
+    expect(body.error).toContain("Billing");
+    expect((await server.state()).workspaces.map((w) => w.id)).toEqual([owner.id]);
   });
 });

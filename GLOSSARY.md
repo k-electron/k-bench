@@ -13,7 +13,7 @@ The owner's Mac that runs k-bench and every Session.
 _Avoid_: server, box, machine
 
 **Workspace**:
-A named entry pointing at a project folder on the Host. Several Workspaces may point at the same folder. A Workspace lasts until the owner deletes it, through Host reboots and whether or not it has any Sessions.
+A named entry pointing at a project folder on the Host. A folder has at most one Workspace. A Workspace lasts until the owner deletes it, through Host reboots and whether or not it has any Sessions.
 _Avoid_: project, repo, folder
 
 **Missing**:

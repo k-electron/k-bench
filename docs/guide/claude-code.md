@@ -103,7 +103,7 @@ A Claude Session is tied to the one conversation it started with, so give each C
 - a conversation carries on in its Session when you close the tab or lose your connection;
 - a restart brings back the right conversation, even when several share a folder.
 
-Several Sessions can share one Workspace, and several Workspaces can point at the same folder. If two conversations will edit the same project at once, they can step on each other's files. A common remedy is a separate git worktree for each, with a Workspace per worktree.
+Several Sessions can share one Workspace, but a folder has at most one Workspace. If two conversations will edit the same project at once, they can step on each other's files. A common remedy is a separate git worktree for each, with a Workspace per worktree.
 
 ## A second Pane for a dev server
 

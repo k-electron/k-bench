@@ -112,6 +112,41 @@ describe("Changing a Workspace's folder", () => {
     await terminal.waitForOutput(`cwd=${moved}=`);
   });
 
+  it("answers 409 for a folder another Workspace has, naming it, and keeps the old folder", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const taken = instance.makeFolder("taken");
+    const owner = await server.createWorkspace({ folder: taken, name: "Billing" });
+    const folder = instance.makeFolder("mine");
+    const workspace = await server.createWorkspace({ folder });
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: taken,
+    });
+
+    expect(response.status).toBe(409);
+    expect(
+      ((await response.json()) as { workspace: { id: string; name: string } }).workspace,
+    ).toEqual({ id: owner.id, name: "Billing" });
+    expect((await server.state()).workspaces.map((w) => w.folder)).toEqual([
+      taken,
+      folder,
+    ]);
+  });
+
+  it("accepts the Workspace's own folder again", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("mine");
+    const workspace = await server.createWorkspace({ folder });
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: `${folder}/`,
+    });
+
+    expect(response.status).toBe(200);
+  });
+
   it("answers 422 for a folder that does not exist, and keeps the old folder", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
