@@ -8,6 +8,8 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Create a Workspace.** Choose **New Workspace**, then paste the path of a project folder on your Mac or choose **Browse folders** to pick it. The name defaults to the folder's name; give it another one if you like. Several Workspaces may point at the same folder.
 
+**Its Prime and Worker.** Every new Workspace comes with two Claude Sessions, the **Prime** and the **Worker**, made with it and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, for planning, and the Worker runs Sonnet at high effort with an Opus advisor, for doing the work, both in Focus view. They're passed again on every launch. Both start out Stopped; start each with **Restart** from its **...** menu, and the first start begins its Claude conversation, which later restarts resume. They're always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
+
 **Create a Session.** Choose the **+** next to a Workspace's name. It is a menu with two choices, and either way the new Session opens in the Focused Pane and starts in the Workspace's folder.
 
 - **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
@@ -18,7 +20,7 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 **Manage them.** Each row has a **...** menu.
 
 - A Workspace's menu has **Rename**, **Change folder** and **Delete**. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace by its grip to reorder it (on a phone, press and hold first), and use the chevron to collapse it.
-- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
+- A Session's menu has **Open in other pane**, **Rename**, **Delete** and, for a Stopped Session, **Restart**. The Prime's and Worker's menus have no **Rename** or **Delete**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
 
 A green dot next to a Session means its program is running. A hollow dot means it is Stopped.
 

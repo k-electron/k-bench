@@ -1,7 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { echoCommand } from "./harness/terminal.ts";
 
@@ -23,9 +23,9 @@ describe("Renaming a Workspace", () => {
     });
 
     expect(response.status).toBe(200);
-    expect((await server.state()).workspaces).toMatchObject([
-      { id: workspace.id, name: "Billing", sessions: [{ id: session.id }] },
-    ]);
+    const { workspaces } = await server.state();
+    expect(workspaces).toMatchObject([{ id: workspace.id, name: "Billing" }]);
+    expect(otherSessions(workspaces[0])).toMatchObject([{ id: session.id }]);
   });
 
   it("answers 409 when the name is taken by another Workspace, and changes nothing", async () => {
@@ -205,14 +205,24 @@ describe("Deleting a Workspace", () => {
     const terminal = await server.openTerminal(session.id);
     terminal.run(`${echoCommand("alive-before-delete-4e1c")}; sleep 600`);
     await terminal.waitForOutput("alive-before-delete-4e1c");
+    const prime = (await server.state()).workspaces[0]?.sessions.find(
+      (s) => s.role === "prime",
+    );
+    await server.post(`/api/sessions/${prime?.id}/restart`);
+    const primeTerminal = await server.openTerminal(prime?.id as string);
+    await primeTerminal.waitForOutput("claude-stub ready");
 
     const response = await server.delete(`/api/workspaces/${workspace.id}`);
 
     expect(response.status).toBe(204);
     // The shell is gone: its terminal closes, and the Session is no longer known.
     expect(await terminal.waitForClose()).toBeGreaterThan(1000);
-    expect((await server.state()).workspaces).toMatchObject([
-      { id: other.id, sessions: [{ id: otherSession.id, status: "running" }] },
+    // So is the Prime, which goes with its Workspace like any Session.
+    expect(await primeTerminal.waitForClose()).toBeGreaterThan(1000);
+    const { workspaces } = await server.state();
+    expect(workspaces).toMatchObject([{ id: other.id }]);
+    expect(otherSessions(workspaces[0])).toMatchObject([
+      { id: otherSession.id, status: "running" },
     ]);
     const reopened = await server.openTerminal(session.id);
     await reopened.waitForEnded();

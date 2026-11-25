@@ -27,3 +27,13 @@ export const DEFAULT_LAUNCH_OPTIONS: LaunchOptions = {
   advisor: "default",
   focusView: false,
 };
+
+/**
+ * The Launch options k-bench sets for a Workspace's Prime and Worker, by role. They are
+ * passed on every launch in place of whatever is stored with the Session, so a change here
+ * reaches every Prime and Worker at its next launch.
+ */
+export const ROLE_LAUNCH_OPTIONS = {
+  prime: { model: "opus", effort: "high", advisor: "off", focusView: true },
+  worker: { model: "sonnet", effort: "high", advisor: "opus", focusView: true },
+} as const satisfies Record<"prime" | "worker", LaunchOptions>;

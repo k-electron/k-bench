@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 import { echoCommand } from "./harness/terminal.ts";
 
 describe("Survival across a server restart", () => {
@@ -18,8 +18,9 @@ describe("Survival across a server restart", () => {
     const second = await instance.start();
 
     const state = await second.state();
-    expect(state.workspaces).toMatchObject([
-      { id: workspace.id, sessions: [{ id: session.id, status: "running" }] },
+    expect(state.workspaces).toMatchObject([{ id: workspace.id }]);
+    expect(otherSessions(state.workspaces[0])).toMatchObject([
+      { id: session.id, status: "running" },
     ]);
 
     const after = await second.openTerminal(session.id);

@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 import { echoCommand } from "./harness/terminal.ts";
 import { killTmuxServer } from "./harness/tmux.ts";
 
@@ -43,11 +43,11 @@ describe("Missing Workspaces", () => {
       ["broken", true],
       ["healthy", false],
     ]);
-    expect(workspaces.find((w) => w.id === broken.id)?.sessions).toMatchObject([
+    expect(otherSessions(workspaces.find((w) => w.id === broken.id))).toMatchObject([
       { id: running.id, status: "running" },
       { status: "stopped" },
     ]);
-    expect(workspaces.find((w) => w.id === healthy.id)?.sessions).toMatchObject([
+    expect(otherSessions(workspaces.find((w) => w.id === healthy.id))).toMatchObject([
       { id: healthyStopped.id, status: "running" },
     ]);
   });
@@ -113,6 +113,6 @@ describe("Missing Workspaces", () => {
     const state = await server.state();
     const workspace = state.workspaces.find((w) => w.id === broken.id);
     expect(workspace?.missing).toBe(true);
-    expect(workspace?.sessions.map((s) => s.status)).toEqual(["stopped", "stopped"]);
+    expect(otherSessions(workspace).map((s) => s.status)).toEqual(["stopped", "stopped"]);
   });
 });
