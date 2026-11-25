@@ -31,6 +31,8 @@ export interface WorkspaceState {
   name: string;
   folder: string;
   position: number;
+  /** Orders Workspaces by when they were created; larger is newer. Not a time to show. */
+  createdAt: number;
   /** The folder no longer exists on the Host. */
   missing: boolean;
   sessions: SessionState[];

@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { LaunchOptions } from "../shared/launch-options.ts";
+import { type LaunchOptions, ROLE_LAUNCH_OPTIONS } from "../shared/launch-options.ts";
 import type { SessionKind, SessionRole } from "../shared/state-protocol.ts";
+import { availableName } from "./naming.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
+ * Each is SQL, or a function for a change SQL can't make, and runs in its own transaction.
  * Append only. Per ADR-0002 nothing here records process IDs or running/Stopped status.
  */
-const MIGRATIONS: string[] = [
+const MIGRATIONS: Array<string | ((db: DatabaseSync) => void)> = [
   `
   CREATE TABLE workspaces (
     id       TEXT PRIMARY KEY,
@@ -50,6 +52,14 @@ const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX sessions_one_per_role ON sessions (workspace_id, role)
     WHERE role IS NOT NULL;
   `,
+  // When each Workspace was created (milliseconds), so the folder picker can open next to the
+  // newest. Workspaces from before this get their row order, which sorts them before any new one.
+  `
+  ALTER TABLE workspaces ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
+  UPDATE workspaces SET created_at = rowid;
+  `,
+  // Every existing Workspace gets a Prime and a Worker, Stopped, each on a fresh conversation.
+  addPrimeAndWorker,
   // The Host's one record of the Open Workspace, the one the main view shows on every
   // device; null when none has been opened. The id check keeps it to one row.
   `
@@ -60,11 +70,63 @@ const MIGRATIONS: string[] = [
   `,
 ];
 
+/**
+ * Records a Prime and a Worker for every Workspace. Existing Sessions stay as Other Sessions;
+ * one already named "Prime" or "Worker" is renamed first, to "Prime (earlier)" for example,
+ * so the names stay unique and the upgrade never fails.
+ */
+function addPrimeAndWorker(db: DatabaseSync): void {
+  const roles = [
+    { role: "prime", name: "Prime" },
+    { role: "worker", name: "Worker" },
+  ] as const;
+  const workspaces = db.prepare("SELECT id FROM workspaces").all() as Array<{
+    id: string;
+  }>;
+  const namesIn = db.prepare(
+    "SELECT name, created_at AS createdAt FROM sessions WHERE workspace_id = ?",
+  );
+  const rename = db.prepare(
+    "UPDATE sessions SET name = ? WHERE workspace_id = ? AND name = ?",
+  );
+  const insert = db.prepare(
+    `INSERT INTO sessions
+       (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options)
+     VALUES (?, ?, ?, ?, 'claude', ?, ?, ?)`,
+  );
+  for (const workspace of workspaces) {
+    const rows = namesIn.all(workspace.id) as Array<{ name: string; createdAt: number }>;
+    const taken = new Set(rows.map((row) => row.name));
+    // Dated just before the Workspace's first Session, so they are listed first, as in a
+    // new Workspace.
+    const first = Math.min(Date.now(), ...rows.map((row) => row.createdAt));
+    for (const { name } of roles) {
+      if (!taken.has(name)) continue;
+      const earlier = availableName(`${name} (earlier)`, taken);
+      rename.run(earlier, workspace.id, name);
+      taken.add(earlier);
+    }
+    for (const [index, { role, name }] of roles.entries()) {
+      insert.run(
+        randomUUID(),
+        workspace.id,
+        name,
+        first - roles.length + index,
+        role,
+        randomUUID(),
+        JSON.stringify(ROLE_LAUNCH_OPTIONS[role]),
+      );
+    }
+  }
+}
+
 export interface WorkspaceRow {
   id: string;
   name: string;
   folder: string;
   position: number;
+  /** Orders Workspaces by creation; larger is newer. */
+  createdAt: number;
 }
 export interface SessionRow {
   id: string;
@@ -106,7 +168,9 @@ export class Store {
     for (let version = row.user_version; version < MIGRATIONS.length; version++) {
       this.db.exec("BEGIN");
       try {
-        this.db.exec(MIGRATIONS[version] as string);
+        const migration = MIGRATIONS[version];
+        if (typeof migration === "function") migration(this.db);
+        else this.db.exec(migration as string);
         this.db.exec(`PRAGMA user_version = ${version + 1}`);
         this.db.exec("COMMIT");
       } catch (error) {
@@ -135,13 +199,17 @@ export class Store {
 
   listWorkspaces(): WorkspaceRow[] {
     return this.db
-      .prepare("SELECT id, name, folder, position FROM workspaces ORDER BY position")
+      .prepare(
+        "SELECT id, name, folder, position, created_at AS createdAt FROM workspaces ORDER BY position",
+      )
       .all() as unknown as WorkspaceRow[];
   }
 
   getWorkspace(id: string): WorkspaceRow | undefined {
     return this.db
-      .prepare("SELECT id, name, folder, position FROM workspaces WHERE id = ?")
+      .prepare(
+        "SELECT id, name, folder, position, created_at AS createdAt FROM workspaces WHERE id = ?",
+      )
       .get(id) as unknown as WorkspaceRow | undefined;
   }
 
@@ -150,10 +218,28 @@ export class Store {
     const next = this.db
       .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS position FROM workspaces")
       .get() as { position: number };
+    const createdAt = Date.now();
     this.db
-      .prepare("INSERT INTO workspaces (id, name, folder, position) VALUES (?, ?, ?, ?)")
-      .run(id, input.name, input.folder, next.position);
-    return { id, name: input.name, folder: input.folder, position: next.position };
+      .prepare(
+        "INSERT INTO workspaces (id, name, folder, position, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(id, input.name, input.folder, next.position, createdAt);
+    return {
+      id,
+      name: input.name,
+      folder: input.folder,
+      position: next.position,
+      createdAt,
+    };
+  }
+
+  /** The most recently created Workspace, if there is one. */
+  newestWorkspace(): WorkspaceRow | undefined {
+    return this.db
+      .prepare(
+        "SELECT id, name, folder, position, created_at AS createdAt FROM workspaces ORDER BY created_at DESC, rowid DESC LIMIT 1",
+      )
+      .get() as unknown as WorkspaceRow | undefined;
   }
 
   updateWorkspace(id: string, changes: { name?: string; folder?: string }): void {

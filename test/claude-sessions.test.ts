@@ -269,8 +269,77 @@ describe("Sessions that existed before Claude Sessions", () => {
 
     const server = await instance.start();
 
-    expect((await server.state()).workspaces[0]?.sessions).toMatchObject([
+    expect(otherSessions((await server.state()).workspaces[0])).toMatchObject([
       { id: "s1", name: "build", kind: "shell", status: "stopped" },
     ]);
+  });
+});
+
+describe("Workspaces that existed before the Prime and Worker", () => {
+  it("each get a Stopped Prime and Worker after an upgrade, keeping every old Session as an Other Session", async () => {
+    const instance = createTestInstance();
+    const folder = instance.makeFolder("project");
+    const empty = instance.makeFolder("empty");
+    // The store as schema version 4 left it: a Workspace with a shell Session and a Claude
+    // Session that the owner happened to name "Prime", and a Workspace with no Sessions.
+    mkdirSync(instance.config.dataDir, { recursive: true });
+    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
+    old.exec(`
+      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
+      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+      ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shell';
+      ALTER TABLE sessions ADD COLUMN conversation_id TEXT;
+      ALTER TABLE sessions ADD COLUMN launch_options TEXT;
+      CREATE TABLE claude_last_launch_options (id INTEGER PRIMARY KEY CHECK (id = 1), options TEXT NOT NULL);
+      INSERT INTO workspaces VALUES ('w1', 'project', '${folder}', 0);
+      INSERT INTO workspaces VALUES ('w2', 'empty', '${empty}', 1);
+      INSERT INTO sessions VALUES ('s1', 'w1', 'build', 1, 'shell', NULL, NULL);
+      INSERT INTO sessions VALUES ('s2', 'w1', 'Prime', 2, 'claude',
+        '11111111-1111-4111-8111-111111111111',
+        '{"model":"sonnet","effort":"low","advisor":"off","focusView":false}');
+      PRAGMA user_version = 4;
+    `);
+    old.close();
+
+    const server = await instance.start();
+    const { workspaces } = await server.state();
+
+    for (const workspace of workspaces) {
+      const roles = workspace.sessions.filter((session) => session.role !== null);
+      expect(roles).toEqual([
+        expect.objectContaining({
+          role: "prime",
+          name: "Prime",
+          kind: "claude",
+          status: "stopped",
+        }),
+        expect.objectContaining({
+          role: "worker",
+          name: "Worker",
+          kind: "claude",
+          status: "stopped",
+        }),
+      ]);
+    }
+    expect(workspaces.map((w) => w.id)).toEqual(["w1", "w2"]);
+    expect(otherSessions(workspaces[0])).toMatchObject([
+      { id: "s1", name: "build", kind: "shell", status: "stopped" },
+      { id: "s2", name: "Prime (earlier)", kind: "claude", status: "stopped" },
+    ]);
+    expect(otherSessions(workspaces[1])).toEqual([]);
+    // Listed like a new Workspace's: the Prime and Worker first.
+    expect(workspaces[0]?.sessions.map((s) => s.name)).toEqual([
+      "Prime",
+      "Worker",
+      "build",
+      "Prime (earlier)",
+    ]);
+    // The renamed Session still runs its own conversation in its Workspace folder.
+    await server.post("/api/sessions/s2/restart");
+    const terminal = await server.openTerminal("s2");
+    expect(await fakeClaudeArgs(terminal)).toContain(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(terminal.output).toContain(`claude-stub cwd: ${folder}`);
   });
 });

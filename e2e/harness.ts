@@ -1,5 +1,5 @@
 import { createServer } from "node:net";
-import { resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { Store } from "../src/server/store.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
@@ -16,9 +16,12 @@ const LOGIN = "owner@example.com";
  */
 export class AppPage {
   readonly page: Page;
+  /** The picker root the server was started with: Home in the folder picker. */
+  readonly home: string;
 
-  constructor(page: Page) {
+  constructor(page: Page, home: string) {
     this.page = page;
+    this.home = home;
   }
 
   /** The sidebar listing Workspaces and their Sessions. */
@@ -160,25 +163,44 @@ export class AppPage {
 
   async createWorkspace(folder: string, options: { name?: string } = {}): Promise<void> {
     await this.page.getByRole("button", { name: "New Workspace" }).click();
-    await this.page.getByRole("textbox", { name: "Folder path" }).fill(folder);
+    await this.pickFolder(folder);
     if (options.name !== undefined) {
       await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
     }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
   }
 
-  /**
-   * Creates a Workspace by browsing the Host's folders from the picker's root: opens each
-   * named folder in turn, then creates a Workspace on the last one.
-   */
-  async createWorkspaceByBrowsing(...path: string[]): Promise<void> {
-    await this.page.getByRole("button", { name: "New Workspace" }).click();
-    await this.page.getByRole("button", { name: "Browse folders" }).click();
-    const browser = this.page.getByRole("region", { name: "Folder browser" });
-    for (const folder of path) {
-      await browser.getByRole("button", { name: folder, exact: true }).click();
+  /** The open dialog's folder picker: Places, breadcrumbs, filter and the folder list. */
+  get folderPicker(): Locator {
+    return this.page.getByRole("dialog");
+  }
+
+  /** The Places in the folder picker (Home, folders holding Workspaces, Computer). */
+  place(name: string): Locator {
+    return this.folderPicker
+      .getByRole("navigation", { name: "Places" })
+      .getByRole("button", { name, exact: true });
+  }
+
+  /** A subfolder in the folder picker's list. */
+  folderRow(name: string): Locator {
+    return this.folderPicker
+      .getByRole("list", { name: "Folders" })
+      .getByRole("button", { name, exact: true });
+  }
+
+  /** In the open folder picker, goes to Home and steps down into `folder`, one folder at a time. */
+  async pickFolder(folder: string): Promise<void> {
+    await this.place("Home").click();
+    for (const name of relative(this.home, folder).split("/").filter(Boolean)) {
+      await this.folderRow(name).click();
     }
-    await this.page.getByRole("button", { name: "Create Workspace" }).click();
+    const here = folder === this.home ? "~" : basename(folder);
+    await expect(
+      this.folderPicker
+        .getByRole("navigation", { name: "Breadcrumbs" })
+        .getByRole("button", { name: here, exact: true }),
+    ).toHaveAttribute("aria-current", "location");
   }
 
   /** A Workspace's heading in the sidebar. */
@@ -450,7 +472,7 @@ export const test = base.extend<Fixtures>({
   },
   app: async ({ page, kbench }, use) => {
     await page.goto(kbench.url);
-    await use(new AppPage(page));
+    await use(new AppPage(page, kbench.instance.root));
   },
   otherDevice: async ({ browser, kbench }, use) => {
     const context = await browser.newContext({
@@ -459,7 +481,7 @@ export const test = base.extend<Fixtures>({
     try {
       const page = await context.newPage();
       await page.goto(kbench.url);
-      await use(new AppPage(page));
+      await use(new AppPage(page, kbench.instance.root));
     } finally {
       await context.close();
     }
