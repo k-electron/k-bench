@@ -76,9 +76,12 @@ To fix it, open the Workspace and choose **Change folder**, in the note under it
 On a desktop or tablet (768 pixels wide and up) the main area belongs to the **Open Workspace** and shows two **Panes** side by side.
 
 - The **left Pane** always shows the Workspace's Prime, under a slim label reading "Prime".
-- The **right Pane** shows its Worker, or another of its Sessions that you opened there. Its label names the Session it shows.
-- Click an Other Session in the sidebar to show it in the right Pane, and click the Worker to bring the Worker back. Clicking the Prime puts your keystrokes in the left Pane.
-- Clicking the Workspace's name brings back Prime with Worker.
+- The **right Pane** shows its Worker, or another of its Sessions that you opened there. Its slim **tab bar** has the **Worker** first, then a tab for each Other Session you opened there.
+- Click an Other Session in the sidebar (or create one) to show it in the right Pane. It gets a tab if it has none yet. Click a tab, or the Worker in the sidebar, to switch. Clicking the Prime puts your keystrokes in the left Pane.
+- The **×** on a tab removes only the tab: the Session keeps running, and you can open it again from the sidebar. Closing the tab that's showing brings back the Worker, which has no ×. Deleting a Session removes its tab.
+- A tab shows an amber dot when its Session rings the [Bell](#bells) while it's hidden.
+- Clicking the Workspace's name brings back Prime with Worker, and keeps the tabs.
+- The tabs, and which one is showing, are kept for each Workspace on your Mac, so switching Workspaces, reloading, or picking up another device brings back what you had.
 - The top bar shows the Workspace's name, with its folder as a tooltip, and the browser tab reads `Workspace — k-bench`.
 - Sessions on screen are highlighted in the sidebar. Only those have a terminal open, so any other Session can raise a [Bell](#bells).
 - Drag the divider between the Panes to resize them, anywhere you like. Double-click it for half and half. If you focus the divider you can also move it with the left and right arrow keys.

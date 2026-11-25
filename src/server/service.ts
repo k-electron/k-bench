@@ -6,7 +6,7 @@ import {
   type LaunchOptions,
   ROLE_LAUNCH_OPTIONS,
 } from "../shared/launch-options.ts";
-import type { SessionRole, State } from "../shared/state-protocol.ts";
+import type { RightPaneState, SessionRole, State } from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
@@ -205,12 +205,21 @@ export class Service {
   /**
    * Makes the Workspace the Open Workspace and, unless it is Missing, starts its Stopped
    * Prime and Worker, resuming their conversations. Opening it again changes nothing that
-   * is running.
+   * is running. With `showWorker` (the owner chose it by name), its right Pane shows the
+   * Worker again, keeping its tabs.
    */
-  async openWorkspace(id: string): Promise<{ id: string }> {
+  async openWorkspace(
+    id: string,
+    options: { showWorker?: boolean } = {},
+  ): Promise<{ id: string }> {
     const workspace = this.store.getWorkspace(id);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
-    this.store.setOpenWorkspaceId(id);
+    this.store.transaction(() => {
+      this.store.setOpenWorkspaceId(id);
+      if (options.showWorker) {
+        this.store.setRightPane(id, { ...this.rightPane(id), shown: null });
+      }
+    });
     if (isDirectory(workspace.folder)) await this.startRoles(id);
     return { id };
   }
@@ -227,6 +236,50 @@ export class Service {
   private async startRoles(workspaceId: string): Promise<void> {
     const roles = this.store.listSessions(workspaceId).filter((session) => session.role);
     await Promise.all(roles.map((session) => this.restartSession(session.id)));
+  }
+
+  /**
+   * Sets what the Workspace's right Pane holds. Every tab must be one of its Other Sessions,
+   * once, and what's shown must be one of the tabs, or null for the Worker.
+   */
+  setRightPane(workspaceId: string, rightPane: RightPaneState): void {
+    if (!this.store.getWorkspace(workspaceId)) {
+      throw new ServiceError("not_found", "Unknown Workspace");
+    }
+    const others = this.otherSessionIds(workspaceId);
+    const { shown, tabs } = rightPane;
+    if (!tabs.every((id) => others.has(id)) || new Set(tabs).size !== tabs.length) {
+      throw new ServiceError(
+        "invalid",
+        "tabs must list Other Sessions of the Workspace, each at most once",
+      );
+    }
+    if (shown !== null && !tabs.includes(shown)) {
+      throw new ServiceError("invalid", "shown must be null or one of the tabs");
+    }
+    this.store.setRightPane(workspaceId, { shown, tabs });
+  }
+
+  private otherSessionIds(workspaceId: string): Set<string> {
+    return new Set(
+      this.store
+        .listSessions(workspaceId)
+        .filter((session) => session.role === null)
+        .map((session) => session.id),
+    );
+  }
+
+  /**
+   * What the Workspace's right Pane holds, leaving out any Session that is no longer one of
+   * its Other Sessions.
+   */
+  private rightPane(workspaceId: string): RightPaneState {
+    const others = this.otherSessionIds(workspaceId);
+    const stored = this.store.getRightPane(workspaceId);
+    const tabs = stored.tabs.filter((id) => others.has(id));
+    const shown =
+      stored.shown !== null && tabs.includes(stored.shown) ? stored.shown : null;
+    return { shown, tabs };
   }
 
   /** `ids` must be every Workspace exactly once, in the order the owner wants. */
@@ -402,13 +455,19 @@ export class Service {
     return { id: sessionId, name };
   }
 
-  /** Ends the Session's shell and everything in it, then forgets the Session. */
+  /**
+   * Ends the Session's shell and everything in it, then forgets the Session, and its tab in
+   * the right Pane, which shows the Worker if that tab was shown.
+   */
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.store.getSession(sessionId);
     if (!session) throw new ServiceError("not_found", "Unknown Session");
     assertNoRole(session, "deleted");
     await this.tmux.killSession(sessionId);
-    this.store.deleteSession(sessionId);
+    this.store.transaction(() => {
+      this.store.deleteSession(sessionId);
+      this.store.setRightPane(session.workspaceId, this.rightPane(session.workspaceId));
+    });
   }
 
   async getState(): Promise<State> {
@@ -426,6 +485,7 @@ export class Service {
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
         })),
+        rightPane: this.rightPane(workspace.id),
       })),
     };
   }
