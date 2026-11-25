@@ -184,6 +184,21 @@ export class AppPage {
     await this.page.mouse.up();
   }
 
+  /**
+   * Drags the divider to where the left Pane takes `share` of the two Panes' width, as
+   * worked out from where the Panes are now.
+   */
+  async dragDividerTo(share: number): Promise<void> {
+    const [divider, left, right] = await Promise.all([
+      this.divider.boundingBox(),
+      this.pane("left").boundingBox(),
+      this.pane("right").boundingBox(),
+    ]);
+    if (!divider || !left || !right) throw new Error("Both Panes should be open");
+    const target = left.x + share * (right.x + right.width - left.x);
+    await this.dragDivider(target - (divider.x + divider.width / 2));
+  }
+
   /** The divider's position: the left Pane's share of the width, in percent. */
   async dividerPercent(): Promise<number> {
     return Number(await this.divider.getAttribute("aria-valuenow"));

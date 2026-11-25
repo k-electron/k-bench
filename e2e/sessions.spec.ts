@@ -40,7 +40,9 @@ test("the terminal fits the Pane and resizes with the window", async ({
   await app.createSession("project");
   const terminal = app.terminal("session 1");
   // The right Pane gets most of the width, so it is more than 80 columns wide.
-  await app.dragDivider(-400);
+  await app.dragDividerTo(0.25);
+  // Well clear of either edge, where the drag would shut a Pane instead.
+  await expect(app.divider).toHaveAttribute("aria-valuenow", /^2\d$/);
 
   const large = await app.terminalSize(terminal);
   // More than the 80x24 a terminal gets before it is fitted to the window.
