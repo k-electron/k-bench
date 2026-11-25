@@ -33,22 +33,13 @@ test("renaming to a name that is taken shows the message and keeps the dialog op
   await expect(app.page.getByRole("button", { name: "Save" })).toBeVisible();
 });
 
-test("change a Workspace's folder; a folder that does not exist shows the message", async ({
-  app,
-  kbench,
-}) => {
+test("change a Workspace's folder by picking another one", async ({ app, kbench }) => {
   await app.createWorkspace(kbench.instance.makeFolder("old"));
   const moved = kbench.instance.makeFolder("moved");
   await expect(app.workspace("old")).toBeVisible();
 
   await app.workspaceAction("old", "Change folder");
-  await app.page
-    .getByRole("textbox", { name: "Folder path" })
-    .fill(`${kbench.instance.root}/nope`);
-  await app.page.getByRole("button", { name: "Save" }).click();
-  await expect(app.page.getByRole("alert")).toContainText("does not exist");
-
-  await app.page.getByRole("textbox", { name: "Folder path" }).fill(moved);
+  await app.pickFolder(moved);
   await app.page.getByRole("button", { name: "Save" }).click();
 
   await expect(app.page.getByRole("button", { name: "Save" })).toHaveCount(0);

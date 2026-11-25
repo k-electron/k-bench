@@ -13,6 +13,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Changed
 
+- **New Workspace** and **Change folder** pick the folder with a proper folder picker instead of a pasted path or the bare **Browse folders** list. It opens in the folder your newest Workspace is in (or Home), shows one folder's subfolders at a time with breadcrumbs above them and a **Filter** box, and lists **Places**: Home, the folders that hold your Workspaces (most Workspaces first, up to five) and Computer. A folder that already has a Workspace is marked with its name, and the Workspace's name follows the folder you pick until you type your own. On a phone the picker fills the screen, with Places as a row of chips.
 - A folder can have only one Workspace, so a project never gets two sets of Claudes editing the same files. Creating a Workspace on a folder that already has one is refused with a message naming that Workspace, and so is changing a Workspace's folder to one. Workspaces that already share a folder are left as they are.
 
 ### Fixed

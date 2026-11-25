@@ -1,14 +1,36 @@
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "./harness.ts";
 
-test("create a Workspace by browsing to a folder; it appears in the sidebar under the folder's name", async ({
+test("pick a Place, step into a folder and create; the Workspace appears with the folder's name", async ({
   app,
   kbench,
 }) => {
-  kbench.instance.makeFolder("my-project");
+  const projects = kbench.instance.makeFolder("projects");
+  mkdirSync(join(projects, "billing"));
+  mkdirSync(join(projects, "search"));
+  await app.createWorkspace(join(projects, "billing"));
+  await expect(app.workspace("billing")).toBeVisible();
+  // The newest Workspace is now in Home, so the picker opens there, not in projects.
+  await app.createWorkspace(kbench.instance.makeFolder("notes"));
+  await expect(app.workspace("notes")).toBeVisible();
 
-  await app.createWorkspaceByBrowsing("my-project");
+  await app.page.getByRole("button", { name: "New Workspace" }).click();
+  await app.place("projects").click();
+  // A folder that already has a Workspace is marked with its name.
+  await expect(app.folderRow("billing")).toHaveAccessibleDescription("Workspace billing");
+  await app.folderRow("search").click();
+  await expect(app.page.getByRole("textbox", { name: "Name" })).toHaveAttribute(
+    "placeholder",
+    "search",
+  );
+  await app.page.getByRole("button", { name: "Create Workspace" }).click();
 
-  await expect(app.workspace("my-project")).toBeVisible();
+  await expect(app.workspace("search")).toBeVisible();
+  await expect(app.workspace("search")).toHaveAttribute(
+    "title",
+    join(projects, "search"),
+  );
 });
 
 test("a second Workspace on the same folder is refused, naming the one that has it", async ({
@@ -37,10 +59,4 @@ test("a name that is already taken shows the message and keeps the dialog open",
 
   await expect(app.page.getByRole("alert")).toContainText("Billing");
   await expect(app.page.getByRole("button", { name: "Create Workspace" })).toBeVisible();
-});
-
-test("a folder that does not exist shows the message", async ({ app, kbench }) => {
-  await app.createWorkspace(`${kbench.instance.root}/nope`);
-
-  await expect(app.page.getByRole("alert")).toContainText("does not exist");
 });
