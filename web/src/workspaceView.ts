@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type {
   SessionState,
   State,
@@ -40,6 +40,11 @@ export interface WorkspaceView {
    * something for, or last clicked into, unless that one is shut.
    */
   focus: Side;
+  /**
+   * The Open Workspace is being opened, which starts its Stopped Prime and Worker: their
+   * Panes wait for their terminals rather than offering Restart.
+   */
+  starting: boolean;
   /** The Sessions on screen in an open Pane, for the sidebar's highlight. */
   shown: ReadonlySet<string>;
   /**
@@ -175,6 +180,15 @@ export function useWorkspaceView(
   const [rightShown, setRightShown] = useState<Record<string, RightPaneShown>>({});
   const [splits, setSplits] = useState(loadSplits);
   const [focus, setFocus] = useState<Side>("left");
+  // How many open requests are in flight.
+  const [opening, setOpening] = useState(0);
+  const open = useCallback(
+    (id: string) => {
+      setOpening((n) => n + 1);
+      void actions.openWorkspace(id).finally(() => setOpening((n) => n - 1));
+    },
+    [actions],
+  );
 
   const workspace = state?.workspaces.find((w) => w.id === state.openWorkspaceId);
   const { left, right } = workspacePanes(
@@ -182,7 +196,7 @@ export function useWorkspaceView(
     workspace ? (rightShown[workspace.id] ?? null) : null,
   );
 
-  useOpenOnLoad(state, actions);
+  const openedOnLoad = useOpenOnLoad(state, open);
 
   useEffect(() => saveSplits(splits), [splits]);
 
@@ -223,9 +237,9 @@ export function useWorkspaceView(
       setRightShown((current) => ({ ...current, [workspaceId]: shown }));
       setFocus("right");
       reopen(workspaceId, "right");
-      if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
+      if (workspaceId !== openId) open(workspaceId);
     },
-    [actions, openId, reopen],
+    [open, openId, reopen],
   );
 
   const showPrimeOf = (workspaceId: string) => {
@@ -238,7 +252,7 @@ export function useWorkspaceView(
     setFocus("left");
     // The Workspace's name brings back the Worker, so a shut right Pane opens again.
     reopen(id, "right");
-    void actions.openWorkspace(id);
+    open(id);
   };
 
   const shown = new Set<string>();
@@ -252,6 +266,7 @@ export function useWorkspaceView(
     ratio: split.ratio,
     shut: split.shut,
     focus: focus === split.shut ? otherSide(focus) : focus,
+    starting: !openedOnLoad || opening > 0,
     shown,
     openWorkspace,
     showPrime: () => {
@@ -267,7 +282,7 @@ export function useWorkspaceView(
       else {
         // The Prime. Another Workspace's opens it, keeping what its right Pane showed.
         showPrimeOf(workspaceId);
-        if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
+        if (workspaceId !== openId) open(workspaceId);
       }
     },
     focusPane: setFocus,
@@ -283,14 +298,16 @@ export function useWorkspaceView(
 
 /**
  * Opens the Open Workspace once, when the first state arrives, so every device lands on
- * it with its Prime and Worker started. Only once per load: a Prime the owner quits stays
- * Stopped until they open the Workspace again, so a reconnect must not reopen it.
+ * it with its Prime and Worker started, and says whether it has. Only once per load: a
+ * Prime the owner quits stays Stopped until they open the Workspace again, so a reconnect
+ * must not reopen it.
  */
-function useOpenOnLoad(state: State | undefined, actions: Actions): void {
-  const opened = useRef(false);
+function useOpenOnLoad(state: State | undefined, open: (id: string) => void): boolean {
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
-    if (!state || opened.current) return;
-    opened.current = true;
-    if (state.openWorkspaceId) void actions.openWorkspace(state.openWorkspaceId);
-  }, [state, actions]);
+    if (!state || opened) return;
+    setOpened(true);
+    if (state.openWorkspaceId) open(state.openWorkspaceId);
+  }, [state, open, opened]);
+  return opened;
 }
