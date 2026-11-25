@@ -13,7 +13,7 @@ The owner's Mac that runs k-bench and every Session.
 _Avoid_: server, box, machine
 
 **Workspace**:
-A named entry pointing at a project folder on the Host. Several Workspaces may point at the same folder. A Workspace lasts until the owner deletes it, through Host reboots and whether or not it has any Sessions.
+A named entry pointing at a project folder on the Host. A folder has at most one Workspace. A Workspace lasts until the owner deletes it, through Host reboots and whether or not it has any Sessions.
 _Avoid_: project, repo, folder
 
 **Missing**:
@@ -25,7 +25,7 @@ A named, persistent program belonging to one Workspace, started in that Workspac
 _Avoid_: terminal, tab, tmux session
 
 **Claude Session**:
-A Session that runs one Claude conversation, started from the New Claude dialog with the owner's Launch options. Restarting it resumes that same Claude conversation.
+A Session that runs one Claude conversation at a time, started from the New Claude dialog with the owner's Launch options; restarting it resumes the one last running in it.
 _Avoid_: Claude terminal, agent session
 
 **Launch options**:
@@ -45,7 +45,7 @@ A Session's request for attention, raised when the Session's program rings the t
 _Avoid_: notification, alert, activity
 
 **Claude conversation**:
-A Claude Code conversation. A Claude Session runs exactly one and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
+A Claude Code conversation. A Claude Session runs one at a time and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
 _Avoid_: session, Claude session id (use conversation ID)
 
 **Pane**:

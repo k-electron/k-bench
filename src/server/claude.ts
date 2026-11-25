@@ -1,8 +1,8 @@
 /**
  * Launching Claude Code for a Claude Session (ADR-0005). k-bench starts it through its
- * documented command-line flags and never reads its output or its files, so everything
- * k-bench knows about Claude Code is in this file: the flags it passes and the launcher
- * script that runs it.
+ * documented command-line flags and learns which conversation it is on through a silent
+ * `SessionStart` hook, so everything k-bench knows about Claude Code is in this file: the
+ * flags it passes, the hook, and the launcher script that runs it.
  */
 
 import {
@@ -57,16 +57,54 @@ export interface ClaudeLaunch {
 }
 
 /**
- * Both keys are needed: focus view does nothing without the fullscreen renderer, and
- * fullscreen is not the default on every machine. `--settings` applies to that launch only
- * and leaves the owner's settings files unchanged.
+ * The tmux pane user option the conversation hook writes the conversation ID to, on the pane
+ * Claude Code runs in, and the tmux `wait-for` channel it signals after (see `TmuxDriver`).
  */
-const FOCUS_VIEW_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
+export const CONVERSATION_OPTION = "@kb-conversation";
+export const CONVERSATION_CHANNEL = "kb-conversation-changed";
+
+/**
+ * Claude Code runs this `SessionStart` hook whenever a conversation starts in the Session,
+ * whatever started it: the launch, `/clear`, `/resume`, `/branch`, compaction (which keeps
+ * the ID) or a `/restart`. It takes `session_id` from the JSON on stdin and records it on its
+ * own tmux pane, then signals the channel, as the Bell does.
+ *
+ * Claude Code adds a `SessionStart` hook's output to the conversation, so it prints nothing,
+ * and it exits 0 whatever happens, so a missing tool never shows in Claude Code (ADR-0005).
+ * It is one line of plain POSIX `sh` with tools every Mac has (no `jq`), because it runs
+ * under the owner's own environment. Bare `tmux` reaches k-bench's socket through `$TMUX`,
+ * which tmux sets in the pane. The ID is passed as an argument, so it cannot inject into a
+ * tmux command; k-bench ignores one that isn't UUID-shaped.
+ */
+const CONVERSATION_HOOK = [
+  "{",
+  `id=$(tr -d '\\n' | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p');`,
+  '[ -n "$id" ] && [ -n "$TMUX_PANE" ] &&',
+  `tmux set-option -p -t "$TMUX_PANE" ${CONVERSATION_OPTION} "$id" &&`,
+  `tmux wait-for -S ${CONVERSATION_CHANNEL};`,
+  "} >/dev/null 2>&1; exit 0",
+].join(" ");
+
+/**
+ * The `--settings` every launch passes: the conversation hook and, with Focus view on, its
+ * keys. Focus view needs both keys: it does nothing without the fullscreen renderer, and
+ * fullscreen is not the default on every machine. `--settings` applies to that launch only
+ * and adds to the owner's own settings and hooks, leaving their files unchanged.
+ */
+function launchSettings(focusView: boolean): string {
+  return JSON.stringify({
+    hooks: {
+      SessionStart: [{ hooks: [{ type: "command", command: CONVERSATION_HOOK }] }],
+    },
+    ...(focusView ? { viewMode: "focus", tui: "fullscreen" } : {}),
+  });
+}
 
 /**
  * The flags that follow the one naming the conversation. This is where Launch options become
  * flags: a Default option adds nothing. Advisor Off is not a flag (there is none): the
- * launcher sets `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` for it.
+ * launcher sets `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` for it. `--settings` is always passed,
+ * for the conversation hook.
  */
 function launchOptionArguments(options: LaunchOptions): string[] {
   const { model, effort, advisor, focusView } = options;
@@ -74,7 +112,8 @@ function launchOptionArguments(options: LaunchOptions): string[] {
     ...(model === "default" ? [] : ["--model", model]),
     ...(effort === "default" ? [] : ["--effort", effort]),
     ...(advisor === "default" || advisor === "off" ? [] : ["--advisor", advisor]),
-    ...(focusView ? ["--settings", FOCUS_VIEW_SETTINGS] : []),
+    "--settings",
+    launchSettings(focusView),
   ];
 }
 
