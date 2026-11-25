@@ -50,7 +50,7 @@ test("change a Workspace's folder by picking another one", async ({ app, kbench 
   await expect(app.workspace("old")).toHaveAttribute("title", moved);
 });
 
-test("dragging a Workspace in the sidebar reorders it, and the order survives a reload", async ({
+test("dragging a Workspace's row, or its tile when collapsed, reorders it, and the order survives a reload", async ({
   app,
   kbench,
 }) => {
@@ -66,6 +66,16 @@ test("dragging a Workspace in the sidebar reorders it, and the order survives a 
   await app.page.reload();
   await expect(app.workspace("third")).toBeVisible();
   expect(await app.workspaceNames()).toEqual(["third", "first", "second"]);
+
+  // Collapsed, a Workspace is dragged by its tile.
+  await app.collapseSidebar();
+  await app.dragOnto(app.workspaceTile("second"), app.workspaceTile("third"));
+  await app.expandSidebarButton.click();
+
+  await expect.poll(() => app.workspaceNames()).toEqual(["second", "third", "first"]);
+  await app.page.reload();
+  await expect(app.workspace("third")).toBeVisible();
+  expect(await app.workspaceNames()).toEqual(["second", "third", "first"]);
 });
 
 test("deleting a Workspace asks first; cancelling keeps everything, confirming ends its Sessions", async ({

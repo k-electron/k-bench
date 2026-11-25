@@ -376,9 +376,57 @@ export class AppPage {
 
   /** Drags a Workspace by its row onto the row of the Workspace named `target`. */
   async dragWorkspaceOnto(workspaceName: string, target: string): Promise<void> {
-    const from = await this.workspace(workspaceName).boundingBox();
-    const dest = await this.workspace(target).boundingBox();
-    if (!from || !dest) throw new Error("Workspace rows are not visible");
+    await this.dragOnto(this.workspace(workspaceName), this.workspace(target));
+  }
+
+  /** Drags a Session by its row in the sidebar onto the row of the Session named `target`. */
+  async dragSessionOnto(sessionName: string, target: string): Promise<void> {
+    await this.dragOnto(this.session(sessionName), this.session(target));
+  }
+
+  /**
+   * The Open Workspace's Sessions' names, in sidebar order: its Prime, its Worker and the
+   * Sessions with the default "session N" names.
+   */
+  async sessionNames(): Promise<string[]> {
+    return this.sidebar
+      .getByRole("button", { name: /^(Prime|Worker|session \d+)$/ })
+      .allTextContents();
+  }
+
+  /**
+   * On the phone: presses and holds a Session's row in the drawer until it lifts, then
+   * drags it with the finger onto the row of the Session named `target`.
+   */
+  async touchDragSessionOnto(sessionName: string, target: string): Promise<void> {
+    const source = this.session(sessionName);
+    const from = await source.boundingBox();
+    const dest = await this.session(target).boundingBox();
+    if (!from || !dest) throw new Error("The rows to drag between are not visible");
+    const cdp = await this.page.context().newCDPSession(this.page);
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", x: number, y: number) =>
+      cdp.send("Input.dispatchTouchEvent", {
+        type,
+        touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+      });
+    const x = from.x + from.width / 2;
+    await touch("touchStart", x, from.y + from.height / 2);
+    // The row lifts once the press has been held long enough.
+    await expect(source).toHaveAttribute("aria-pressed", "true");
+    const toY = dest.y + dest.height / 2;
+    for (let step = 1; step <= 10; step++) {
+      const y = from.y + from.height / 2 + ((toY - from.y - from.height / 2) * step) / 10;
+      await touch("touchMove", x, y);
+    }
+    await touch("touchEnd", x, toY);
+    await cdp.detach();
+  }
+
+  /** Drags `source` with the mouse onto the middle of `target`. */
+  async dragOnto(source: Locator, target: Locator): Promise<void> {
+    const from = await source.boundingBox();
+    const dest = await target.boundingBox();
+    if (!from || !dest) throw new Error("The rows to drag between are not visible");
     const { mouse } = this.page;
     await mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await mouse.down();

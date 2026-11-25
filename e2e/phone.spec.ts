@@ -206,6 +206,26 @@ test("the drawer opens from the menu button;tapping a Session opens it and close
   await expect(app.drawer).toBeHidden();
 });
 
+test("in the drawer, pressing and holding a Session's row drags it to a new place", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  for (let n = 1; n <= 2; n++) {
+    await app.createSession("project");
+    await expect(app.terminal(`session ${n}`)).toBeVisible();
+    await app.openDrawer();
+  }
+  expect(await app.sessionNames()).toEqual(["Prime", "Worker", "session 1", "session 2"]);
+
+  await app.touchDragSessionOnto("session 2", "session 1");
+
+  await expect
+    .poll(() => app.sessionNames())
+    .toEqual(["Prime", "Worker", "session 2", "session 1"]);
+});
+
 test("the extra keys reach the shell", async ({ app, kbench }) => {
   await app.openDrawer();
   await app.createWorkspace(kbench.instance.makeFolder("project"));

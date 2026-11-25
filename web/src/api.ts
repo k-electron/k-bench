@@ -130,6 +130,12 @@ export const api = {
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
+  /**
+   * `ids` is every Other Session of the Workspace, in the order wanted; its Prime and Worker
+   * always come first, so they are never in it.
+   */
+  reorderSessions: (workspaceId: string, ids: string[]) =>
+    send<void>("PUT", `/api/workspaces/${workspaceId}/sessions/order`, { ids }),
   restartSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
 };

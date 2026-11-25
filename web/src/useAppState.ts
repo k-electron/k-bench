@@ -67,6 +67,11 @@ export interface Actions {
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   restartSession(sessionId: string): Promise<void>;
+  /**
+   * Shows the Workspace's new Other Session order at once, then saves it. `ids` is every
+   * Other Session of the Workspace; its Prime and Worker stay first.
+   */
+  reorderSessions(workspaceId: string, ids: string[]): Promise<void>;
 }
 
 /**
@@ -190,6 +195,29 @@ export function useAppState(): {
       deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {
         await reporting(() => act(api.restartSession(sessionId)));
+      },
+      reorderSessions: (workspaceId, ids) => {
+        setState(
+          (current) =>
+            current && {
+              ...current,
+              workspaces: current.workspaces.map((w) =>
+                w.id === workspaceId
+                  ? {
+                      ...w,
+                      sessions: [
+                        ...w.sessions.filter((s) => s.role !== null),
+                        ...ids.flatMap((id) => w.sessions.find((s) => s.id === id) ?? []),
+                      ],
+                    }
+                  : w,
+              ),
+            },
+        );
+        // A refused order sends no snapshot: resync for one, putting the order right.
+        return act(api.reorderSessions(workspaceId, ids)).catch(() =>
+          clientRef.current?.resync(),
+        );
       },
     };
   }, []);
