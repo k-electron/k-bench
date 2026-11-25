@@ -69,7 +69,9 @@ function addPrimeAndWorker(db: DatabaseSync): void {
   const workspaces = db.prepare("SELECT id FROM workspaces").all() as Array<{
     id: string;
   }>;
-  const namesIn = db.prepare("SELECT name FROM sessions WHERE workspace_id = ?");
+  const namesIn = db.prepare(
+    "SELECT name, created_at AS createdAt FROM sessions WHERE workspace_id = ?",
+  );
   const rename = db.prepare(
     "UPDATE sessions SET name = ? WHERE workspace_id = ? AND name = ?",
   );
@@ -79,20 +81,23 @@ function addPrimeAndWorker(db: DatabaseSync): void {
      VALUES (?, ?, ?, ?, 'claude', ?, ?, ?)`,
   );
   for (const workspace of workspaces) {
-    const rows = namesIn.all(workspace.id) as Array<{ name: string }>;
+    const rows = namesIn.all(workspace.id) as Array<{ name: string; createdAt: number }>;
     const taken = new Set(rows.map((row) => row.name));
+    // Dated just before the Workspace's first Session, so they are listed first, as in a
+    // new Workspace.
+    const first = Math.min(Date.now(), ...rows.map((row) => row.createdAt));
     for (const { name } of roles) {
       if (!taken.has(name)) continue;
       const earlier = availableName(`${name} (earlier)`, taken);
       rename.run(earlier, workspace.id, name);
       taken.add(earlier);
     }
-    for (const { role, name } of roles) {
+    for (const [index, { role, name }] of roles.entries()) {
       insert.run(
         randomUUID(),
         workspace.id,
         name,
-        Date.now(),
+        first - roles.length + index,
         role,
         randomUUID(),
         JSON.stringify(ROLE_LAUNCH_OPTIONS[role]),

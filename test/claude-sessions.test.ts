@@ -327,6 +327,13 @@ describe("Workspaces that existed before the Prime and Worker", () => {
       { id: "s2", name: "Prime (earlier)", kind: "claude", status: "stopped" },
     ]);
     expect(otherSessions(workspaces[1])).toEqual([]);
+    // Listed like a new Workspace's: the Prime and Worker first.
+    expect(workspaces[0]?.sessions.map((s) => s.name)).toEqual([
+      "Prime",
+      "Worker",
+      "build",
+      "Prime (earlier)",
+    ]);
     // The renamed Session still runs its own conversation in its Workspace folder.
     await server.post("/api/sessions/s2/restart");
     const terminal = await server.openTerminal("s2");
