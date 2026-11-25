@@ -26,6 +26,7 @@ test("after a page reload the same Session shows its earlier output", async ({
   await app.runMarker(terminal, "kb-before-reload-4242");
 
   await page.reload();
+  await app.session("session 1").click();
 
   await expect(app.terminal("session 1")).toContainText("kb-before-reload-4242");
 });
@@ -38,6 +39,10 @@ test("the terminal fits the Pane and resizes with the window", async ({
   await app.createWorkspace(kbench.instance.makeFolder("project"));
   await app.createSession("project");
   const terminal = app.terminal("session 1");
+  // The right Pane gets most of the width, so it is more than 80 columns wide.
+  await app.dragDividerTo(0.25);
+  // Well clear of either edge, where the drag would shut a Pane instead.
+  await expect(app.divider).toHaveAttribute("aria-valuenow", /^2\d$/);
 
   const large = await app.terminalSize(terminal);
   // More than the 80x24 a terminal gets before it is fitted to the window.
@@ -53,7 +58,7 @@ test("the terminal fits the Pane and resizes with the window", async ({
     .toBe(true);
 });
 
-test("a new Session opens in the Focused Pane straight away, even when state pushes lag", async ({
+test("a new Session opens in the right Pane straight away, even when state pushes lag", async ({
   app,
   kbench,
 }) => {
@@ -69,7 +74,6 @@ test("a new Session opens in the Focused Pane straight away, even when state pus
   for (let n = 1; n <= 10; n++) {
     await app.createSession("project");
 
-    await expect(app.terminalIn(1, `session ${n}`)).toBeVisible();
-    await expect(app.page.getByRole("status", { name: "Pane notice" })).toBeHidden();
+    await expect(app.terminalIn("right", `session ${n}`)).toBeVisible();
   }
 });

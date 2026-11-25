@@ -1,21 +1,55 @@
 import { randomUUID } from "node:crypto";
-import { statSync } from "node:fs";
-import { basename, resolve } from "node:path";
-import { DEFAULT_LAUNCH_OPTIONS, type LaunchOptions } from "../shared/launch-options.ts";
-import type { State } from "../shared/state-protocol.ts";
+import { mkdirSync, statSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
+import {
+  DEFAULT_LAUNCH_OPTIONS,
+  type LaunchOptions,
+  ROLE_LAUNCH_OPTIONS,
+} from "../shared/launch-options.ts";
+import { sessionsByRole } from "../shared/session-roles.ts";
+import type { RightPaneState, SessionRole, State } from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
 import type { TmuxDriver } from "./tmux.ts";
 
-/** A failure the HTTP layer maps to a status code. */
+/**
+ * A failure the HTTP layer maps to a status code. `details` go into the response body
+ * next to the message, for a client that acts on the refusal.
+ */
 export class ServiceError extends Error {
   readonly kind: "not_found" | "conflict" | "invalid";
+  readonly details: Record<string, unknown>;
 
-  constructor(kind: "not_found" | "conflict" | "invalid", message: string) {
+  constructor(
+    kind: "not_found" | "conflict" | "invalid",
+    message: string,
+    details: Record<string, unknown> = {},
+  ) {
     super(message);
     this.kind = kind;
+    this.details = details;
+  }
+}
+
+/** A Workspace's Prime and Worker, in the order they are listed. */
+const ROLES: readonly SessionRole[] = ["prime", "worker"];
+
+/** The fixed names of the Prime and Worker, which no Other Session may take. */
+const ROLE_NAMES: Record<SessionRole, string> = { prime: "Prime", worker: "Worker" };
+
+function isRoleName(name: string): boolean {
+  return ROLES.some((role) => ROLE_NAMES[role] === name);
+}
+
+/** The Prime and Worker last as long as their Workspace, under their fixed names. */
+function assertNoRole(session: { role: SessionRole | null }, change: string): void {
+  if (session.role) {
+    throw new ServiceError(
+      "conflict",
+      `The ${ROLE_NAMES[session.role]} can't be ${change}`,
+    );
   }
 }
 
@@ -24,6 +58,46 @@ function isDirectory(path: string): boolean {
     return statSync(path).isDirectory();
   } catch {
     return false;
+  }
+}
+
+function assertDirectory(folder: string): void {
+  if (!isDirectory(folder)) {
+    throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
+  }
+}
+
+/** Why a folder couldn't be made, in the owner's words. */
+function mkdirFailure(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "EEXIST" || code === "ENOTDIR") return "a file is in the way";
+  if (code === "EACCES" || code === "EPERM") return "permission denied";
+  if (code === "ENAMETOOLONG") return "the name is too long";
+  return code ?? String(error);
+}
+
+/**
+ * Makes `folder` and any missing folders above it, from the top down. A failure names the
+ * folder that couldn't be made; the folders made before it stay.
+ */
+function makeFolders(folder: string): void {
+  const missing: string[] = [];
+  for (
+    let path = folder;
+    !isDirectory(path) && path !== dirname(path);
+    path = dirname(path)
+  ) {
+    missing.unshift(path);
+  }
+  for (const path of missing) {
+    try {
+      mkdirSync(path);
+    } catch (error) {
+      throw new ServiceError(
+        "invalid",
+        `Couldn't make the folder ${path}: ${mkdirFailure(error)}`,
+      );
+    }
   }
 }
 
@@ -41,25 +115,69 @@ export class Service {
     this.reconciler = new Reconciler(store, tmux);
   }
 
-  /** Kills tmux sessions that have no store record. Runs at startup and on every state read. */
+  /**
+   * Kills tmux sessions that have no store record and stores the conversation each Claude
+   * Session is on. Runs at startup, on every state read and whenever Claude Code reports a
+   * conversation.
+   */
   async reconcile(): Promise<void> {
     await this.reconciler.reconcile();
   }
 
-  createWorkspace(input: { name?: string; folder: string }) {
+  /**
+   * With `createMissingFolders`, a folder that doesn't exist yet is made (with any missing
+   * folders above it) once every other check has passed; without it, it is refused.
+   */
+  createWorkspace(input: {
+    name?: string;
+    folder: string;
+    createMissingFolders?: boolean;
+  }) {
     const folder = resolve(input.folder);
-    if (!isDirectory(folder)) {
-      throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
-    }
+    if (!input.createMissingFolders) assertDirectory(folder);
+    this.assertFolderFree(folder);
     const explicit = input.name?.trim();
     if (explicit) this.assertWorkspaceNameFree(explicit);
+    if (input.createMissingFolders) makeFolders(folder);
     const name = explicit || availableName(basename(folder), this.workspaceNames());
-    const { id } = this.store.addWorkspace({ name, folder });
+    // The Prime and Worker are recorded with the Workspace and started only when asked to.
+    const { id } = this.store.transaction(() => {
+      const workspace = this.store.addWorkspace({ name, folder });
+      for (const role of ROLES) {
+        this.store.addSession({
+          id: randomUUID(),
+          workspaceId: workspace.id,
+          name: ROLE_NAMES[role],
+          role,
+          conversationId: randomUUID(),
+          launchOptions: ROLE_LAUNCH_OPTIONS[role],
+        });
+      }
+      return workspace;
+    });
     return { id, name, folder };
   }
 
-  /** Renames and/or re-folders a Workspace; both changes are checked before either is made. */
-  updateWorkspace(id: string, changes: { name?: string; folder?: string }) {
+  /**
+   * Where the folder picker opens: the parent of the most recently created Workspace's
+   * folder, or `root` (Home) when there is none or that parent is gone.
+   */
+  pickerStart(root: string): string {
+    const newest = this.store.newestWorkspace();
+    const parent = newest && dirname(newest.folder);
+    return parent && isDirectory(parent) ? parent : root;
+  }
+
+  /**
+   * Renames and/or re-folders a Workspace; both changes are checked before either is made.
+   * `createMissingFolders` works as in `createWorkspace`. Moving the Open Workspace onto a
+   * folder starts its Stopped Prime and Worker there, so fixing a Missing one needs no
+   * second open.
+   */
+  async updateWorkspace(
+    id: string,
+    changes: { name?: string; folder?: string; createMissingFolders?: boolean },
+  ) {
     const workspace = this.store.getWorkspace(id);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
     const update: { name?: string; folder?: string } = {};
@@ -71,13 +189,94 @@ export class Service {
     }
     if (changes.folder !== undefined) {
       const folder = resolve(changes.folder);
-      if (!isDirectory(folder)) {
-        throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
-      }
+      if (!changes.createMissingFolders) assertDirectory(folder);
+      this.assertFolderFree(folder, id);
       update.folder = folder;
     }
+    if (update.folder !== undefined && changes.createMissingFolders) {
+      makeFolders(update.folder);
+    }
     this.store.updateWorkspace(id, update);
+    if (update.folder !== undefined && this.openWorkspaceId() === id) {
+      await this.startRoles(id);
+    }
     return { ...workspace, ...update };
+  }
+
+  /**
+   * Makes the Workspace the Open Workspace and, unless it is Missing, starts its Stopped
+   * Prime and Worker, resuming their conversations. Opening it again changes nothing that
+   * is running. With `showWorker` (the owner chose it by name), its right Pane shows the
+   * Worker again, keeping its tabs.
+   */
+  async openWorkspace(
+    id: string,
+    options: { showWorker?: boolean } = {},
+  ): Promise<{ id: string }> {
+    const workspace = this.store.getWorkspace(id);
+    if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
+    this.store.transaction(() => {
+      this.store.setOpenWorkspaceId(id);
+      if (options.showWorker) {
+        this.store.setRightPane(id, { ...this.rightPane(id), shown: null });
+      }
+    });
+    if (isDirectory(workspace.folder)) await this.startRoles(id);
+    return { id };
+  }
+
+  /**
+   * The Open Workspace: the one last opened or, when none is set, the first by position.
+   * Null when there are no Workspaces.
+   */
+  private openWorkspaceId(): string | null {
+    return this.store.getOpenWorkspaceId() ?? this.store.listWorkspaces()[0]?.id ?? null;
+  }
+
+  /** Starts the Workspace's Prime and Worker, those that are Stopped, together. */
+  private async startRoles(workspaceId: string): Promise<void> {
+    const { primeAndWorker } = sessionsByRole(this.store.listSessions(workspaceId));
+    await Promise.all(primeAndWorker.map((session) => this.restartSession(session.id)));
+  }
+
+  /**
+   * Sets what the Workspace's right Pane holds. Every tab must be one of its Other Sessions,
+   * once, and what's shown must be one of the tabs, or null for the Worker.
+   */
+  setRightPane(workspaceId: string, rightPane: RightPaneState): void {
+    if (!this.store.getWorkspace(workspaceId)) {
+      throw new ServiceError("not_found", "Unknown Workspace");
+    }
+    const others = this.otherSessionIds(workspaceId);
+    const { shown, tabs } = rightPane;
+    if (!tabs.every((id) => others.has(id)) || new Set(tabs).size !== tabs.length) {
+      throw new ServiceError(
+        "invalid",
+        "tabs must list Other Sessions of the Workspace, each at most once",
+      );
+    }
+    if (shown !== null && !tabs.includes(shown)) {
+      throw new ServiceError("invalid", "shown must be null or one of the tabs");
+    }
+    this.store.setRightPane(workspaceId, { shown, tabs });
+  }
+
+  private otherSessionIds(workspaceId: string): Set<string> {
+    const { others } = sessionsByRole(this.store.listSessions(workspaceId));
+    return new Set(others.map((session) => session.id));
+  }
+
+  /**
+   * What the Workspace's right Pane holds, leaving out any Session that is no longer one of
+   * its Other Sessions.
+   */
+  private rightPane(workspaceId: string): RightPaneState {
+    const others = this.otherSessionIds(workspaceId);
+    const stored = this.store.getRightPane(workspaceId);
+    const tabs = stored.tabs.filter((id) => others.has(id));
+    const shown =
+      stored.shown !== null && tabs.includes(stored.shown) ? stored.shown : null;
+    return { shown, tabs };
   }
 
   /** `ids` must be every Workspace exactly once, in the order the owner wants. */
@@ -89,7 +288,28 @@ export class Service {
     this.store.setWorkspaceOrder(ids);
   }
 
-  /** Ends the Workspace's shells first, then forgets it. The folder on disk is never touched. */
+  /**
+   * `ids` must be every Other Session of the Workspace exactly once, in the order the owner
+   * wants. The Prime and Worker always come first, so they are never in it.
+   */
+  reorderSessions(workspaceId: string, ids: string[]): void {
+    if (!this.store.getWorkspace(workspaceId)) {
+      throw new ServiceError("not_found", "Unknown Workspace");
+    }
+    const known = [...this.otherSessionIds(workspaceId)];
+    if (ids.length !== known.length || !known.every((id) => ids.includes(id))) {
+      throw new ServiceError(
+        "invalid",
+        "ids must list every Other Session of the Workspace exactly once",
+      );
+    }
+    this.store.setSessionOrder(workspaceId, ids);
+  }
+
+  /**
+   * Ends the Workspace's shells first, then forgets it. The folder on disk is never touched.
+   * Deleting the Open Workspace opens the first Workspace by position, or none.
+   */
   async deleteWorkspace(id: string): Promise<void> {
     if (!this.store.getWorkspace(id))
       throw new ServiceError("not_found", "Unknown Workspace");
@@ -101,7 +321,14 @@ export class Service {
     );
     const failed = kills.find((kill) => kill.status === "rejected");
     if (failed) throw failed.reason;
-    this.store.deleteWorkspace(id);
+    const wasOpen = this.openWorkspaceId() === id;
+    this.store.transaction(() => {
+      this.store.deleteWorkspace(id);
+      // The first Workspace by position becomes open, and stays so through a reorder. It is
+      // not started: only opening it does that.
+      if (wasOpen)
+        this.store.setOpenWorkspaceId(this.store.listWorkspaces()[0]?.id ?? null);
+    });
   }
 
   private workspaceNames(exceptId?: string): Set<string> {
@@ -117,6 +344,24 @@ export class Service {
   private assertWorkspaceNameFree(name: string, exceptId?: string): void {
     if (this.workspaceNames(exceptId).has(name)) {
       throw new ServiceError("conflict", `A Workspace named "${name}" already exists`);
+    }
+  }
+
+  /**
+   * A folder has at most one Workspace, so a project never gets two sets of Claudes. The
+   * refusal names the Workspace that has it, so a client can take the owner there.
+   * `folder` is already resolved. Changing a folder passes the Workspace being moved.
+   */
+  private assertFolderFree(folder: string, exceptId?: string): void {
+    const owner = this.store
+      .listWorkspaces()
+      .find((w) => w.id !== exceptId && resolve(w.folder) === folder);
+    if (owner) {
+      throw new ServiceError(
+        "conflict",
+        `A Workspace for this folder already exists: "${owner.name}"`,
+        { workspace: { id: owner.id, name: owner.name } },
+      );
     }
   }
 
@@ -153,7 +398,7 @@ export class Service {
       let n = 1;
       while (taken.has(`session ${n}`)) n++;
       name = `session ${n}`;
-    } else if (taken.has(name)) {
+    } else if (taken.has(name) || isRoleName(name)) {
       throw new ServiceError("conflict", `A Session named "${name}" already exists`);
     }
     const id = randomUUID();
@@ -191,30 +436,38 @@ export class Service {
   renameSession(sessionId: string, requestedName: string): { id: string; name: string } {
     const session = this.store.getSession(sessionId);
     if (!session) throw new ServiceError("not_found", "Unknown Session");
+    assertNoRole(session, "renamed");
     const name = requestedName.trim();
     if (!name) throw new ServiceError("invalid", "name is required");
     const clash = this.store
       .listSessions(session.workspaceId)
       .some((other) => other.id !== sessionId && other.name === name);
-    if (clash) {
+    if (clash || isRoleName(name)) {
       throw new ServiceError("conflict", `A Session named "${name}" already exists`);
     }
     this.store.renameSession(sessionId, name);
     return { id: sessionId, name };
   }
 
-  /** Ends the Session's shell and everything in it, then forgets the Session. */
+  /**
+   * Ends the Session's shell and everything in it, then forgets the Session, and its tab in
+   * the right Pane, which shows the Worker if that tab was shown.
+   */
   async deleteSession(sessionId: string): Promise<void> {
-    if (!this.store.getSession(sessionId)) {
-      throw new ServiceError("not_found", "Unknown Session");
-    }
+    const session = this.store.getSession(sessionId);
+    if (!session) throw new ServiceError("not_found", "Unknown Session");
+    assertNoRole(session, "deleted");
     await this.tmux.killSession(sessionId);
-    this.store.deleteSession(sessionId);
+    this.store.transaction(() => {
+      this.store.deleteSession(sessionId);
+      this.store.setRightPane(session.workspaceId, this.rightPane(session.workspaceId));
+    });
   }
 
   async getState(): Promise<State> {
     const live = await this.reconciler.reconcile();
     return {
+      openWorkspaceId: this.openWorkspaceId(),
       workspaces: this.store.listWorkspaces().map((workspace) => ({
         ...workspace,
         missing: !isDirectory(workspace.folder),
@@ -222,9 +475,11 @@ export class Service {
           id: session.id,
           name: session.name,
           kind: session.kind,
+          role: session.role,
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
         })),
+        rightPane: this.rightPane(workspace.id),
       })),
     };
   }
@@ -250,6 +505,7 @@ export class Service {
   private async startStopped(session: {
     id: string;
     folder: string;
+    role: SessionRole | null;
     conversationId: string | null;
     launchOptions: LaunchOptions | null;
   }): Promise<void> {
@@ -266,8 +522,11 @@ export class Service {
           : {
               conversationId: session.conversationId,
               mode: "resume",
-              // Every Launch option is passed again each time (ADR-0005).
-              options: session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS,
+              // Every Launch option is passed again each time (ADR-0005). A Prime's or
+              // Worker's are k-bench's fixed ones, whatever was stored with it.
+              options: session.role
+                ? ROLE_LAUNCH_OPTIONS[session.role]
+                : (session.launchOptions ?? DEFAULT_LAUNCH_OPTIONS),
             },
       ),
     );

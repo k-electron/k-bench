@@ -23,7 +23,8 @@ test("renaming to a name that is taken shows the message and keeps the dialog op
 }) => {
   await app.createWorkspace(kbench.instance.makeFolder("a"), { name: "Billing" });
   await app.createWorkspace(kbench.instance.makeFolder("b"), { name: "Search" });
-  await expect(app.workspace("Search")).toBeVisible();
+  // Only the Open Workspace's row has the menu.
+  await app.openWorkspace("Search");
 
   await app.workspaceAction("Search", "Rename");
   await app.page.getByRole("textbox", { name: "Name" }).fill("Billing");
@@ -33,29 +34,23 @@ test("renaming to a name that is taken shows the message and keeps the dialog op
   await expect(app.page.getByRole("button", { name: "Save" })).toBeVisible();
 });
 
-test("change a Workspace's folder; a folder that does not exist shows the message", async ({
-  app,
-  kbench,
-}) => {
+test("change a Workspace's folder by picking another one", async ({ app, kbench }) => {
   await app.createWorkspace(kbench.instance.makeFolder("old"));
   const moved = kbench.instance.makeFolder("moved");
   await expect(app.workspace("old")).toBeVisible();
 
   await app.workspaceAction("old", "Change folder");
-  await app.page
-    .getByRole("textbox", { name: "Folder path" })
-    .fill(`${kbench.instance.root}/nope`);
-  await app.page.getByRole("button", { name: "Save" }).click();
-  await expect(app.page.getByRole("alert")).toContainText("does not exist");
-
-  await app.page.getByRole("textbox", { name: "Folder path" }).fill(moved);
+  // It opens at the Workspace's own folder, with nothing to save until another is picked.
+  await expect(app.breadcrumb("old")).toHaveAttribute("aria-current", "location");
+  await expect(app.page.getByRole("button", { name: "Save" })).toBeDisabled();
+  await app.pickFolder(moved);
   await app.page.getByRole("button", { name: "Save" }).click();
 
   await expect(app.page.getByRole("button", { name: "Save" })).toHaveCount(0);
   await expect(app.workspace("old")).toHaveAttribute("title", moved);
 });
 
-test("dragging a Workspace in the sidebar reorders it, and the order survives a reload", async ({
+test("dragging a Workspace's row, or its tile when collapsed, reorders it, and the order survives a reload", async ({
   app,
   kbench,
 }) => {
@@ -71,6 +66,16 @@ test("dragging a Workspace in the sidebar reorders it, and the order survives a 
   await app.page.reload();
   await expect(app.workspace("third")).toBeVisible();
   expect(await app.workspaceNames()).toEqual(["third", "first", "second"]);
+
+  // Collapsed, a Workspace is dragged by its tile.
+  await app.collapseSidebar();
+  await app.dragOnto(app.workspaceTile("second"), app.workspaceTile("third"));
+  await app.expandSidebarButton.click();
+
+  await expect.poll(() => app.workspaceNames()).toEqual(["second", "third", "first"]);
+  await app.page.reload();
+  await expect(app.workspace("third")).toBeVisible();
+  expect(await app.workspaceNames()).toEqual(["second", "third", "first"]);
 });
 
 test("deleting a Workspace asks first; cancelling keeps everything, confirming ends its Sessions", async ({

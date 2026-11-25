@@ -47,6 +47,14 @@ export async function startServer(
   });
   const events = new EventSockets(feed);
   const bells = tmux.watchBells(() => feed.notify());
+  // A Claude Session's new conversation is stored at once, whether or not anyone is viewing
+  // it. One reconcile at a time; stopping waits for the last before the database closes.
+  let following = Promise.resolve();
+  const conversations = tmux.watchConversations(() => {
+    following = following
+      .then(() => service.reconcile())
+      .catch((error) => console.error("could not follow a Claude conversation", error));
+  });
 
   // The guard sits in front of everything the server answers, so no route or static file
   // (now or added later) can be reached without the allowed login.
@@ -95,6 +103,8 @@ export async function startServer(
   const stop = () => {
     stopping ??= (async () => {
       await bells.stop();
+      await conversations.stop();
+      await following;
       events.closeAll();
       // From here on no tmux client this server started is running or starting.
       await attachments.stop();

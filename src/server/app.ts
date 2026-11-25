@@ -35,15 +35,16 @@ function optionalString(value: unknown): string | undefined {
 export function createApp(
   service: Service,
   options: {
+    /** The folder picker's root: Home. */
+    pickerRoot: string;
     webDir?: string;
-    pickerRoot?: string;
     /**
      * Called after every request that changed something, so open clients hear about it.
      * Returns the state revision from which the change shows; the response carries it in
      * the `State-Revision` header, so the client that made the change can wait for it.
      */
     onMutation?: () => number;
-  } = {},
+  },
 ): Hono {
   const app = new Hono();
 
@@ -54,7 +55,7 @@ export function createApp(
     if (error instanceof ServiceError) {
       const status =
         error.kind === "not_found" ? 404 : error.kind === "conflict" ? 409 : 422;
-      return c.json({ error: error.message }, status);
+      return c.json({ ...error.details, error: error.message }, status);
     }
     console.error(error);
     return c.json({ error: "Internal error" }, 500);
@@ -74,12 +75,14 @@ export function createApp(
 
   app.get("/api/state", async (c) => c.json(await service.getState()));
 
-  // The folder picker. Defaults to the configured root.
+  // The folder picker. Without a path it lists where the picker opens; every answer names
+  // the picker root (Home), which the picker shows among its Places.
   app.get("/api/directories", (c) => {
-    const path = c.req.query("path") || options.pickerRoot;
-    if (!path) throw new ServiceError("invalid", "path is required");
+    const root = options.pickerRoot;
+    const path = c.req.query("path") || service.pickerStart(root);
     try {
-      return c.json(listDirectories(path));
+      const hidden = c.req.query("hidden") === "1";
+      return c.json({ ...listDirectories(path, { hidden }), root });
     } catch (error) {
       if (error instanceof DirectoryError) {
         throw new ServiceError("invalid", error.message);
@@ -95,6 +98,7 @@ export function createApp(
     const workspace = service.createWorkspace({
       folder,
       name: optionalString(body.name),
+      createMissingFolders: body.createMissingFolders === true,
     });
     return c.json(workspace, 201);
   });
@@ -111,16 +115,48 @@ export function createApp(
 
   app.patch("/api/workspaces/:id", async (c) => {
     const body = await jsonBody(c.req.raw);
-    const workspace = service.updateWorkspace(c.req.param("id"), {
+    const workspace = await service.updateWorkspace(c.req.param("id"), {
       name: optionalString(body.name),
       folder: optionalString(body.folder),
+      createMissingFolders: body.createMissingFolders === true,
     });
     return c.json(workspace);
+  });
+
+  app.post("/api/workspaces/:id/open", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    return c.json(
+      await service.openWorkspace(c.req.param("id"), {
+        showWorker: body.showWorker === true,
+      }),
+    );
+  });
+
+  // The whole record: the tabs in order, and the one shown (null for the Worker).
+  app.put("/api/workspaces/:id/right-pane", async (c) => {
+    const { shown, tabs } = await jsonBody(c.req.raw);
+    if (!Array.isArray(tabs) || !tabs.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "tabs must be a list of Session ids");
+    }
+    if (shown !== null && typeof shown !== "string") {
+      throw new ServiceError("invalid", "shown must be a Session id or null");
+    }
+    service.setRightPane(c.req.param("id"), { shown, tabs });
+    return c.json({ shown, tabs });
   });
 
   app.delete("/api/workspaces/:id", async (c) => {
     await service.deleteWorkspace(c.req.param("id"));
     return c.body(null, 204);
+  });
+
+  app.put("/api/workspaces/:id/sessions/order", async (c) => {
+    const { ids } = await jsonBody(c.req.raw);
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "ids must be a list of Session ids");
+    }
+    service.reorderSessions(c.req.param("id"), ids);
+    return c.json({ ids });
   });
 
   app.post("/api/workspaces/:id/sessions", async (c) => {

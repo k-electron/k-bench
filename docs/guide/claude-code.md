@@ -1,8 +1,8 @@
 # Using k-bench with Claude Code
 
-k-bench launches Claude Code for you and resumes it when you restart. A **Claude Session** is a Session that runs Claude Code itself, in a Workspace's folder, with the model, effort and advisor you pick in a dialog. Restarting it brings back the same Claude conversation. This page covers that, and the few things worth setting up so k-bench and Claude Code work well together.
+k-bench launches Claude Code for you and resumes it when you restart. A **Claude Session** is a Session that runs Claude Code itself, in a Workspace's folder, with the model, effort and advisor you pick in a dialog. Restarting it brings back the Claude conversation you were last in. This page covers that, and the few things worth setting up so k-bench and Claude Code work well together.
 
-k-bench only starts and resumes Claude Code, using its documented command-line flags. It never reads Claude Code's output or files. What you see in a Claude Session is the real Claude Code in a real terminal, so its slash commands, skills and hooks all work as they do on your Mac.
+k-bench starts and resumes Claude Code using its documented command-line flags, and adds one silent hook so it knows which conversation you are in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)). It changes nothing else about what Claude sees or does. What you see in a Claude Session is the real Claude Code in a real terminal, so its slash commands, skills and hooks all work as they do on your Mac.
 
 ## Start a Claude Session
 
@@ -12,7 +12,7 @@ k-bench only starts and resumes Claude Code, using its documented command-line f
 
 ![The New Claude dialog, with a name, model, effort, advisor and the Focus view checkbox](../images/new-claude.png)
 
-The new Session opens in the Focused Pane, so you can start typing to Claude at once. Claude Code starts in the Workspace's folder, through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings and the account you are signed in to are the same as in a terminal window on that Mac.
+The new Session opens in the right Pane, so you can start typing to Claude at once. Claude Code starts in the Workspace's folder, through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings and the account you are signed in to are the same as in a terminal window on that Mac.
 
 The first time Claude Code runs in a folder it asks whether you trust it, and **"No, exit" is selected by default**. Answer in the terminal as you would anywhere. If you exit there, the Session stops, and you can restart it from its **...** menu.
 
@@ -42,11 +42,11 @@ Focus view is for small screens, where Claude Code's output is hard to follow. C
 
 Focus view applies to that launch only. k-bench does not change your Claude Code settings, so terminals outside k-bench are not affected. Claude Code runs full-screen in a Focus view Session and keeps its own scrollback, so k-bench's [History](using-k-bench.md#scrolling-selecting-and-copying) stays empty while it runs.
 
-## The Claude glyph
+## The Claude icon
 
 ![A sidebar with two Claude Sessions, each marked with a small orange glyph, next to a shell Session](../images/claude-sidebar.png)
 
-A Claude Session shows a small orange glyph beside its name in the sidebar, and its accessible name is "_name_ is a Claude Session". Only Claude Sessions have it.
+In the sidebar a Claude Session shows a sparkle before its name where a shell shows `>_`, and the icon's accessible name is "_name_ is a Claude Session". The Prime and Worker, also Claude Sessions, show a crown and a hammer.
 
 ## Quitting, errors and restarting
 
@@ -58,15 +58,19 @@ If Claude Code exits with an error, such as a model and advisor it won't pair, o
 
 ### Restarting resumes the conversation
 
-A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**. There is no dialog. Claude Code resumes the same conversation, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench gave the conversation its ID when it launched the Session, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
+A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**, or press **Restart** in its Pane. There is no dialog. Claude Code resumes the conversation last running in the Session, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench knows the conversation by its ID, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
 
-Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with the same Launch options.
+A Claude Session follows its conversation. When you move to another one inside Claude Code, with `/clear`, `/resume`, `/branch` or `/fork`, k-bench notices and saves it straight away, whether or not a browser is open, and a later restart resumes that one. Compacting a conversation keeps it. To do this, k-bench adds a `SessionStart` hook to each Claude Code it launches, for that launch only. The hook prints nothing, so nothing reaches your conversation, and your own settings and hooks are left alone.
+
+It can't follow the conversation when Claude Code doesn't run hooks: in a folder you haven't trusted, or when your settings have `disableAllHooks`. Then a restart resumes the last conversation k-bench knew, which is the one it launched unless it followed a move before.
+
+Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with that same ID and the same Launch options. That includes a conversation you started with `/clear` and never typed into.
 
 Deleting a Claude Session ends it but leaves its conversation alone, so you can still find it with `claude --resume` in a terminal.
 
 ## Typing `claude` in an ordinary Session
 
-An ordinary Session, from **New shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no glyph and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
+An ordinary Session, from **New shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no sparkle and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
 
 ## Two things that can surprise you
 
@@ -96,18 +100,18 @@ To check it, start a short task in a Session, then open a different Session. Whe
 
 ## One Session per Claude conversation
 
-A Claude Session is tied to the one conversation it started with, so give each Claude conversation its own Claude Session, and name it after the task (in the dialog, or later with **...** then **Rename**). Then:
+A Claude Session runs one conversation at a time. You can move it to another with `/clear` or `/resume`, but it is simplest to give each piece of work its own Claude Session, and name it after the task (in the dialog, or later with **...** then **Rename**). Then:
 
 - you can run several conversations at once and switch between them from the sidebar;
 - a Bell tells you which one is waiting, instead of you checking each in turn;
 - a conversation carries on in its Session when you close the tab or lose your connection;
 - a restart brings back the right conversation, even when several share a folder.
 
-Several Sessions can share one Workspace, and several Workspaces can point at the same folder. If two conversations will edit the same project at once, they can step on each other's files. A common remedy is a separate git worktree for each, with a Workspace per worktree.
+Several Sessions can share one Workspace, but a folder has at most one Workspace. If two conversations will edit the same project at once, they can step on each other's files. A common remedy is a separate git worktree for each, with a Workspace per worktree.
 
-## A second Pane for a dev server
+## The right Pane for a dev server
 
-On a wide screen, put Claude Code in one [Pane](using-k-bench.md#panes) and a dev server, a test watcher or a log tail in the other. Create a shell Session in the same Workspace for it (**+**, then **New shell**), open it with `⌘`-click (or **Open in other pane**), and use `⌘\` to move between the two. You see Claude's changes take effect as they happen.
+On a wide screen the Prime is always in the left [Pane](using-k-bench.md#panes). Put a dev server, a test watcher or a log tail in the right one: create a shell Session in the Workspace for it (**+**, then **New shell**), and it opens there. Click the Worker in the sidebar to bring the Worker back, and the shell again to return to it. You see Claude's changes take effect as they happen.
 
 ## Driving Claude Code from your phone
 

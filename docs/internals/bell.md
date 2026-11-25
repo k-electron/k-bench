@@ -1,6 +1,6 @@
 # The Bell
 
-A Session raises a Bell when its program rings the terminal bell, whether or not any browser is attached. It shows as a badge on the Session row, and as a hint on a collapsed Workspace (the chevron by a Workspace name collapses it). Viewing the Session clears it, and viewing means a terminal attached to it: opening the Session in a Pane, or a Pane's terminal reconnecting. The front end has no Bell logic of its own.
+A Session raises a Bell when its program rings the terminal bell, whether or not any browser is attached. It shows as a bell icon on the Session's row in the sidebar, and as an amber dot on the tile of a Workspace that isn't open (only the Open Workspace's Sessions are listed). Viewing the Session clears it, and viewing means a terminal attached to it: opening the Session in a Pane, or a Pane's terminal reconnecting. The front end has no Bell logic of its own.
 
 ## Mechanism
 

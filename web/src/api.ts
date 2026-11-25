@@ -1,21 +1,39 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { revisionOf } from "../../src/shared/state-protocol.ts";
+import { type RightPaneState, revisionOf } from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
   path: string;
   parent?: string;
   directories: Array<{ name: string; path: string }>;
+  /** The picker root (Home), which the folder picker shows among its Places. */
+  root: string;
 }
 
 export class ApiError extends Error {
   /** The HTTP status the server answered with. */
   readonly status: number;
+  /** The refusal's whole JSON body, which can carry more than its `error` message. */
+  readonly body: Record<string, unknown>;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.body = body;
+  }
+
+  /**
+   * The Workspace that already has the folder, when that is why a create or folder change
+   * was refused.
+   */
+  get folderOwner(): { id: string; name: string } | undefined {
+    const owner = this.body.workspace as { id?: unknown; name?: unknown } | undefined;
+    return this.status === 409 &&
+      typeof owner?.id === "string" &&
+      typeof owner.name === "string"
+      ? { id: owner.id, name: owner.name }
+      : undefined;
   }
 }
 
@@ -31,11 +49,12 @@ export interface Change<T> {
 
 async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const response = await fetch(path, init);
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok)
     throw new ApiError(
-      body.error ?? `Request failed (${response.status})`,
+      typeof body.error === "string" ? body.error : `Request failed (${response.status})`,
       response.status,
+      body,
     );
   return { value: body as T, revision: revisionOf(response.headers) };
 }
@@ -62,20 +81,38 @@ function send<T>(
  * Workspaces and Sessions reach the page.
  */
 export const api = {
-  /** Subfolders of `path`, or of the configured root when omitted. */
-  listDirectories: (path?: string) =>
-    get<DirectoryListing>(
-      path === undefined
-        ? "/api/directories"
-        : `/api/directories?path=${encodeURIComponent(path)}`,
-    ),
-  createWorkspace: (input: { folder: string; name?: string }) =>
+  /**
+   * Subfolders of `path`, or of the picker's starting folder when omitted; hidden ones (a
+   * leading `.`) only with `hidden`.
+   */
+  listDirectories: (path?: string, { hidden = false }: { hidden?: boolean } = {}) => {
+    const query = new URLSearchParams();
+    if (path !== undefined) query.set("path", path);
+    if (hidden) query.set("hidden", "1");
+    return get<DirectoryListing>(`/api/directories?${query}`);
+  },
+  createWorkspace: (input: {
+    folder: string;
+    name?: string;
+    createMissingFolders?: boolean;
+  }) =>
     send<{ id: string; name: string; folder: string }>("POST", "/api/workspaces", input),
-  updateWorkspace: (id: string, changes: { name?: string; folder?: string }) =>
-    send<void>("PATCH", `/api/workspaces/${id}`, changes),
+  updateWorkspace: (
+    id: string,
+    changes: { name?: string; folder?: string; createMissingFolders?: boolean },
+  ) => send<void>("PATCH", `/api/workspaces/${id}`, changes),
   /** `ids` is every Workspace, in the order wanted. */
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
+  /**
+   * Makes it the Open Workspace and starts its Stopped Prime and Worker. With `showWorker`,
+   * its right Pane shows the Worker again.
+   */
+  openWorkspace: (id: string, options: { showWorker?: boolean } = {}) =>
+    send<{ id: string }>("POST", `/api/workspaces/${id}/open`, options),
+  /** Sets the Workspace's right Pane: its tabs, and the one shown (null for the Worker). */
+  setRightPane: (id: string, rightPane: RightPaneState) =>
+    send<RightPaneState>("PUT", `/api/workspaces/${id}/right-pane`, rightPane),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   /** The Launch options last used for a Claude Session; all Default if none has been. */
   lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),
@@ -93,6 +130,12 @@ export const api = {
     send<{ id: string; name: string }>("PATCH", `/api/sessions/${sessionId}`, { name }),
   deleteSession: (sessionId: string) =>
     send<void>("DELETE", `/api/sessions/${sessionId}`),
+  /**
+   * `ids` is every Other Session of the Workspace, in the order wanted; its Prime and Worker
+   * always come first, so they are never in it.
+   */
+  reorderSessions: (workspaceId: string, ids: string[]) =>
+    send<void>("PUT", `/api/workspaces/${workspaceId}/sessions/order`, { ids }),
   restartSession: (sessionId: string) =>
     send<{ id: string; name: string }>("POST", `/api/sessions/${sessionId}/restart`, {}),
 };

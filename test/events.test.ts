@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createTestInstance, type State } from "./harness/instance.ts";
+import { createTestInstance, otherSessions, type State } from "./harness/instance.ts";
 import { killTmuxServer } from "./harness/tmux.ts";
 
 function sessionsOf(state: State): Array<{ id: string; name: string; status: string }> {
   return state.workspaces.flatMap((w) =>
-    w.sessions.map((s) => ({ id: s.id, name: s.name, status: s.status })),
+    otherSessions(w).map((s) => ({ id: s.id, name: s.name, status: s.status })),
   );
 }
 
@@ -35,7 +35,7 @@ describe("Events WebSocket", () => {
     const events = await server.openEvents();
 
     const snapshot = await events.waitForSnapshot(() => true);
-    expect(snapshot.workspaces[0]?.sessions).toMatchObject([
+    expect(otherSessions(snapshot.workspaces[0])).toMatchObject([
       { id: session.id, name: "session 1", status: "running" },
     ]);
   });
@@ -58,7 +58,7 @@ describe("Events WebSocket", () => {
       (state) => sessionsOf(state).length === 3,
       "all three Sessions",
     );
-    expect(snapshot.workspaces.map((w) => [w.name, w.sessions.length])).toEqual([
+    expect(snapshot.workspaces.map((w) => [w.name, otherSessions(w).length])).toEqual([
       ["project", 2],
       ["other", 1],
     ]);

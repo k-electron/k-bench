@@ -1,7 +1,7 @@
 import { createServer } from "node:net";
-import { resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
-import { Store } from "../src/server/store.ts";
+import { type SessionRow, Store } from "../src/server/store.ts";
 import { createTestInstance, type TestInstance } from "../test/harness/instance.ts";
 import { pollUntil } from "../test/harness/poll.ts";
 import { echoCommand } from "../test/harness/terminal.ts";
@@ -16,9 +16,12 @@ const LOGIN = "owner@example.com";
  */
 export class AppPage {
   readonly page: Page;
+  /** The picker root the server was started with: Home in the folder picker. */
+  readonly home: string;
 
-  constructor(page: Page) {
+  constructor(page: Page, home: string) {
     this.page = page;
+    this.home = home;
   }
 
   /** The sidebar listing Workspaces and their Sessions. */
@@ -51,9 +54,17 @@ export class AppPage {
       .getByRole("button", { name, exact: true });
   }
 
-  /** A Session's row in the sidebar. */
+  /** A Session's row in the sidebar: the button that opens it. */
   session(name: string): Locator {
     return this.sidebar.getByRole("button", { name, exact: true });
+  }
+
+  /** A Session's whole row in the sidebar: its icon, name, "stopped" label, Bell and menu. */
+  sessionRow(name: string): Locator {
+    return this.sidebar
+      .getByRole("listitem")
+      .filter({ has: this.page.getByRole("button", { name, exact: true }) })
+      .filter({ hasNot: this.page.getByRole("list") });
   }
 
   /** Opens a Session row's menu and picks `item` (for example "Rename" or "Delete"). */
@@ -72,35 +83,88 @@ export class AppPage {
     });
   }
 
-  /** One of the (at most two) side-by-side slots in the main view; `n` is 1 or 2. */
-  pane(n: 1 | 2): Locator {
-    return this.page.getByRole("group", { name: `Pane ${n}`, exact: true });
+  /** On a phone: the `Workspace › Session` title beside the Menu button. */
+  get phoneTitle(): Locator {
+    return this.page.getByRole("main").getByRole("heading", { level: 1 });
   }
 
-  /** The `Workspace › Session` label above Pane `n` in the top bar; absent for an empty Pane. */
-  paneLabel(n: 1 | 2): Locator {
-    return this.page.getByRole("note", { name: `Pane ${n} label`, exact: true });
+  /** On a phone: the sheet listing the Open Workspace's Sessions, opened from the title. */
+  get sessionsSheet(): Locator {
+    return this.page.getByRole("dialog", { name: "Sessions", exact: true });
   }
 
-  /** The terminal showing the named Session, found inside Pane `n`. */
-  terminalIn(n: 1 | 2, sessionName: string): Locator {
-    return this.pane(n).getByRole("region", {
+  /** On a phone: taps the title to open the Sessions sheet. */
+  async openSessionsSheet(): Promise<void> {
+    await this.phoneTitle.getByRole("button").tap();
+    await expect(this.sessionsSheet).toBeVisible();
+  }
+
+  /** On a phone: a Session's row in the Sessions sheet. */
+  sheetRow(name: string): Locator {
+    return this.sessionsSheet.getByRole("button").filter({
+      has: this.page.getByText(name, { exact: true }),
+    });
+  }
+
+  /** On a phone: the dot on the title's Workspace name, for a Bell elsewhere in it. */
+  get titleBell(): Locator {
+    return this.phoneTitle.getByRole("img", {
+      name: "Another session here rang the bell",
+      exact: true,
+    });
+  }
+
+  /** On a phone: the dot on the Menu button, for a Bell in another Workspace. */
+  get menuBell(): Locator {
+    return this.page.getByRole("img", {
+      name: "A session in another workspace rang the bell",
+      exact: true,
+    });
+  }
+
+  /** On a desktop or tablet: the left Pane (always the Prime) or the right one. */
+  pane(side: "left" | "right"): Locator {
+    const name = side === "left" ? "Left Pane" : "Right Pane";
+    return this.page.getByRole("group", { name, exact: true });
+  }
+
+  /** The terminal showing the named Session, found inside the left or right Pane. */
+  terminalIn(side: "left" | "right", sessionName: string): Locator {
+    return this.pane(side).getByRole("region", {
       name: `Terminal ${sessionName}`,
       exact: true,
     });
   }
 
-  /** The toggle between one and two Panes. */
-  get panesToggle(): Locator {
-    return this.page.getByRole("button", { name: "Two panes", exact: true });
+  /** A tab in the right Pane's tab bar: "Worker", or an Other Session's name. */
+  rightTab(name: string): Locator {
+    return this.pane("right").getByRole("button", { name, exact: true });
   }
 
-  /** Switches the main view to two Panes if it is not already. */
-  async showTwoPanes(): Promise<void> {
-    if ((await this.panesToggle.getAttribute("aria-pressed")) !== "true") {
-      await this.panesToggle.click();
-    }
-    await expect(this.pane(2)).toBeVisible();
+  /** The × on an Other Session's tab in the right Pane. */
+  closeTabButton(name: string): Locator {
+    return this.pane("right").getByRole("button", {
+      name: `Close tab ${name}`,
+      exact: true,
+    });
+  }
+
+  /** The Bell dot on a right Pane tab; present only while its Session's Bell is raised. */
+  tabBell(name: string): Locator {
+    return this.pane("right").getByRole("img", {
+      name: `${name} rang the bell`,
+      exact: true,
+    });
+  }
+
+  /** On a desktop or tablet: the Open Workspace's name in the top bar. */
+  get workspaceTitle(): Locator {
+    return this.page.getByRole("main").getByRole("heading", { level: 1 });
+  }
+
+  /** Opens a Workspace by clicking its name in the sidebar. */
+  async openWorkspace(name: string): Promise<void> {
+    await this.workspace(name).getByRole("button", { name, exact: true }).click();
   }
 
   /** The draggable divider between the two Panes. */
@@ -120,14 +184,58 @@ export class AppPage {
     await this.page.mouse.up();
   }
 
-  /** Opens a Session's row menu and picks "Open in other pane". */
-  async openInOtherPane(sessionName: string): Promise<void> {
-    await this.sessionMenu(sessionName, "Open in other pane");
+  /**
+   * Drags the divider to where the left Pane takes `share` of the two Panes' width, as
+   * worked out from where the Panes are now.
+   */
+  async dragDividerTo(share: number): Promise<void> {
+    const [divider, left, right] = await Promise.all([
+      this.divider.boundingBox(),
+      this.pane("left").boundingBox(),
+      this.pane("right").boundingBox(),
+    ]);
+    if (!divider || !left || !right) throw new Error("Both Panes should be open");
+    const target = left.x + share * (right.x + right.width - left.x);
+    await this.dragDivider(target - (divider.x + divider.width / 2));
   }
 
-  /** The running/Stopped indicator beside a Session in the sidebar. */
+  /** The divider's position: the left Pane's share of the width, in percent. */
+  async dividerPercent(): Promise<number> {
+    return Number(await this.divider.getAttribute("aria-valuenow"));
+  }
+
+  /** Drags the divider to a few pixels from the left or right edge, which shuts that Pane. */
+  async shutPane(side: "left" | "right"): Promise<void> {
+    const [divider, pane] = await Promise.all([
+      this.divider.boundingBox(),
+      this.pane(side).boundingBox(),
+    ]);
+    if (!divider || !pane) throw new Error(`The ${side} Pane is not open`);
+    const edge = side === "left" ? pane.x + 5 : pane.x + pane.width - 5;
+    await this.dragDivider(edge - (divider.x + divider.width / 2));
+  }
+
+  /** The rail a shut Pane leaves, which reopens it when clicked. */
+  rail(side: "left" | "right", sessionName: string): Locator {
+    return this.pane(side).getByRole("button", {
+      name: `Show ${sessionName}`,
+      exact: true,
+    });
+  }
+
+  /** The Bell dot on a shut Pane's rail; present only while its Session has a Bell. */
+  railBell(side: "left" | "right", sessionName: string): Locator {
+    return this.pane(side).getByRole("img", {
+      name: `${sessionName} rang the bell`,
+      exact: true,
+    });
+  }
+
+  /** A Session's row, found only while it is running, or only while it is Stopped. */
   sessionStatus(name: string, status: "running" | "stopped"): Locator {
-    return this.sidebar.getByRole("img", { name: `${name} ${status}`, exact: true });
+    return status === "stopped"
+      ? this.sessionRow(name).filter({ hasText: "stopped" })
+      : this.sessionRow(name).filter({ hasNotText: "stopped" });
   }
 
   private sizeProbes = 0;
@@ -160,30 +268,77 @@ export class AppPage {
 
   async createWorkspace(folder: string, options: { name?: string } = {}): Promise<void> {
     await this.page.getByRole("button", { name: "New Workspace" }).click();
-    await this.page.getByRole("textbox", { name: "Folder path" }).fill(folder);
+    await this.pickFolder(folder);
     if (options.name !== undefined) {
       await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
     }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
   }
 
-  /**
-   * Creates a Workspace by browsing the Host's folders from the picker's root: opens each
-   * named folder in turn, then creates a Workspace on the last one.
-   */
-  async createWorkspaceByBrowsing(...path: string[]): Promise<void> {
-    await this.page.getByRole("button", { name: "New Workspace" }).click();
-    await this.page.getByRole("button", { name: "Browse folders" }).click();
-    const browser = this.page.getByRole("region", { name: "Folder browser" });
-    for (const folder of path) {
-      await browser.getByRole("button", { name: folder, exact: true }).click();
+  /** The open dialog's folder picker: Places, breadcrumbs, filter and the folder list. */
+  get folderPicker(): Locator {
+    return this.page.getByRole("dialog");
+  }
+
+  /** The Places in the folder picker (Home, folders holding Workspaces, Computer). */
+  place(name: string): Locator {
+    return this.folderPicker
+      .getByRole("navigation", { name: "Places" })
+      .getByRole("button", { name, exact: true });
+  }
+
+  /** A subfolder in the folder picker's list. */
+  folderRow(name: string): Locator {
+    return this.folderPicker
+      .getByRole("list", { name: "Folders" })
+      .getByRole("button", { name, exact: true });
+  }
+
+  /** A crumb in the folder picker's breadcrumbs (Home is `~`). */
+  breadcrumb(name: string): Locator {
+    return this.folderPicker
+      .getByRole("navigation", { name: "Breadcrumbs" })
+      .getByRole("button", { name, exact: true });
+  }
+
+  /** In the open folder picker, names a New folder; Enter steps into it. */
+  async newFolder(name: string): Promise<void> {
+    await this.folderPicker
+      .getByRole("button", { name: "New folder", exact: true })
+      .click();
+    const input = this.folderPicker.getByRole("textbox", { name: "New folder name" });
+    await input.fill(name);
+    await input.press("Enter");
+  }
+
+  /** In the open folder picker, goes to Home and steps down into `folder`, one folder at a time. */
+  async pickFolder(folder: string): Promise<void> {
+    await this.place("Home").click();
+    for (const name of relative(this.home, folder).split("/").filter(Boolean)) {
+      await this.folderRow(name).click();
     }
-    await this.page.getByRole("button", { name: "Create Workspace" }).click();
+    const here = folder === this.home ? "~" : basename(folder);
+    await expect(this.breadcrumb(here)).toHaveAttribute("aria-current", "location");
   }
 
   /** A Workspace's heading in the sidebar. */
   workspace(name: string): Locator {
     return this.sidebar.getByRole("heading", { name, exact: true });
+  }
+
+  /** In the collapsed sidebar: a Workspace's tile, which opens it. */
+  workspaceTile(name: string): Locator {
+    return this.sidebar.getByRole("button", { name, exact: true });
+  }
+
+  /** Collapses the sidebar to a column of tiles. */
+  async collapseSidebar(): Promise<void> {
+    await this.sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
+  }
+
+  /** The button at the top of the collapsed sidebar that brings the tree back. */
+  get expandSidebarButton(): Locator {
+    return this.sidebar.getByRole("button", { name: "Expand sidebar" });
   }
 
   /** The Bell badge on a Session's row; present only while its Bell is raised. */
@@ -194,7 +349,7 @@ export class AppPage {
     });
   }
 
-  /** The hint on a Workspace row saying some Session in it rang the bell. */
+  /** The Bell dot on a folded Workspace's tile: some Session in it rang the bell. */
   workspaceBellHint(workspaceName: string): Locator {
     return this.sidebar.getByRole("img", {
       name: `${workspaceName} has a session that rang the bell`,
@@ -202,21 +357,18 @@ export class AppPage {
     });
   }
 
-  /** Collapses a Workspace's Sessions out of view. */
-  async collapseWorkspace(workspaceName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Collapse ${workspaceName}`, exact: true })
-      .click();
+  /** The warning mark on a Missing Workspace's tile. */
+  missingMark(workspaceName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${workspaceName} is Missing`,
+      exact: true,
+    });
   }
 
-  /** Shows a collapsed Workspace's Sessions again. */
-  async expandWorkspace(workspaceName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Expand ${workspaceName}`, exact: true })
-      .click();
-  }
-
-  /** The notice on a Workspace that is Missing; absent when its folder exists. */
+  /**
+   * The note under the Open Workspace when it is Missing, with its Change folder button;
+   * absent when its folder exists or it is folded.
+   */
   missingNotice(workspaceName: string): Locator {
     return this.sidebar
       .getByRole("listitem")
@@ -233,35 +385,94 @@ export class AppPage {
 
   /** Opens a Workspace's row menu and picks `item` (Rename, Change folder, Delete). */
   async workspaceAction(workspaceName: string, item: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `Actions for ${workspaceName}`, exact: true })
-      .click();
+    await this.workspaceActions(workspaceName).click();
     await this.page.getByRole("menuitem", { name: item, exact: true }).click();
   }
 
-  /** Drags a Workspace by its handle onto the row of the Workspace named `target`. */
+  /** Drags a Workspace by its row onto the row of the Workspace named `target`. */
   async dragWorkspaceOnto(workspaceName: string, target: string): Promise<void> {
-    const handle = this.sidebar.getByRole("button", {
-      name: `Reorder ${workspaceName}`,
-      exact: true,
-    });
-    const from = await handle.boundingBox();
-    const dest = await this.workspace(target).boundingBox();
-    if (!from || !dest) throw new Error("Workspace rows are not visible");
+    await this.dragOnto(this.workspace(workspaceName), this.workspace(target));
+  }
+
+  /** Drags a Session by its row in the sidebar onto the row of the Session named `target`. */
+  async dragSessionOnto(sessionName: string, target: string): Promise<void> {
+    await this.dragOnto(this.session(sessionName), this.session(target));
+  }
+
+  /**
+   * The Open Workspace's Sessions' names, in sidebar order: its Prime, its Worker and the
+   * Sessions with the default "session N" names.
+   */
+  async sessionNames(): Promise<string[]> {
+    return this.sidebar
+      .getByRole("button", { name: /^(Prime|Worker|session \d+)$/ })
+      .allTextContents();
+  }
+
+  /**
+   * On the phone: presses and holds a Session's row in the drawer until it lifts, then
+   * drags it with the finger onto the row of the Session named `target`.
+   */
+  async touchDragSessionOnto(sessionName: string, target: string): Promise<void> {
+    const source = this.session(sessionName);
+    const from = await source.boundingBox();
+    const dest = await this.session(target).boundingBox();
+    if (!from || !dest) throw new Error("The rows to drag between are not visible");
+    const cdp = await this.page.context().newCDPSession(this.page);
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", x: number, y: number) =>
+      cdp.send("Input.dispatchTouchEvent", {
+        type,
+        touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+      });
+    const x = from.x + from.width / 2;
+    await touch("touchStart", x, from.y + from.height / 2);
+    // The row lifts once the press has been held long enough.
+    await expect(source).toHaveAttribute("aria-pressed", "true");
+    const toY = dest.y + dest.height / 2;
+    for (let step = 1; step <= 10; step++) {
+      const y = from.y + from.height / 2 + ((toY - from.y - from.height / 2) * step) / 10;
+      await touch("touchMove", x, y);
+    }
+    await touch("touchEnd", x, toY);
+    await cdp.detach();
+  }
+
+  /** Drags `source` with the mouse onto the middle of `target`. */
+  async dragOnto(source: Locator, target: Locator): Promise<void> {
+    const from = await source.boundingBox();
+    const dest = await target.boundingBox();
+    if (!from || !dest) throw new Error("The rows to drag between are not visible");
     const { mouse } = this.page;
     await mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await mouse.down();
     // Pointer-driven drags need intermediate moves to register.
-    await mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 5, { steps: 3 });
+    // Past the few pixels a row needs before a press becomes a drag.
+    await mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, {
+      steps: 3,
+    });
     await mouse.move(dest.x + dest.width / 2, dest.y + dest.height / 2, { steps: 10 });
     await mouse.up();
   }
 
+  /** The **+** on a Workspace's row; only the Open Workspace's row has one. */
+  newSessionButton(workspaceName: string): Locator {
+    return this.sidebar.getByRole("button", {
+      name: `New session in ${workspaceName}`,
+      exact: true,
+    });
+  }
+
+  /** The **...** on a Workspace's row; only the Open Workspace's row has one. */
+  workspaceActions(workspaceName: string): Locator {
+    return this.sidebar.getByRole("button", {
+      name: `Actions for ${workspaceName}`,
+      exact: true,
+    });
+  }
+
   /** Opens the **+** menu on a Workspace's row; it offers New shell and New Claude…. */
   async openNewSessionMenu(workspaceName: string): Promise<void> {
-    await this.sidebar
-      .getByRole("button", { name: `New session in ${workspaceName}`, exact: true })
-      .click();
+    await this.newSessionButton(workspaceName).click();
   }
 
   /** The **+** menu's entries, once it is open. */
@@ -328,7 +539,7 @@ export class AppPage {
     await this.launchClaude(options);
   }
 
-  /** The Claude glyph on a Session's row; present on Claude Sessions only. */
+  /** The sparkle (or, for the Prime and Worker, crown or hammer) of a Claude Session's row. */
   claudeGlyph(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {
       name: `${sessionName} is a Claude Session`,
@@ -338,7 +549,7 @@ export class AppPage {
 
   /**
    * Creates `count` Sessions ("session 1", "session 2", ...), waiting for each to open in
-   * the Focused Pane before creating the next, so a late open can't disturb the layout.
+   * a Pane before creating the next, so a late open can't disturb the view.
    */
   async createSessions(workspaceName: string, count: number): Promise<void> {
     for (let n = 1; n <= count; n++) {
@@ -382,16 +593,26 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-/** The id of the Session named `name`, read from the database whether or not a server runs. */
-function sessionIdNamed(instance: TestInstance, name: string): string {
+/**
+ * The Session named `name` (in the Workspace named `workspaceName`, when given), read from
+ * the database whether or not a server runs.
+ */
+function sessionNamed(
+  instance: TestInstance,
+  name: string,
+  workspaceName?: string,
+): SessionRow {
   const store = new Store(instance.config.dataDir);
   try {
     const session = store
       .listWorkspaces()
+      .filter(
+        (workspace) => workspaceName === undefined || workspace.name === workspaceName,
+      )
       .flatMap((workspace) => store.listSessions(workspace.id))
       .find((s) => s.name === name);
     if (!session) throw new Error(`No Session named ${name}`);
-    return session.id;
+    return session;
   } finally {
     store.close();
   }
@@ -405,11 +626,11 @@ export interface Kbench {
   /** Starts the server again on the same address, data folder and tmux socket. */
   startServer(): Promise<void>;
   /**
-   * Rings the terminal bell in the named Session's shell, with no browser involved, once no
-   * terminal is viewing it (one that just moved to another Session can take a moment to let
-   * go). Works while the server is stopped too.
+   * Rings the terminal bell in the named Session (of the named Workspace, when given), with
+   * no browser involved, once no terminal is viewing it (one that just moved to another
+   * Session can take a moment to let go). Works while the server is stopped too.
    */
-  ringBell(sessionName: string): Promise<void>;
+  ringBell(sessionName: string, workspaceName?: string): Promise<void>;
 }
 
 interface Fixtures {
@@ -431,13 +652,18 @@ export const test = base.extend<Fixtures>({
       await use({
         instance,
         url: server.baseUrl,
-        ringBell: async (sessionName) => {
-          const id = sessionIdNamed(instance, sessionName);
+        ringBell: async (sessionName, workspaceName) => {
+          const session = sessionNamed(instance, sessionName, workspaceName);
           const socket = instance.config.tmuxSocket;
-          await pollUntil(() => attachedClientCount(socket, id) === 0, {
+          await pollUntil(() => attachedClientCount(socket, session.id) === 0, {
             description: `no terminal to be viewing ${sessionName}`,
           });
-          typeIntoSession(socket, id, "printf '\\a'");
+          // A Claude Session runs the stub, which rings when told `bell`.
+          typeIntoSession(
+            socket,
+            session.id,
+            session.kind === "claude" ? "bell" : "printf '\\a'",
+          );
         },
         stopServer: () => server.stop(),
         startServer: async () => {
@@ -450,7 +676,7 @@ export const test = base.extend<Fixtures>({
   },
   app: async ({ page, kbench }, use) => {
     await page.goto(kbench.url);
-    await use(new AppPage(page));
+    await use(new AppPage(page, kbench.instance.root));
   },
   otherDevice: async ({ browser, kbench }, use) => {
     const context = await browser.newContext({
@@ -459,7 +685,7 @@ export const test = base.extend<Fixtures>({
     try {
       const page = await context.newPage();
       await page.goto(kbench.url);
-      await use(new AppPage(page));
+      await use(new AppPage(page, kbench.instance.root));
     } finally {
       await context.close();
     }

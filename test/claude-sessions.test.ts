@@ -1,14 +1,17 @@
-import { mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { fakeClaudeArgs } from "./harness/fake-claude.ts";
-import { createTestInstance, type TestServer } from "./harness/instance.ts";
+import { fakeClaudeArgs, fakeClaudeSettings } from "./harness/fake-claude.ts";
+import {
+  createTestInstance,
+  otherSessions,
+  type TestServer,
+} from "./harness/instance.ts";
+import { writeOldStore } from "./harness/old-store.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { typeIntoSession } from "./harness/tmux.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const FOCUS_SETTINGS = '{"viewMode":"focus","tui":"fullscreen"}';
+const FOCUS_SETTINGS = { viewMode: "focus", tui: "fullscreen" };
 const ERROR_HELD = "Claude Code exited with an error. Press any key to close.";
 
 async function boot() {
@@ -38,7 +41,7 @@ describe("Claude Sessions", () => {
 
     const claude = await server.createClaudeSession(workspace.id);
 
-    const sessions = (await server.state()).workspaces[0]?.sessions;
+    const sessions = otherSessions((await server.state()).workspaces[0]);
     expect(sessions).toMatchObject([
       { id: shell.id, kind: "shell", status: "running" },
       { id: claude.id, name: "session 2", kind: "claude", status: "running" },
@@ -77,7 +80,7 @@ describe("Claude Sessions", () => {
 
     expect(taken.status).toBe(409);
     expect(unnamed.name).toBe("session 1");
-    expect((await server.state()).workspaces[0]?.sessions).toHaveLength(2);
+    expect(otherSessions((await server.state()).workspaces[0])).toHaveLength(2);
   });
 
   it("refuses launch options that are not an object, and creates no Session", async () => {
@@ -89,7 +92,7 @@ describe("Claude Sessions", () => {
 
     expect(response.status).toBe(422);
     expect(((await response.json()) as { error: string }).error).toContain("claude");
-    expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
+    expect(otherSessions((await server.state()).workspaces[0])).toEqual([]);
   });
 
   it("is Stopped when Claude Code quits with status 0, with no shell left underneath", async () => {
@@ -164,9 +167,8 @@ describe("Claude Sessions", () => {
       conversationId,
       "--model",
       "opus",
-      "--settings",
-      FOCUS_SETTINGS,
     ]);
+    expect(await fakeClaudeSettings(again)).toEqual(FOCUS_SETTINGS);
     expect(again.output).toContain("advisor tool disabled: 1");
     expect(again.output).not.toContain("No conversation found");
   });
@@ -253,21 +255,86 @@ describe("Sessions that existed before Claude Sessions", () => {
     const instance = createTestInstance();
     const folder = instance.makeFolder("project");
     // The store as the first version of k-bench left it.
-    mkdirSync(instance.config.dataDir, { recursive: true });
-    const old = new DatabaseSync(join(instance.config.dataDir, "k-bench.db"));
-    old.exec(`
-      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, folder TEXT NOT NULL, position INTEGER NOT NULL);
-      CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (workspace_id, name));
+    writeOldStore(
+      instance,
+      1,
+      `
       INSERT INTO workspaces VALUES ('w1', 'project', '${folder}', 0);
       INSERT INTO sessions VALUES ('s1', 'w1', 'build', 1);
-      PRAGMA user_version = 1;
-    `);
-    old.close();
+    `,
+    );
 
     const server = await instance.start();
 
-    expect((await server.state()).workspaces[0]?.sessions).toMatchObject([
+    expect(otherSessions((await server.state()).workspaces[0])).toMatchObject([
       { id: "s1", name: "build", kind: "shell", status: "stopped" },
     ]);
+  });
+});
+
+describe("Workspaces that existed before the Prime and Worker", () => {
+  it("each get a Stopped Prime and Worker after an upgrade, keeping every old Session as an Other Session", async () => {
+    const instance = createTestInstance();
+    const folder = instance.makeFolder("project");
+    const empty = instance.makeFolder("empty");
+    // The store as schema version 4 left it: a Workspace with a shell Session and a Claude
+    // Session that the owner happened to name "Prime", and a Workspace with no Sessions.
+    writeOldStore(
+      instance,
+      4,
+      `
+      ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'shell';
+      ALTER TABLE sessions ADD COLUMN conversation_id TEXT;
+      ALTER TABLE sessions ADD COLUMN launch_options TEXT;
+      CREATE TABLE claude_last_launch_options (id INTEGER PRIMARY KEY CHECK (id = 1), options TEXT NOT NULL);
+      INSERT INTO workspaces VALUES ('w1', 'project', '${folder}', 0);
+      INSERT INTO workspaces VALUES ('w2', 'empty', '${empty}', 1);
+      INSERT INTO sessions VALUES ('s1', 'w1', 'build', 1, 'shell', NULL, NULL);
+      INSERT INTO sessions VALUES ('s2', 'w1', 'Prime', 2, 'claude',
+        '11111111-1111-4111-8111-111111111111',
+        '{"model":"sonnet","effort":"low","advisor":"off","focusView":false}');
+    `,
+    );
+
+    const server = await instance.start();
+    const { workspaces } = await server.state();
+
+    for (const workspace of workspaces) {
+      const roles = workspace.sessions.filter((session) => session.role !== null);
+      expect(roles).toEqual([
+        expect.objectContaining({
+          role: "prime",
+          name: "Prime",
+          kind: "claude",
+          status: "stopped",
+        }),
+        expect.objectContaining({
+          role: "worker",
+          name: "Worker",
+          kind: "claude",
+          status: "stopped",
+        }),
+      ]);
+    }
+    expect(workspaces.map((w) => w.id)).toEqual(["w1", "w2"]);
+    expect(otherSessions(workspaces[0])).toMatchObject([
+      { id: "s1", name: "build", kind: "shell", status: "stopped" },
+      { id: "s2", name: "Prime (earlier)", kind: "claude", status: "stopped" },
+    ]);
+    expect(otherSessions(workspaces[1])).toEqual([]);
+    // Listed like a new Workspace's: the Prime and Worker first.
+    expect(workspaces[0]?.sessions.map((s) => s.name)).toEqual([
+      "Prime",
+      "Worker",
+      "build",
+      "Prime (earlier)",
+    ]);
+    // The renamed Session still runs its own conversation in its Workspace folder.
+    await server.post("/api/sessions/s2/restart");
+    const terminal = await server.openTerminal("s2");
+    expect(await fakeClaudeArgs(terminal)).toContain(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(terminal.output).toContain(`claude-stub cwd: ${folder}`);
   });
 });

@@ -30,7 +30,7 @@ test("New Claude… launches Claude Code in a new Session, marked with a glyph o
 
   await expect(app.claudeDialog).toBeHidden();
   await expect(app.session("session 2")).toHaveAttribute("aria-current", "true");
-  const terminal = app.terminalIn(1, "session 2");
+  const terminal = app.terminalIn("right", "session 2");
   await expect(terminal).toContainText("claude-stub ready");
   await expect(terminal).toContainText(`claude-stub cwd: ${folder}`);
   await expect(terminal).toContainText("claude-stub arg: --session-id");
@@ -66,7 +66,7 @@ test("the Claude dialog opens with every option Default, and a choice reaches Cl
   await expect(terminal).toContainText("claude-stub arg: opus");
   await expect(terminal).toContainText("claude-stub arg: xhigh");
   await expect(terminal).toContainText("claude-stub advisor tool disabled: 1");
-  await expect(terminal).toContainText("claude-stub arg: --settings");
+  await expect(terminal).toContainText('"viewMode":"focus"');
   await expect(terminal).not.toContainText("claude-stub arg: --advisor");
 });
 

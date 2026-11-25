@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 
 function isAlive(pid: number): boolean {
@@ -81,12 +81,12 @@ describe("Session names", () => {
     await server.renameSession(zebra.id, "yak");
 
     const state = await server.state();
-    expect(state.workspaces[0]?.sessions.map((s) => s.id)).toEqual([
+    expect(otherSessions(state.workspaces[0]).map((s) => s.id)).toEqual([
       zebra.id,
       apple.id,
       mango.id,
     ]);
-    expect(state.workspaces[0]?.sessions.map((s) => s.name)).toEqual([
+    expect(otherSessions(state.workspaces[0]).map((s) => s.name)).toEqual([
       "yak",
       "apple",
       "mango",
@@ -105,7 +105,7 @@ describe("Session names", () => {
 
     expect(response.status).toBe(200);
     const state = await server.state();
-    expect(state.workspaces[0]?.sessions).toMatchObject([
+    expect(otherSessions(state.workspaces[0])).toMatchObject([
       { id: session.id, name: "deploy", status: "running" },
     ]);
   });
@@ -122,7 +122,7 @@ describe("Session names", () => {
     const response = await server.renameSession(second.id, first.name);
 
     expect(response.status).toBe(409);
-    const names = (await server.state()).workspaces[0]?.sessions.map((s) => s.name);
+    const names = otherSessions((await server.state()).workspaces[0]).map((s) => s.name);
     expect(names).toEqual(["session 1", "session 2"]);
   });
 
@@ -139,7 +139,7 @@ describe("Session names", () => {
     });
 
     expect(response.status).toBe(409);
-    expect((await server.state()).workspaces[0]?.sessions).toHaveLength(1);
+    expect(otherSessions((await server.state()).workspaces[0])).toHaveLength(1);
   });
 
   it("allows the same name in a different Workspace", async () => {
@@ -176,7 +176,9 @@ describe("Session names", () => {
 
     expect((await server.renameSession(session.id, "   ")).status).toBe(422);
     expect((await server.renameSession("no-such-session", "x")).status).toBe(404);
-    expect((await server.state()).workspaces[0]?.sessions[0]?.name).toBe("session 1");
+    expect(otherSessions((await server.state()).workspaces[0])[0]?.name).toBe(
+      "session 1",
+    );
   });
 
   it("renames a Stopped Session", async () => {
@@ -189,12 +191,13 @@ describe("Session names", () => {
     const terminal = await server.openTerminal(session.id);
     terminal.run("exit");
     await pollUntil(
-      async () => (await server.state()).workspaces[0]?.sessions[0]?.status === "stopped",
+      async () =>
+        otherSessions((await server.state()).workspaces[0])[0]?.status === "stopped",
       { description: "the Session to be Stopped" },
     );
 
     expect((await server.renameSession(session.id, "old")).status).toBe(200);
-    expect((await server.state()).workspaces[0]?.sessions[0]).toMatchObject({
+    expect(otherSessions((await server.state()).workspaces[0])[0]).toMatchObject({
       name: "old",
       status: "stopped",
     });
@@ -227,7 +230,7 @@ describe("Deleting a Session", () => {
 
     expect(response.status).toBe(204);
     await pollUntil(() => !isAlive(pid), { description: "the process to end" });
-    expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
+    expect(otherSessions((await server.state()).workspaces[0])).toEqual([]);
     expect((await server.deleteSession(session.id)).status).toBe(404);
   });
 
@@ -241,12 +244,13 @@ describe("Deleting a Session", () => {
     const terminal = await server.openTerminal(session.id);
     terminal.run("exit");
     await pollUntil(
-      async () => (await server.state()).workspaces[0]?.sessions[0]?.status === "stopped",
+      async () =>
+        otherSessions((await server.state()).workspaces[0])[0]?.status === "stopped",
       { description: "the Session to be Stopped" },
     );
 
     expect((await server.deleteSession(session.id)).status).toBe(204);
-    expect((await server.state()).workspaces[0]?.sessions).toEqual([]);
+    expect(otherSessions((await server.state()).workspaces[0])).toEqual([]);
   });
 
   it("leaves the Workspace's other Sessions running", async () => {
@@ -260,7 +264,7 @@ describe("Deleting a Session", () => {
 
     await server.deleteSession(doomed.id);
 
-    expect((await server.state()).workspaces[0]?.sessions).toMatchObject([
+    expect(otherSessions((await server.state()).workspaces[0])).toMatchObject([
       { id: kept.id, status: "running" },
     ]);
   });

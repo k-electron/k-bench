@@ -1,22 +1,99 @@
+import { rmSync } from "node:fs";
 import { type AppPage, expect, type Kbench, test } from "./harness.ts";
 
 // These run on the `phone` project: a touch device narrower than the layout breakpoint.
 
-test("the phone shows a single Pane and no Pane-count toggle", async ({
+test("on load the phone shows the Open Workspace's Prime, titled Workspace › Prime", async ({
   app,
   kbench,
+  page,
 }) => {
+  const folder = kbench.instance.makeFolder("project");
   await app.openDrawer();
-  await app.createWorkspace(kbench.instance.makeFolder("project"));
-  await app.createSession("project");
+  await app.createWorkspace(folder, { name: "alpha" });
 
-  await expect(app.pane(1)).toBeVisible();
-  await expect(app.terminal("session 1")).toBeVisible();
-  await expect(app.pane(2)).toHaveCount(0);
-  await expect(app.panesToggle).toHaveCount(0);
+  // Loading k-bench opens the Open Workspace, starting its Prime.
+  await page.reload();
+  await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${folder}`);
+  await expect(app.terminal("Prime")).toContainText("claude-stub ready");
+  await expect(app.terminal("Worker")).toHaveCount(0);
+  await expect(app.phoneTitle).toHaveText("alpha › Prime");
+  const menu = await page
+    .getByRole("button", { name: "Menu", exact: true })
+    .boundingBox();
+  const title = await app.phoneTitle.boundingBox();
+  if (!menu || !title) throw new Error("The Menu button and the title should both show");
+  expect(title.x).toBeGreaterThanOrEqual(menu.x + menu.width);
 });
 
-test("the phone shows the open Session's label beside the Menu button", async ({
+test("a long Workspace name is cut off in the title before the Session's name", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  await app.openDrawer();
+  const name = "a-workspace-whose-name-is-far-too-long-for-a-phone";
+  await app.createWorkspace(kbench.instance.makeFolder("project"), { name });
+  await app.createSession(name);
+  await expect(app.terminal("session 1")).toBeVisible();
+
+  await expect(app.phoneTitle).toHaveText(`${name} › session 1`);
+  const session = app.phoneTitle.getByText("session 1", { exact: true });
+  const workspace = app.phoneTitle.getByText(name, { exact: true });
+  // The Session's name shows in full, inside the screen; the Workspace's is clipped.
+  expect(await session.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const box = await session.boundingBox();
+  if (!box) throw new Error("The Session's name should show");
+  expect(box.x + box.width).toBeLessThanOrEqual(375);
+  expect(await workspace.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+});
+
+test("tapping a Workspace's name in the drawer opens it on its Prime and closes the drawer", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  const two = kbench.instance.makeFolder("two");
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  await app.createWorkspace(two, { name: "beta" });
+  await page.reload();
+  await expect(app.phoneTitle).toHaveText("alpha › Prime");
+  const openByName = async (name: string) => {
+    await app.openDrawer();
+    await app.workspace(name).getByRole("button", { name, exact: true }).tap();
+    await expect(app.drawer).toBeHidden();
+  };
+
+  await openByName("beta");
+
+  await expect(app.phoneTitle).toHaveText("beta › Prime");
+  await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${two}`);
+  // Even after showing its Worker, the Workspace's name brings back its Prime.
+  await app.openDrawer();
+  await app.session("Worker").tap();
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
+  await openByName("alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › Prime");
+  await openByName("beta");
+  await expect(app.phoneTitle).toHaveText("beta › Prime");
+  await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${two}`);
+
+  // Create on a folder that already has a Workspace opens it the same way.
+  await app.openDrawer();
+  await app.session("Worker").tap();
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
+  await openByName("alpha");
+  await app.openDrawer();
+  await app.createWorkspace(two);
+  await expect(app.page.getByRole("alert")).toContainText(
+    "A Workspace for this folder already exists",
+  );
+  await expect(app.phoneTitle).toHaveText("beta › Prime");
+});
+
+test("tapping the title lists the Workspace's Sessions, and tapping one shows it and closes the sheet", async ({
   app,
   kbench,
 }) => {
@@ -25,13 +102,97 @@ test("the phone shows the open Session's label beside the Menu button", async ({
   await app.createSession("alpha");
   await expect(app.terminal("session 1")).toBeVisible();
 
-  await expect(app.paneLabel(1)).toHaveText("alpha › session 1");
-  const menu = await app.page
-    .getByRole("button", { name: "Menu", exact: true })
-    .boundingBox();
-  const label = await app.paneLabel(1).boundingBox();
-  if (!menu || !label) throw new Error("The Menu button and the label should both show");
-  expect(label.x).toBeGreaterThanOrEqual(menu.x + menu.width);
+  await app.openSessionsSheet();
+
+  // Prime, Worker, then the Other Sessions; the one on screen is highlighted.
+  await expect(app.sessionsSheet.getByRole("listitem")).toHaveText([
+    /^Prime/,
+    /^Worker/,
+    /^session 1/,
+  ]);
+  await expect(app.sheetRow("Worker")).toContainText("stopped");
+  await expect(app.sheetRow("session 1")).toHaveAttribute("aria-current", "true");
+  await expect(app.sheetRow("Prime")).not.toHaveAttribute("aria-current", "true");
+
+  await app.sheetRow("Worker").tap();
+
+  await expect(app.sessionsSheet).toBeHidden();
+  await expect(app.phoneTitle).toHaveText("alpha › Worker");
+  await expect(app.terminal("session 1")).toHaveCount(0);
+
+  // Tapping outside the sheet closes it without choosing.
+  await app.openSessionsSheet();
+  await app.sessionsSheet.getByRole("button", { name: "Close sessions" }).tap();
+  await expect(app.sessionsSheet).toBeHidden();
+  await expect(app.phoneTitle).toHaveText("alpha › Worker");
+});
+
+test("a Bell elsewhere in the Open Workspace dots its name in the title, and one in another Workspace dots the menu button", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
+  await app.createSession("beta");
+  await expect(app.terminal("session 1")).toBeVisible();
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  // Opening alpha starts its Prime and Worker, and shows the Prime.
+  await app.workspace("alpha").getByRole("button", { name: "alpha", exact: true }).tap();
+  await expect(app.terminal("Prime")).toContainText("claude-stub ready");
+  await expect(app.titleBell).toHaveCount(0);
+  await expect(app.menuBell).toHaveCount(0);
+
+  await kbench.ringBell("Worker", "alpha");
+
+  await expect(app.titleBell).toBeVisible();
+  await expect(app.menuBell).toHaveCount(0);
+
+  await kbench.ringBell("session 1", "beta");
+
+  await expect(app.menuBell).toBeVisible();
+  await expect(app.titleBell).toBeVisible();
+});
+
+test("a Stopped Session on screen shows Restart, and pressing it brings the terminal back", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await page.keyboard.press("Escape");
+  await expect(app.drawer).toBeHidden();
+
+  // A new Workspace's Prime isn't started until the Workspace is opened.
+  await expect(app.phoneTitle).toHaveText("project › Prime");
+  const restart = page.getByRole("button", { name: "Restart", exact: true });
+  await restart.tap();
+
+  await expect(restart).toHaveCount(0);
+  await expect(app.terminal("Prime")).toContainText("claude-stub ready");
+});
+
+test("a Missing Workspace on the phone says its folder is missing, and Change folder there fixes it", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  const folder = kbench.instance.makeFolder("project");
+  await app.openDrawer();
+  await app.createWorkspace(folder);
+  rmSync(folder, { recursive: true });
+  await page.reload();
+
+  const main = page.getByRole("main");
+  await expect(main).toContainText("This Workspace's folder is missing");
+  await expect(main.getByRole("button", { name: "Restart" })).toHaveCount(0);
+  await main.getByRole("button", { name: "Change folder", exact: true }).tap();
+  const restored = kbench.instance.makeFolder("restored");
+  await app.pickFolder(restored);
+  await page.getByRole("button", { name: "Save" }).tap();
+
+  await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${restored}`);
 });
 
 test("the drawer opens from the menu button;tapping a Session opens it and closes the drawer", async ({
@@ -55,6 +216,26 @@ test("the drawer opens from the menu button;tapping a Session opens it and close
   await expect(app.terminal("session 1")).toBeVisible();
   await expect(app.terminal("session 2")).toHaveCount(0);
   await expect(app.drawer).toBeHidden();
+});
+
+test("in the drawer, pressing and holding a Session's row drags it to a new place", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  for (let n = 1; n <= 2; n++) {
+    await app.createSession("project");
+    await expect(app.terminal(`session ${n}`)).toBeVisible();
+    await app.openDrawer();
+  }
+  expect(await app.sessionNames()).toEqual(["Prime", "Worker", "session 1", "session 2"]);
+
+  await app.touchDragSessionOnto("session 2", "session 1");
+
+  await expect
+    .poll(() => app.sessionNames())
+    .toEqual(["Prime", "Worker", "session 2", "session 1"]);
 });
 
 test("the extra keys reach the shell", async ({ app, kbench }) => {
@@ -210,7 +391,10 @@ test("an armed Ctrl waits for the owner's next key through a reconnect", async (
   await app.runMarker(terminal, "interrupted");
 });
 
-test("the phone's open Session survives a reload", async ({ app, kbench }) => {
+test("the phone keeps showing the Session it last showed in the Workspace across a reload", async ({
+  app,
+  kbench,
+}) => {
   await app.openDrawer();
   await app.createWorkspace(kbench.instance.makeFolder("project"));
   await app.createSession("project");
@@ -223,7 +407,9 @@ test("the phone's open Session survives a reload", async ({ app, kbench }) => {
 
   await app.page.reload();
   await expect(app.terminal("session 1")).toBeVisible();
+  await expect(app.phoneTitle).toHaveText("project › session 1");
   await expect(app.terminal("session 2")).toHaveCount(0);
+  await expect(app.terminal("Prime")).toHaveCount(0);
 });
 
 test("with the on-screen keyboard up the app gives the terminal the room and compact keys replace the row", async ({
@@ -432,4 +618,27 @@ test.describe("Paste in the keyboard-up overlay", () => {
     await expect(app.extraKey("Ctrl")).toBeVisible();
     await expect(app.overlayKey("Paste")).toBeHidden();
   });
+});
+
+test("the folder picker is a full-screen sheet with Places as a row of chips above the breadcrumbs", async ({
+  app,
+}) => {
+  await app.openDrawer();
+  await app.page.getByRole("button", { name: "New Workspace" }).tap();
+
+  await expect(app.place("Home")).toBeVisible();
+  const viewport = app.page.viewportSize();
+  const sheet = await app.folderPicker.boundingBox();
+  const home = await app.place("Home").boundingBox();
+  const computer = await app.place("Computer").boundingBox();
+  const breadcrumbs = await app.folderPicker
+    .getByRole("navigation", { name: "Breadcrumbs" })
+    .boundingBox();
+  if (!viewport || !sheet || !home || !computer || !breadcrumbs) {
+    throw new Error("the sheet, its Places and its breadcrumbs should show");
+  }
+  expect(sheet).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
+  expect(computer.y).toBe(home.y);
+  expect(computer.x).toBeGreaterThan(home.x);
+  expect(home.y + home.height).toBeLessThanOrEqual(breadcrumbs.y);
 });

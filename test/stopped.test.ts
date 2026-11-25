@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { echoCommand } from "./harness/terminal.ts";
 import { killTmuxServer, plantTmuxSession, tmuxSessionNames } from "./harness/tmux.ts";
@@ -30,7 +30,7 @@ describe("Stopped Sessions", () => {
       { description: "the Session to be Stopped" },
     );
     const [ws] = (await server.state()).workspaces;
-    expect(ws?.sessions).toMatchObject([
+    expect(otherSessions(ws)).toMatchObject([
       { id: session.id, name: "session 1", status: "stopped" },
       { id: other.id, name: "session 2", status: "running" },
     ]);
@@ -48,7 +48,9 @@ describe("Stopped Sessions", () => {
 
     const state = await server.state();
     expect(state.workspaces.map((w) => w.name)).toEqual(["project", "other"]);
-    const statuses = state.workspaces.flatMap((w) => w.sessions.map((s) => s.status));
+    const statuses = state.workspaces.flatMap((w) =>
+      otherSessions(w).map((s) => s.status),
+    );
     expect(statuses).toEqual(["stopped", "stopped", "stopped"]);
   });
 
@@ -71,7 +73,7 @@ describe("Restarting a Stopped Session", () => {
 
     expect(response.status).toBe(200);
     const [ws] = (await server.state()).workspaces;
-    expect(ws?.sessions).toMatchObject([
+    expect(otherSessions(ws)).toMatchObject([
       { id: session.id, name: session.name, status: "running" },
     ]);
     const terminal = await server.openTerminal(session.id);
@@ -96,7 +98,7 @@ describe("Restarting a Stopped Session", () => {
     expect((await server.post(`/api/sessions/${session.id}/restart`)).status).toBe(200);
 
     const [ws] = (await server.state()).workspaces;
-    expect(ws?.sessions.map((s) => s.status)).toEqual(["running", "running"]);
+    expect(otherSessions(ws).map((s) => s.status)).toEqual(["running", "running"]);
     const again = await server.openTerminal(sibling.id);
     await again.waitForOutput("sibling-5d02");
   });
@@ -123,7 +125,7 @@ describe("Restarting a Stopped Session", () => {
     expect(response.status).toBe(422);
     expect(((await response.json()) as { error: string }).error).toContain(folder);
     const [ws] = (await server.state()).workspaces;
-    expect(ws?.sessions).toMatchObject([{ id: session.id, status: "stopped" }]);
+    expect(otherSessions(ws)).toMatchObject([{ id: session.id, status: "stopped" }]);
   });
 
   it("answers 404 for an unknown Session", async () => {
@@ -149,7 +151,7 @@ describe("Reconciling tmux with the store", () => {
     });
     expect(tmuxSessionNames(socket)).toEqual([`kb-${session.id}`]);
     const [ws] = (await restarted.state()).workspaces;
-    expect(ws?.sessions).toMatchObject([{ id: session.id, status: "running" }]);
+    expect(otherSessions(ws)).toMatchObject([{ id: session.id, status: "running" }]);
   });
 
   it("removes one that appears while the server runs, the next time state is read", async () => {

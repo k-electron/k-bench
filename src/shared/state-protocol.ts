@@ -11,25 +11,51 @@
 /** What a Session runs: the owner's shell, or Claude Code (a Claude Session). */
 export type SessionKind = "shell" | "claude";
 
+/**
+ * Which of a Workspace's two fixed Claude Sessions a Session is: its Prime or its Worker.
+ * A Session with no role is an Other Session.
+ */
+export type SessionRole = "prime" | "worker";
+
 export interface SessionState {
   id: string;
   name: string;
   kind: SessionKind;
+  role: SessionRole | null;
   status: "running" | "stopped";
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
 }
+
+/**
+ * What a Workspace's right Pane holds, kept on the Host so it follows the owner between
+ * devices: its tabs after the Worker's, each an Other Session's id in the owner's order,
+ * and the one shown, or null for the Worker.
+ */
+export interface RightPaneState {
+  shown: string | null;
+  tabs: string[];
+}
+
 export interface WorkspaceState {
   id: string;
   name: string;
   folder: string;
   position: number;
+  /** Orders Workspaces by when they were created; larger is newer. Not a time to show. */
+  createdAt: number;
   /** The folder no longer exists on the Host. */
   missing: boolean;
   sessions: SessionState[];
+  rightPane: RightPaneState;
 }
 export interface State {
   workspaces: WorkspaceState[];
+  /**
+   * The Open Workspace, the one the main view shows on every device: the one last opened,
+   * else the first by position. Null when there are no Workspaces.
+   */
+  openWorkspaceId: string | null;
 }
 
 /**

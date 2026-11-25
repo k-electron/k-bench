@@ -249,7 +249,7 @@ test("text typed in one Session is not carried into the next: only the new text 
   await app.page.keyboard.type("ab");
   await expect(terminal).toContainText("ab");
 
-  // Another Session takes the Focused Pane, and runs the same program.
+  // Another Session takes the Pane, and runs the same program.
   await app.openDrawer();
   await app.createSession("project");
   const other = app.terminal("session 2");
@@ -537,35 +537,6 @@ test("the choice survives a page reload", async ({ app, kbench }) => {
   await app.openDrawer();
   await app.session("session 1").tap();
   await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "true");
-});
-
-test("deleting a Session forgets its choice", async ({ app, kbench }) => {
-  await app.openDrawer();
-  await app.createWorkspace(kbench.instance.makeFolder("project"));
-  await app.createSession("project");
-  await expect(app.terminal("session 1")).toBeVisible();
-  await app.extraKey("Smart typing").tap();
-  await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "false");
-
-  // The choice is kept on this device, next to the Pane layout, under the Session's id.
-  const id = await app.page.evaluate(
-    `JSON.parse(localStorage.getItem("k-bench.layout")).sessions[0]`,
-  );
-  const keeps = () =>
-    app.page.evaluate(
-      `(localStorage.getItem("k-bench.smart-typing") ?? "").includes(${JSON.stringify(id)})`,
-    );
-  expect(await keeps()).toBe(true);
-
-  await app.openDrawer();
-  await app.sessionMenu("session 1", "Delete");
-  await app.page
-    .getByRole("alertdialog", { name: "Delete session 1?" })
-    .getByRole("button", { name: "Delete session" })
-    .click();
-  await expect(app.session("session 1")).toBeHidden();
-
-  await expect.poll(keeps).toBe(false);
 });
 
 test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40px tall", async ({

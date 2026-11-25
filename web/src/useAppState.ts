@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { EVENTS_PATH, type State } from "../../src/shared/state-protocol.ts";
+import { sessionsByRole } from "../../src/shared/session-roles.ts";
+import {
+  EVENTS_PATH,
+  type RightPaneState,
+  type State,
+} from "../../src/shared/state-protocol.ts";
 import { ApiError, api, type Change } from "./api";
 import { createStateClient, type StateClient } from "./stateClient";
 
@@ -15,14 +20,40 @@ function eventsUrl(): string {
  * The owner's actions. Each one finishes once its change is in `state`, so whatever runs
  * after it (closing a dialog, opening a new Session in a Pane) sees the result.
  *
- * An action whose form can show why it was refused rejects with an `ApiError`. Creating and
- * restarting a Session have no form: their refusal goes in `error` instead.
+ * An action whose form can show why it was refused rejects with an `ApiError`. Opening a
+ * Workspace, and creating and restarting a Session, have no form: their refusal goes in
+ * `error` instead.
  */
 export interface Actions {
-  createWorkspace(input: { folder: string; name?: string }): Promise<void>;
-  updateWorkspace(id: string, changes: { name?: string; folder?: string }): Promise<void>;
+  /**
+   * When the folder already has a Workspace, opens that one instead with `openExisting` (the
+   * view's open, as choosing its name) and says so in `error`, so the owner ends up where
+   * they meant to be. Any other refusal rejects.
+   */
+  createWorkspace(
+    input: {
+      folder: string;
+      name?: string;
+      createMissingFolders?: boolean;
+    },
+    openExisting: (id: string) => void,
+  ): Promise<void>;
+  updateWorkspace(
+    id: string,
+    changes: { name?: string; folder?: string; createMissingFolders?: boolean },
+  ): Promise<void>;
   /** Shows the new Workspace order at once, then saves it. `ids` is every Workspace. */
   reorderWorkspaces(ids: string[]): Promise<void>;
+  /**
+   * Makes it the Open Workspace, on every device, and starts its Prime and Worker. With
+   * `showWorker` (chosen by its name), its right Pane shows the Worker again, at once.
+   */
+  openWorkspace(id: string, options?: { showWorker?: boolean }): Promise<void>;
+  /**
+   * Shows what the Workspace's right Pane holds at once, then saves it on the Host, so
+   * every device follows.
+   */
+  setRightPane(workspaceId: string, rightPane: RightPaneState): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;
   /**
    * The new Session's id, once it is in state. Undefined if it was refused (see `error`) or
@@ -41,6 +72,11 @@ export interface Actions {
   renameSession(sessionId: string, name: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
   restartSession(sessionId: string): Promise<void>;
+  /**
+   * Shows the Workspace's new Other Session order at once, then saves it. `ids` is every
+   * Other Session of the Workspace; its Prime and Worker stay first.
+   */
+  reorderSessions(workspaceId: string, ids: string[]): Promise<void>;
 }
 
 /**
@@ -54,7 +90,10 @@ export interface Actions {
 export function useAppState(): {
   state: State | undefined;
   actions: Actions;
-  /** Why the last Session create or restart was refused, until the next one. */
+  /**
+   * Why the last Session create or restart, or Workspace open, was refused, or that a new
+   * Workspace's folder already had one; until the next of those.
+   */
   error: string | undefined;
 } {
   const [state, setState] = useState<State>();
@@ -81,6 +120,20 @@ export function useAppState(): {
     const act = async (request: Promise<Change<unknown>>) => {
       await whenShown(await request);
     };
+    /** Shows a change to a Workspace's right Pane before the Host has it. */
+    const showRightPane = (
+      workspaceId: string,
+      change: (current: RightPaneState) => RightPaneState,
+    ) =>
+      setState(
+        (current) =>
+          current && {
+            ...current,
+            workspaces: current.workspaces.map((w) =>
+              w.id === workspaceId ? { ...w, rightPane: change(w.rightPane) } : w,
+            ),
+          },
+      );
     /** For the actions with no form: a refusal goes in `error` rather than rejecting. */
     const reporting = async <T>(request: () => Promise<T>): Promise<T | undefined> => {
       setError(undefined);
@@ -94,7 +147,16 @@ export function useAppState(): {
     };
 
     return {
-      createWorkspace: (input) => act(api.createWorkspace(input)),
+      createWorkspace: async (input, openExisting) => {
+        try {
+          await act(api.createWorkspace(input));
+        } catch (failure) {
+          if (!(failure instanceof ApiError) || !failure.folderOwner) throw failure;
+          // Opening clears `error` as it starts, so the message is set after it.
+          openExisting(failure.folderOwner.id);
+          setError(failure.message);
+        }
+      },
       updateWorkspace: (id, changes) => act(api.updateWorkspace(id, changes)),
       reorderWorkspaces: (ids) => {
         setState(
@@ -108,6 +170,19 @@ export function useAppState(): {
         );
         // A refused order sends no snapshot: resync for one, putting the order right.
         return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
+      },
+      openWorkspace: async (id, options = {}) => {
+        if (options.showWorker) {
+          showRightPane(id, (current) => ({ ...current, shown: null }));
+        }
+        await reporting(() => act(api.openWorkspace(id, options)));
+      },
+      setRightPane: (workspaceId, rightPane) => {
+        showRightPane(workspaceId, () => rightPane);
+        // A refused change sends no snapshot: resync for one, putting the Pane right.
+        return act(api.setRightPane(workspaceId, rightPane)).catch(() =>
+          clientRef.current?.resync(),
+        );
       },
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>
@@ -123,6 +198,29 @@ export function useAppState(): {
       deleteSession: (sessionId) => act(api.deleteSession(sessionId)),
       restartSession: async (sessionId) => {
         await reporting(() => act(api.restartSession(sessionId)));
+      },
+      reorderSessions: (workspaceId, ids) => {
+        setState(
+          (current) =>
+            current && {
+              ...current,
+              workspaces: current.workspaces.map((w) =>
+                w.id === workspaceId
+                  ? {
+                      ...w,
+                      sessions: [
+                        ...sessionsByRole(w.sessions).primeAndWorker,
+                        ...ids.flatMap((id) => w.sessions.find((s) => s.id === id) ?? []),
+                      ],
+                    }
+                  : w,
+              ),
+            },
+        );
+        // A refused order sends no snapshot: resync for one, putting the order right.
+        return act(api.reorderSessions(workspaceId, ids)).catch(() =>
+          clientRef.current?.resync(),
+        );
       },
     };
   }, []);

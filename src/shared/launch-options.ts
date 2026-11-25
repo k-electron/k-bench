@@ -1,5 +1,7 @@
 /** The Launch options of a Claude Session, shared by the server and the New Claude dialog. */
 
+import type { SessionRole } from "./state-protocol.ts";
+
 /**
  * The Launch options: fixed for a Claude Session's life, and stored with it. "default" means
  * no flag at all, so the owner's own Claude Code settings apply. k-bench does not check which
@@ -27,3 +29,13 @@ export const DEFAULT_LAUNCH_OPTIONS: LaunchOptions = {
   advisor: "default",
   focusView: false,
 };
+
+/**
+ * The Launch options k-bench sets for a Workspace's Prime and Worker, by role. They are
+ * passed on every launch in place of whatever is stored with the Session, so a change here
+ * reaches every Prime and Worker at its next launch.
+ */
+export const ROLE_LAUNCH_OPTIONS = {
+  prime: { model: "opus", effort: "high", advisor: "off", focusView: true },
+  worker: { model: "sonnet", effort: "high", advisor: "opus", focusView: true },
+} as const satisfies Record<SessionRole, LaunchOptions>;

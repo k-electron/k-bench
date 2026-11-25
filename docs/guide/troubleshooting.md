@@ -57,7 +57,7 @@ There are two ports, and the fix differs.
 
 A Workspace is [Missing](using-k-bench.md#missing-workspaces) when its folder is gone, and no Session can start in it until the folder is fixed. Starting or restarting one shows "Folder does not exist" in the sidebar.
 
-Open the Workspace's **...** menu, choose **Change folder** and point it at the folder's new place. Or put the folder back where it was. Sessions that were already running in it were never affected, and other Workspaces work as normal.
+Open the Workspace, choose **Change folder** in the note under its name (or in its **...** menu) and point it at the folder's new place. Or put the folder back where it was. Sessions that were already running in it were never affected, and other Workspaces work as normal.
 
 ## Every Session says Stopped
 

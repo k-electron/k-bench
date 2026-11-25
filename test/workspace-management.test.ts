@@ -1,7 +1,7 @@
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createTestInstance } from "./harness/instance.ts";
+import { createTestInstance, otherSessions } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
 import { echoCommand } from "./harness/terminal.ts";
 
@@ -23,9 +23,9 @@ describe("Renaming a Workspace", () => {
     });
 
     expect(response.status).toBe(200);
-    expect((await server.state()).workspaces).toMatchObject([
-      { id: workspace.id, name: "Billing", sessions: [{ id: session.id }] },
-    ]);
+    const { workspaces } = await server.state();
+    expect(workspaces).toMatchObject([{ id: workspace.id, name: "Billing" }]);
+    expect(otherSessions(workspaces[0])).toMatchObject([{ id: session.id }]);
   });
 
   it("answers 409 when the name is taken by another Workspace, and changes nothing", async () => {
@@ -112,6 +112,41 @@ describe("Changing a Workspace's folder", () => {
     await terminal.waitForOutput(`cwd=${moved}=`);
   });
 
+  it("answers 409 for a folder another Workspace has, naming it, and keeps the old folder", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const taken = instance.makeFolder("taken");
+    const owner = await server.createWorkspace({ folder: taken, name: "Billing" });
+    const folder = instance.makeFolder("mine");
+    const workspace = await server.createWorkspace({ folder });
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: taken,
+    });
+
+    expect(response.status).toBe(409);
+    expect(
+      ((await response.json()) as { workspace: { id: string; name: string } }).workspace,
+    ).toEqual({ id: owner.id, name: "Billing" });
+    expect((await server.state()).workspaces.map((w) => w.folder)).toEqual([
+      taken,
+      folder,
+    ]);
+  });
+
+  it("accepts the Workspace's own folder again", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("mine");
+    const workspace = await server.createWorkspace({ folder });
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: `${folder}/`,
+    });
+
+    expect(response.status).toBe(200);
+  });
+
   it("answers 422 for a folder that does not exist, and keeps the old folder", async () => {
     const instance = createTestInstance();
     const server = await instance.start();
@@ -124,6 +159,43 @@ describe("Changing a Workspace's folder", () => {
 
     expect(response.status).toBe(422);
     expect((await server.state()).workspaces[0]?.folder).toBe(folder);
+  });
+
+  it("with createMissingFolders, makes the missing folders and then moves the Workspace", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("old");
+    const workspace = await server.createWorkspace({ folder });
+    const moved = join(instance.root, "acme", "web");
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: moved,
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(200);
+    expect(statSync(moved).isDirectory()).toBe(true);
+    expect((await server.state()).workspaces).toMatchObject([
+      { name: "old", folder: moved, missing: false },
+    ]);
+  });
+
+  it("with createMissingFolders, names a folder it couldn't make and keeps the old folder", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("old");
+    const workspace = await server.createWorkspace({ folder });
+    const blocker = join(instance.root, "notes");
+    writeFileSync(blocker, "x");
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: join(blocker, "web"),
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(422);
+    expect(await errorOf(response)).toContain(blocker);
+    expect((await server.state()).workspaces).toMatchObject([{ folder }]);
   });
 
   it("answers 422 for a file, and applies neither change when one of the two is bad", async () => {
@@ -205,14 +277,24 @@ describe("Deleting a Workspace", () => {
     const terminal = await server.openTerminal(session.id);
     terminal.run(`${echoCommand("alive-before-delete-4e1c")}; sleep 600`);
     await terminal.waitForOutput("alive-before-delete-4e1c");
+    const prime = (await server.state()).workspaces[0]?.sessions.find(
+      (s) => s.role === "prime",
+    );
+    await server.post(`/api/sessions/${prime?.id}/restart`);
+    const primeTerminal = await server.openTerminal(prime?.id as string);
+    await primeTerminal.waitForOutput("claude-stub ready");
 
     const response = await server.delete(`/api/workspaces/${workspace.id}`);
 
     expect(response.status).toBe(204);
     // The shell is gone: its terminal closes, and the Session is no longer known.
     expect(await terminal.waitForClose()).toBeGreaterThan(1000);
-    expect((await server.state()).workspaces).toMatchObject([
-      { id: other.id, sessions: [{ id: otherSession.id, status: "running" }] },
+    // So is the Prime, which goes with its Workspace like any Session.
+    expect(await primeTerminal.waitForClose()).toBeGreaterThan(1000);
+    const { workspaces } = await server.state();
+    expect(workspaces).toMatchObject([{ id: other.id }]);
+    expect(otherSessions(workspaces[0])).toMatchObject([
+      { id: otherSession.id, status: "running" },
     ]);
     const reopened = await server.openTerminal(session.id);
     await reopened.waitForEnded();
