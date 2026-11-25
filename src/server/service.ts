@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import {
   DEFAULT_LAUNCH_OPTIONS,
   type LaunchOptions,
@@ -108,6 +108,16 @@ export class Service {
       return workspace;
     });
     return { id, name, folder };
+  }
+
+  /**
+   * Where the folder picker opens: the parent of the most recently created Workspace's
+   * folder, or `root` (Home) when there is none or that parent is gone.
+   */
+  pickerStart(root: string): string {
+    const newest = this.store.newestWorkspace();
+    const parent = newest && dirname(newest.folder);
+    return parent && isDirectory(parent) ? parent : root;
   }
 
   /** Renames and/or re-folders a Workspace; both changes are checked before either is made. */

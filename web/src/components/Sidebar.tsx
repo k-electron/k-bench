@@ -86,7 +86,7 @@ export function Sidebar({
       aria-label="Workspaces"
       className={cn("flex shrink-0 flex-col gap-2 border-r bg-card p-2", className)}
     >
-      <NewWorkspaceDialog onCreate={actions.createWorkspace} />
+      <NewWorkspaceDialog workspaces={workspaces} onCreate={actions.createWorkspace} />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -132,6 +132,7 @@ export function Sidebar({
       {dialog && dialog.action !== "delete" && (
         <EditWorkspaceDialog
           workspace={dialog.workspace}
+          workspaces={workspaces}
           edit={dialog.action}
           onSave={(changes) => actions.updateWorkspace(dialog.workspace.id, changes)}
           onClose={() => setDialog(undefined)}

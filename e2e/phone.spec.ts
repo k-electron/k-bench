@@ -433,3 +433,26 @@ test.describe("Paste in the keyboard-up overlay", () => {
     await expect(app.overlayKey("Paste")).toBeHidden();
   });
 });
+
+test("the folder picker is a full-screen sheet with Places as a row of chips above the breadcrumbs", async ({
+  app,
+}) => {
+  await app.openDrawer();
+  await app.page.getByRole("button", { name: "New Workspace" }).tap();
+
+  await expect(app.place("Home")).toBeVisible();
+  const viewport = app.page.viewportSize();
+  const sheet = await app.folderPicker.boundingBox();
+  const home = await app.place("Home").boundingBox();
+  const computer = await app.place("Computer").boundingBox();
+  const breadcrumbs = await app.folderPicker
+    .getByRole("navigation", { name: "Breadcrumbs" })
+    .boundingBox();
+  if (!viewport || !sheet || !home || !computer || !breadcrumbs) {
+    throw new Error("the sheet, its Places and its breadcrumbs should show");
+  }
+  expect(sheet).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
+  expect(computer.y).toBe(home.y);
+  expect(computer.x).toBeGreaterThan(home.x);
+  expect(home.y + home.height).toBeLessThanOrEqual(breadcrumbs.y);
+});

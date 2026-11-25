@@ -50,6 +50,12 @@ const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX sessions_one_per_role ON sessions (workspace_id, role)
     WHERE role IS NOT NULL;
   `,
+  // When each Workspace was created (milliseconds), so the folder picker can open next to the
+  // newest. Workspaces from before this get their row order, which sorts them before any new one.
+  `
+  ALTER TABLE workspaces ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
+  UPDATE workspaces SET created_at = rowid;
+  `,
   // A Session's place in the owner's order of its Workspace's Other Sessions (the Prime and
   // Worker are listed first whatever theirs). Existing Sessions keep their creation order.
   // The default keeps inserts that don't name a position working.
@@ -69,6 +75,8 @@ export interface WorkspaceRow {
   name: string;
   folder: string;
   position: number;
+  /** Orders Workspaces by creation; larger is newer. */
+  createdAt: number;
 }
 export interface SessionRow {
   id: string;
@@ -139,13 +147,17 @@ export class Store {
 
   listWorkspaces(): WorkspaceRow[] {
     return this.db
-      .prepare("SELECT id, name, folder, position FROM workspaces ORDER BY position")
+      .prepare(
+        "SELECT id, name, folder, position, created_at AS createdAt FROM workspaces ORDER BY position",
+      )
       .all() as unknown as WorkspaceRow[];
   }
 
   getWorkspace(id: string): WorkspaceRow | undefined {
     return this.db
-      .prepare("SELECT id, name, folder, position FROM workspaces WHERE id = ?")
+      .prepare(
+        "SELECT id, name, folder, position, created_at AS createdAt FROM workspaces WHERE id = ?",
+      )
       .get(id) as unknown as WorkspaceRow | undefined;
   }
 
@@ -154,10 +166,28 @@ export class Store {
     const next = this.db
       .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS position FROM workspaces")
       .get() as { position: number };
+    const createdAt = Date.now();
     this.db
-      .prepare("INSERT INTO workspaces (id, name, folder, position) VALUES (?, ?, ?, ?)")
-      .run(id, input.name, input.folder, next.position);
-    return { id, name: input.name, folder: input.folder, position: next.position };
+      .prepare(
+        "INSERT INTO workspaces (id, name, folder, position, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(id, input.name, input.folder, next.position, createdAt);
+    return {
+      id,
+      name: input.name,
+      folder: input.folder,
+      position: next.position,
+      createdAt,
+    };
+  }
+
+  /** The most recently created Workspace, if there is one. */
+  newestWorkspace(): WorkspaceRow | undefined {
+    return this.db
+      .prepare(
+        "SELECT id, name, folder, position, created_at AS createdAt FROM workspaces ORDER BY created_at DESC, rowid DESC LIMIT 1",
+      )
+      .get() as unknown as WorkspaceRow | undefined;
   }
 
   updateWorkspace(id: string, changes: { name?: string; folder?: string }): void {
