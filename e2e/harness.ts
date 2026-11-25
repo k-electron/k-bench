@@ -341,6 +341,21 @@ export class AppPage {
     return this.sidebar.getByRole("button", { name: "Expand sidebar" });
   }
 
+  /**
+   * Expands the collapsed sidebar, clicking again if a click went unheard, as a person
+   * would. For 50ms after a drop the drag library swallows every click (it is there to eat
+   * the click the drop itself makes), and on a busy machine that window runs late, so a
+   * click straight after `dragOnto` can land in it.
+   */
+  async expandSidebar(): Promise<void> {
+    const collapse = this.sidebar.getByRole("button", { name: "Collapse sidebar" });
+    await expect(async () => {
+      if (await this.expandSidebarButton.isVisible())
+        await this.expandSidebarButton.click();
+      await expect(collapse).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
+  }
+
   /** The Bell badge on a Session's row; present only while its Bell is raised. */
   bellBadge(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {

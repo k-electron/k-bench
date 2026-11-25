@@ -70,7 +70,7 @@ test("dragging a Workspace's row, or its tile when collapsed, reorders it, and t
   // Collapsed, a Workspace is dragged by its tile.
   await app.collapseSidebar();
   await app.dragOnto(app.workspaceTile("second"), app.workspaceTile("third"));
-  await app.expandSidebarButton.click();
+  await app.expandSidebar();
 
   await expect.poll(() => app.workspaceNames()).toEqual(["second", "third", "first"]);
   await app.page.reload();
