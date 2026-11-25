@@ -15,14 +15,17 @@ function eventsUrl(): string {
  * The owner's actions. Each one finishes once its change is in `state`, so whatever runs
  * after it (closing a dialog, opening a new Session in a Pane) sees the result.
  *
- * An action whose form can show why it was refused rejects with an `ApiError`. Creating and
- * restarting a Session have no form: their refusal goes in `error` instead.
+ * An action whose form can show why it was refused rejects with an `ApiError`. Opening a
+ * Workspace, and creating and restarting a Session, have no form: their refusal goes in
+ * `error` instead.
  */
 export interface Actions {
   createWorkspace(input: { folder: string; name?: string }): Promise<void>;
   updateWorkspace(id: string, changes: { name?: string; folder?: string }): Promise<void>;
   /** Shows the new Workspace order at once, then saves it. `ids` is every Workspace. */
   reorderWorkspaces(ids: string[]): Promise<void>;
+  /** Makes it the Open Workspace, on every device, and starts its Prime and Worker. */
+  openWorkspace(id: string): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;
   /**
    * The new Session's id, once it is in state. Undefined if it was refused (see `error`) or
@@ -108,6 +111,9 @@ export function useAppState(): {
         );
         // A refused order sends no snapshot: resync for one, putting the order right.
         return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
+      },
+      openWorkspace: async (id) => {
+        await reporting(() => act(api.openWorkspace(id)));
       },
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>

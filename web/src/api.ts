@@ -76,6 +76,9 @@ export const api = {
   /** `ids` is every Workspace, in the order wanted. */
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
+  /** Makes it the Open Workspace and starts its Stopped Prime and Worker. */
+  openWorkspace: (id: string) =>
+    send<{ id: string }>("POST", `/api/workspaces/${id}/open`, {}),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   /** The Launch options last used for a Claude Session; all Default if none has been. */
   lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),

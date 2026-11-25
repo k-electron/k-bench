@@ -99,7 +99,10 @@ describe("State client", () => {
     });
     await pollUntil(() => shown, { description: "the first snapshot" });
     const serverOrder = workspaceNames(shown);
-    shown = { workspaces: [...(shown?.workspaces ?? [])].reverse() };
+    shown = {
+      openWorkspaceId: shown?.openWorkspaceId ?? null,
+      workspaces: [...(shown?.workspaces ?? [])].reverse(),
+    };
     expect(workspaceNames(shown)).not.toEqual(serverOrder);
 
     client.resync();

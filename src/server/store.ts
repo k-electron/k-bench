@@ -50,6 +50,14 @@ const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX sessions_one_per_role ON sessions (workspace_id, role)
     WHERE role IS NOT NULL;
   `,
+  // The Host's one record of the Open Workspace, the one the main view shows on every
+  // device; null when none has been opened. The id check keeps it to one row.
+  `
+  CREATE TABLE open_workspace (
+    id           INTEGER PRIMARY KEY CHECK (id = 1),
+    workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL
+  );
+  `,
 ];
 
 export interface WorkspaceRow {
@@ -214,6 +222,23 @@ export class Store {
          ON CONFLICT (id) DO UPDATE SET options = excluded.options`,
       )
       .run(JSON.stringify(options));
+  }
+
+  /** The Workspace last opened, if one has been and it still exists. */
+  getOpenWorkspaceId(): string | null {
+    const row = this.db
+      .prepare("SELECT workspace_id AS workspaceId FROM open_workspace WHERE id = 1")
+      .get() as { workspaceId: string | null } | undefined;
+    return row?.workspaceId ?? null;
+  }
+
+  setOpenWorkspaceId(workspaceId: string | null): void {
+    this.db
+      .prepare(
+        `INSERT INTO open_workspace (id, workspace_id) VALUES (1, ?)
+         ON CONFLICT (id) DO UPDATE SET workspace_id = excluded.workspace_id`,
+      )
+      .run(workspaceId);
   }
 
   /**
