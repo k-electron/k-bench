@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { bootWithWorkspace as boot } from "./harness/boot.ts";
-import { createTestInstance, otherSessions } from "./harness/instance.ts";
+import { createTestInstance } from "./harness/instance.ts";
 
 describe("Ordering a Workspace's Other Sessions", () => {
   it("lists them in the owner's order after the Prime and Worker, across a restart, with a new Session last", async () => {
@@ -57,7 +57,7 @@ describe("Ordering a Workspace's Other Sessions", () => {
     expect(unknown.status).toBe(404);
   });
 
-  it("keeps Sessions from before the upgrade in the order they were created", async () => {
+  it("keeps Sessions from before the upgrade in the order they were created, after the Prime and Worker", async () => {
     const instance = createTestInstance();
     const folder = instance.makeFolder("project");
     // The store as the first version of k-bench left it, with rows stored out of creation order.
@@ -75,9 +75,11 @@ describe("Ordering a Workspace's Other Sessions", () => {
     old.close();
 
     const server = await instance.start();
+    await server.createSession("w1", "fourth");
 
+    // The upgrade's Prime and Worker come first, and a Session made since goes last.
     expect(
-      otherSessions((await server.state()).workspaces[0]).map((session) => session.name),
-    ).toEqual(["first", "second", "third"]);
+      (await server.state()).workspaces[0]?.sessions.map((session) => session.name),
+    ).toEqual(["Prime", "Worker", "first", "second", "third", "fourth"]);
   });
 });

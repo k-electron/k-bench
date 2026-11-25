@@ -9,6 +9,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 ### Added
 
 - Every new Workspace comes with a **Prime** and a **Worker**: two Claude Sessions made with the Workspace and lasting as long as it does. k-bench sets their Launch options: the Prime runs Opus at high effort with the advisor off, and the Worker runs Sonnet at high effort with an Opus advisor, both in Focus view. They're passed again on every launch, so a restart never drifts. Neither is started when the Workspace is created; for now, start each with **Restart** from its row menu. They can't be renamed or deleted (their rows have no **Rename** or **Delete**), and no other Session can be named "Prime" or "Worker". Deleting the Workspace ends them with its other Sessions.
+- Upgrading gives every existing Workspace a Prime and a Worker too, both Stopped, so old and new Workspaces work the same. Nothing is started by the upgrade. Every existing Session is kept as it was, Claude Sessions included, with its kind, folder and conversation unchanged; none becomes the Prime or Worker. A Session you had already named "Prime" or "Worker" is renamed, for example to "Prime (earlier)".
 
 ### Changed
 
