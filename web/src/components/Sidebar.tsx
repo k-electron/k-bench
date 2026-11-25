@@ -2,12 +2,13 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import {
+  arrayMove,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -27,7 +28,7 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type ComponentProps, type ReactNode, useState } from "react";
+import { type ComponentProps, type CSSProperties, type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
 import { useSidebarCollapsed } from "@/useSidebarCollapsed";
@@ -140,6 +141,7 @@ export function Sidebar({
         <div aria-hidden="true" className="w-8 border-t" />
         <WorkspaceTiles
           workspaces={workspaces}
+          onReorder={actions.reorderWorkspaces}
           openWorkspaceId={state?.openWorkspaceId}
           shown={shown}
           onOpenWorkspace={onOpenWorkspace}
@@ -184,34 +186,37 @@ export function Sidebar({
           </IconButton>
         )}
       </div>
-      <SortableWorkspaces
-        workspaces={workspaces}
-        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
+      <Reorderable
+        ids={workspaces.map((w) => w.id)}
+        onReorder={actions.reorderWorkspaces}
       >
-        {workspaces.map((workspace) => {
-          const isOpen = workspace.id === state?.openWorkspaceId;
-          return (
-            <WorkspaceItem
-              key={workspace.id}
-              workspace={workspace}
-              isOpen={isOpen}
-              mode={mode}
-              onOpen={() => onOpenWorkspace(workspace.id)}
-              onNewShell={() => void onCreateSession(workspace.id)}
-              onNewClaude={() => setLaunching(workspace)}
-              onAction={(action) => setDialog({ workspace, action })}
-            >
-              <SessionList
+        <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+          {workspaces.map((workspace) => {
+            const isOpen = workspace.id === state?.openWorkspaceId;
+            return (
+              <WorkspaceItem
+                key={workspace.id}
                 workspace={workspace}
-                shown={shown}
+                isOpen={isOpen}
                 mode={mode}
-                onOpen={(session) => onOpenSession(workspace.id, session)}
-                onAction={(session, action) => setSessionDialog({ session, action })}
-              />
-            </WorkspaceItem>
-          );
-        })}
-      </SortableWorkspaces>
+                onOpen={() => onOpenWorkspace(workspace.id)}
+                onNewShell={() => void onCreateSession(workspace.id)}
+                onNewClaude={() => setLaunching(workspace)}
+                onAction={(action) => setDialog({ workspace, action })}
+              >
+                <SessionList
+                  workspace={workspace}
+                  shown={shown}
+                  mode={mode}
+                  onOpen={(session) => onOpenSession(workspace.id, session)}
+                  onAction={(session, action) => setSessionDialog({ session, action })}
+                  onReorder={(ids) => actions.reorderSessions(workspace.id, ids)}
+                />
+              </WorkspaceItem>
+            );
+          })}
+        </ul>
+      </Reorderable>
       {launching && (
         <NewClaudeDialog
           workspace={launching}
@@ -293,29 +298,34 @@ function IconButton({
 const STRETCHED =
   "outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50";
 
-/** Workspaces reorder by dragging their row; a short click still opens it. */
-function SortableWorkspaces({
-  workspaces,
-  className,
+/**
+ * A list whose items (`ids`, each a `useSortable` row inside `children`) reorder by
+ * dragging the row itself, with no handle. A drag starts once the mouse moves a few pixels,
+ * or after a short press on touch, so a click or tap still opens the row and a swipe still
+ * scrolls. The lifted row casts a shadow and the others slide aside.
+ */
+function Reorderable({
+  ids,
+  onReorder,
   children,
 }: {
-  workspaces: WorkspaceState[];
-  className?: string;
+  ids: string[];
+  /** Every id, in the new order. */
+  onReorder: (ids: string[]) => Promise<void>;
   children: ReactNode;
 }) {
-  const actions = useActions();
+  // The mouse sensor, not the pointer one, so a finger's swipe never starts a drag: on touch
+  // only the press-and-hold does.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    // On a phone a drag starts with a short press, so scrolling the sidebar still works.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    const ids = workspaces.map((w) => w.id);
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
-    ids.splice(to, 0, ...ids.splice(from, 1));
-    void actions.reorderWorkspaces(ids);
+    if (from < 0 || to < 0) return;
+    void onReorder(arrayMove(ids, from, to));
   };
   return (
     <DndContext
@@ -323,15 +333,45 @@ function SortableWorkspaces({
       collisionDetection={closestCenter}
       onDragEnd={onDragEnd}
     >
-      <SortableContext
-        items={workspaces.map((w) => w.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <ul className={className}>{children}</ul>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {children}
       </SortableContext>
     </DndContext>
   );
 }
+
+/**
+ * A row of a `Reorderable` list: `row` goes on its list item, which moves, and `handle` on
+ * its main button, which is what a drag picks up.
+ */
+type SortableRow = {
+  row: { ref: (node: HTMLElement | null) => void; style: CSSProperties };
+  handle: Record<string, unknown> & { ref: (node: HTMLElement | null) => void };
+  isDragging: boolean;
+};
+
+function useSortableRow(id: string): SortableRow {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  return {
+    row: {
+      ref: setNodeRef,
+      style: { transform: CSS.Transform.toString(transform), transition },
+    },
+    handle: { ref: setActivatorNodeRef, ...attributes, ...listeners },
+    isDragging,
+  };
+}
+
+/** The classes of a row while it is lifted by a drag. */
+const LIFTED = "relative z-20 bg-card shadow-lg";
 
 /**
  * One Workspace: its tile and name, which opens it and is what a drag picks up, and, for
@@ -357,25 +397,12 @@ function WorkspaceItem({
   onAction: (action: WorkspaceEdit | "delete") => void;
   children: ReactNode;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: workspace.id });
+  const { row, handle, isDragging } = useSortableRow(workspace.id);
 
   return (
     <li
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        "rounded-lg",
-        isOpen && "bg-accent/30 pb-1",
-        isDragging && "relative z-20 bg-card shadow-lg",
-      )}
+      {...row}
+      className={cn("rounded-lg", isOpen && "bg-accent/30 pb-1", isDragging && LIFTED)}
     >
       <div
         className={cn(
@@ -393,9 +420,7 @@ function WorkspaceItem({
           {/* Opening it starts its Prime and Worker; opening the Open one brings back Prime with Worker. */}
           <button
             type="button"
-            ref={setActivatorNodeRef}
-            {...attributes}
-            {...listeners}
+            {...handle}
             onClick={onOpen}
             className={cn("block w-full truncate text-left", STRETCHED)}
           >
@@ -495,60 +520,96 @@ function sessionsByRole(workspace: WorkspaceState): {
  */
 function WorkspaceTiles({
   workspaces,
+  onReorder,
   openWorkspaceId,
   shown,
   onOpenWorkspace,
   onOpenSession,
 }: {
   workspaces: WorkspaceState[];
+  /** Every Workspace's id, in the order a tile was dragged into. */
+  onReorder: (ids: string[]) => Promise<void>;
   openWorkspaceId: string | null | undefined;
   shown: ReadonlySet<string>;
   onOpenWorkspace: (workspaceId: string) => void;
   onOpenSession: (workspaceId: string, session: SessionState) => void;
 }) {
   return (
-    <ul className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto py-1">
-      {workspaces.map((workspace) => {
-        const isOpen = workspace.id === openWorkspaceId;
-        const { prime, worker, others } = sessionsByRole(workspace);
-        const sessions = [prime, worker, ...others].filter(
-          (s): s is SessionState => s !== undefined,
-        );
-        return (
-          <li key={workspace.id} className="flex flex-col items-center gap-1">
-            {/* The button lies over the tile, so the tile's Bell dot and Missing mark stay labelled. */}
-            <div className="relative">
-              <WorkspaceTile
-                workspace={workspace}
-                size="md"
-                bell={!isOpen && hasBell(workspace)}
-                className={cn("rounded-lg", isOpen && "ring-2 ring-foreground/80")}
-              />
-              <button
-                type="button"
-                aria-label={workspace.name}
-                aria-current={isOpen ? "true" : undefined}
-                title={`${workspace.name}\n${workspace.folder}`}
-                onClick={() => onOpenWorkspace(workspace.id)}
-                className="absolute inset-0 rounded-lg outline-none hover:bg-foreground/10 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </div>
-            {isOpen && sessions.length > 0 && (
-              <ul className="flex flex-col items-center gap-0.5 rounded-lg bg-accent/40 p-0.5">
-                {sessions.map((session) => (
-                  <SessionIconItem
-                    key={session.id}
-                    session={session}
-                    isShown={shown.has(session.id)}
-                    onOpen={() => onOpenSession(workspace.id, session)}
-                  />
-                ))}
-              </ul>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <Reorderable ids={workspaces.map((w) => w.id)} onReorder={onReorder}>
+      <ul className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto py-1">
+        {workspaces.map((workspace) => (
+          <WorkspaceTileItem
+            key={workspace.id}
+            workspace={workspace}
+            isOpen={workspace.id === openWorkspaceId}
+            shown={shown}
+            onOpen={() => onOpenWorkspace(workspace.id)}
+            onOpenSession={(session) => onOpenSession(workspace.id, session)}
+          />
+        ))}
+      </ul>
+    </Reorderable>
+  );
+}
+
+/**
+ * One Workspace in the collapsed sidebar: its tile, which opens it and is what a drag picks
+ * up, and, for the Open Workspace, its Sessions as small icons under it.
+ */
+function WorkspaceTileItem({
+  workspace,
+  isOpen,
+  shown,
+  onOpen,
+  onOpenSession,
+}: {
+  workspace: WorkspaceState;
+  isOpen: boolean;
+  shown: ReadonlySet<string>;
+  onOpen: () => void;
+  onOpenSession: (session: SessionState) => void;
+}) {
+  const { row, handle, isDragging } = useSortableRow(workspace.id);
+  const { prime, worker, others } = sessionsByRole(workspace);
+  const sessions = [prime, worker, ...others].filter(
+    (s): s is SessionState => s !== undefined,
+  );
+  return (
+    <li
+      {...row}
+      className={cn("flex flex-col items-center gap-1 rounded-lg", isDragging && LIFTED)}
+    >
+      {/* The button lies over the tile, so the tile's Bell dot and Missing mark stay labelled. */}
+      <div className="relative">
+        <WorkspaceTile
+          workspace={workspace}
+          size="md"
+          bell={!isOpen && hasBell(workspace)}
+          className={cn("rounded-lg", isOpen && "ring-2 ring-foreground/80")}
+        />
+        <button
+          type="button"
+          {...handle}
+          aria-label={workspace.name}
+          aria-current={isOpen ? "true" : undefined}
+          title={`${workspace.name}\n${workspace.folder}`}
+          onClick={onOpen}
+          className="absolute inset-0 rounded-lg outline-none hover:bg-foreground/10 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+      </div>
+      {isOpen && sessions.length > 0 && (
+        <ul className="flex flex-col items-center gap-0.5 rounded-lg bg-accent/40 p-0.5">
+          {sessions.map((session) => (
+            <SessionIconItem
+              key={session.id}
+              session={session}
+              isShown={shown.has(session.id)}
+              onOpen={() => onOpenSession(session)}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
@@ -599,32 +660,42 @@ function SessionList({
   mode,
   onOpen,
   onAction,
+  onReorder,
 }: {
   workspace: WorkspaceState;
   shown: ReadonlySet<string>;
   mode: SidebarMode;
   onOpen: (session: SessionState) => void;
   onAction: (session: SessionState, action: SessionAction) => void;
+  /** Every Other Session's id, in the order one was dragged into. */
+  onReorder: (ids: string[]) => Promise<void>;
 }) {
   const { prime, worker, others } = sessionsByRole(workspace);
-  const item = (session: SessionState) => (
-    <SessionItem
-      key={session.id}
-      session={session}
-      isShown={shown.has(session.id)}
-      mode={mode}
-      onOpen={() => onOpen(session)}
-      onAction={(action) => onAction(session, action)}
-    />
-  );
+  const props = (session: SessionState) => ({
+    session,
+    isShown: shown.has(session.id),
+    mode,
+    onOpen: () => onOpen(session),
+    onAction: (action: SessionAction) => onAction(session, action),
+  });
+  // Only the Other Sessions reorder; the Prime and Worker sit above them, out of reach.
   return (
     <ul className="grid gap-0.5">
-      {prime && item(prime)}
-      {worker && item(worker)}
+      {prime && <SessionItem key={prime.id} {...props(prime)} />}
+      {worker && <SessionItem key={worker.id} {...props(worker)} />}
       {others.length > 0 && <li aria-hidden="true" className="mx-2 my-1 border-t" />}
-      {others.map(item)}
+      <Reorderable ids={others.map((s) => s.id)} onReorder={onReorder}>
+        {others.map((session) => (
+          <SortableSessionItem key={session.id} {...props(session)} />
+        ))}
+      </Reorderable>
     </ul>
   );
+}
+
+/** An Other Session's row, which reorders by dragging it. */
+function SortableSessionItem(props: Omit<ComponentProps<typeof SessionItem>, "drag">) {
+  return <SessionItem {...props} drag={useSortableRow(props.session.id)} />;
 }
 
 /**
@@ -637,6 +708,7 @@ function SessionItem({
   mode,
   onOpen,
   onAction,
+  drag,
 }: {
   session: SessionState;
   /** It is on screen, in a Pane. */
@@ -644,17 +716,21 @@ function SessionItem({
   mode: SidebarMode;
   onOpen: () => void;
   onAction: (action: SessionAction) => void;
+  /** How an Other Session's row is dragged; the Prime and Worker have none. */
+  drag?: SortableRow;
 }) {
   const actions = useActions();
   const stopped = session.status === "stopped";
   const fixed = session.role !== null;
   return (
     <li
+      {...drag?.row}
       className={cn(
         "relative flex items-center gap-2 rounded-md px-2 text-sm",
         mode === "drawer" ? "h-8" : "h-7",
         isShown ? "bg-accent text-foreground" : "hover:bg-accent/60",
         stopped && "text-muted-foreground",
+        drag?.isDragging && LIFTED,
       )}
     >
       <span
@@ -670,6 +746,7 @@ function SessionItem({
       </span>
       <button
         type="button"
+        {...drag?.handle}
         aria-current={isShown ? "true" : undefined}
         onClick={onOpen}
         className={cn("min-w-0 truncate text-left", STRETCHED)}

@@ -26,6 +26,8 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Collapse the sidebar** with the button at the right of its header, to give the Panes the room. It becomes a narrow column of Workspace tiles, with the Open Workspace's Sessions as small icons under its tile: the same icons as the tree, dimmed when Stopped, with an amber dot when one has a Bell. Click a tile to open that Workspace, or an icon to open that Session. A Workspace that isn't open still shows its amber dot. **New Workspace** (**+**) is at the bottom of the column, and the button at the top expands the sidebar again. Collapsed or expanded is remembered on this device, so your laptop and your iPad can each keep their own; a phone's drawer is always the full tree.
 
+**Reorder by dragging.** Drag a Workspace's row up or down to move it, or its tile when the sidebar is collapsed. Drag an Other Session's row to move it among the Open Workspace's Other Sessions. The Prime and Worker always stay at the top: they can't be dragged, and nothing can be dropped above or between them. There are no handles: a drag starts once the mouse has moved a few pixels, so a short click still opens the row. On a touch screen, press and hold the row for a moment, then drag; a quick tap still opens it and a swipe still scrolls. Both orders are kept on your Mac, so every device shows them the same, and a new Session goes last.
+
 **Create a Session.** Choose the **+** next to the Open Workspace's name. It is a menu with two choices, and either way the new Session opens in the right Pane and starts in the Workspace's folder.
 
 - **New shell** starts your login shell. It is called "session 1", "session 2" and so on.
@@ -35,7 +37,7 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **Manage them** from the **...** menus in the sidebar.
 
-- The Open Workspace's row has one, with **Rename**, **Change folder** and **Delete**; open a Workspace to manage it. Deleting a Workspace ends its Sessions, and never touches the folder on disk. Drag a Workspace's row to reorder it (on a phone, press and hold first); a short click still opens it.
+- The Open Workspace's row has one, with **Rename**, **Change folder** and **Delete**; open a Workspace to manage it. Deleting a Workspace ends its Sessions, and never touches the folder on disk.
 - An Other Session's menu has **Rename**, **Delete** and, when it's Stopped, **Restart**. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
 - The Prime and Worker can't be renamed or deleted, so they have a menu only while Stopped, offering **Restart**.
 
