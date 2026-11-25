@@ -1,4 +1,4 @@
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createTestInstance, otherSessions } from "./harness/instance.ts";
@@ -159,6 +159,43 @@ describe("Changing a Workspace's folder", () => {
 
     expect(response.status).toBe(422);
     expect((await server.state()).workspaces[0]?.folder).toBe(folder);
+  });
+
+  it("with createMissingFolders, makes the missing folders and then moves the Workspace", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("old");
+    const workspace = await server.createWorkspace({ folder });
+    const moved = join(instance.root, "acme", "web");
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: moved,
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(200);
+    expect(statSync(moved).isDirectory()).toBe(true);
+    expect((await server.state()).workspaces).toMatchObject([
+      { name: "old", folder: moved, missing: false },
+    ]);
+  });
+
+  it("with createMissingFolders, names a folder it couldn't make and keeps the old folder", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("old");
+    const workspace = await server.createWorkspace({ folder });
+    const blocker = join(instance.root, "notes");
+    writeFileSync(blocker, "x");
+
+    const response = await server.patch(`/api/workspaces/${workspace.id}`, {
+      folder: join(blocker, "web"),
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(422);
+    expect(await errorOf(response)).toContain(blocker);
+    expect((await server.state()).workspaces).toMatchObject([{ folder }]);
   });
 
   it("answers 422 for a file, and applies neither change when one of the two is bad", async () => {

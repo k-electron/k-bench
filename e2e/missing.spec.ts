@@ -39,6 +39,9 @@ test("a Workspace whose folder vanished is marked Missing with the reason, until
 
   const restored = kbench.instance.makeFolder("restored");
   await app.workspaceAction("project", "Change folder");
+  // It opens at the nearest folder above the missing one, with nothing to save yet.
+  await expect(app.breadcrumb("~")).toHaveAttribute("aria-current", "location");
+  await expect(app.page.getByRole("button", { name: "Save" })).toBeDisabled();
   await app.pickFolder(restored);
   await app.page.getByRole("button", { name: "Save" }).click();
 

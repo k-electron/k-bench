@@ -19,8 +19,15 @@ function eventsUrl(): string {
  * restarting a Session have no form: their refusal goes in `error` instead.
  */
 export interface Actions {
-  createWorkspace(input: { folder: string; name?: string }): Promise<void>;
-  updateWorkspace(id: string, changes: { name?: string; folder?: string }): Promise<void>;
+  createWorkspace(input: {
+    folder: string;
+    name?: string;
+    createMissingFolders?: boolean;
+  }): Promise<void>;
+  updateWorkspace(
+    id: string,
+    changes: { name?: string; folder?: string; createMissingFolders?: boolean },
+  ): Promise<void>;
   /** Shows the new Workspace order at once, then saves it. `ids` is every Workspace. */
   reorderWorkspaces(ids: string[]): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;

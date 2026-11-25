@@ -1,4 +1,11 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
@@ -273,5 +280,74 @@ describe("One Workspace per folder", () => {
     expect(body.workspace).toEqual({ id: owner.id, name: "Billing" });
     expect(body.error).toContain("Billing");
     expect((await server.state()).workspaces.map((w) => w.id)).toEqual([owner.id]);
+  });
+});
+
+describe("Creating a Workspace with new folders", () => {
+  it("makes every missing folder, two levels deep, then the Workspace", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = join(instance.makeFolder("projects"), "acme", "web");
+
+    const response = await server.post("/api/workspaces", {
+      folder,
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(201);
+    expect(statSync(folder).isDirectory()).toBe(true);
+    expect((await server.state()).workspaces).toMatchObject([
+      { name: "web", folder, missing: false },
+    ]);
+  });
+
+  it("names a file that blocks the path, and creates no Workspace", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const blocker = join(instance.root, "notes");
+    writeFileSync(blocker, "x");
+
+    const response = await server.post("/api/workspaces", {
+      folder: join(blocker, "web"),
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toContain(blocker);
+    expect((await server.state()).workspaces).toHaveLength(0);
+  });
+
+  it("keeps the folders made before one that can't be made, and creates no Workspace", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const made = join(instance.root, "acme");
+    // Longer than any folder name the filesystem allows.
+    const impossible = join(made, "x".repeat(300));
+
+    const response = await server.post("/api/workspaces", {
+      folder: join(impossible, "web"),
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toContain(impossible);
+    expect(statSync(made).isDirectory()).toBe(true);
+    expect((await server.state()).workspaces).toHaveLength(0);
+  });
+
+  it("refuses a folder another Workspace has before making anything", async () => {
+    const instance = createTestInstance();
+    const server = await instance.start();
+    const folder = instance.makeFolder("gone");
+    await server.createWorkspace({ folder, name: "Billing" });
+    rmSync(folder, { recursive: true });
+
+    const response = await server.post("/api/workspaces", {
+      folder,
+      createMissingFolders: true,
+    });
+
+    expect(response.status).toBe(409);
+    expect(existsSync(folder)).toBe(false);
   });
 });

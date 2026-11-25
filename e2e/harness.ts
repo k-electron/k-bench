@@ -189,6 +189,23 @@ export class AppPage {
       .getByRole("button", { name, exact: true });
   }
 
+  /** A crumb in the folder picker's breadcrumbs (Home is `~`). */
+  breadcrumb(name: string): Locator {
+    return this.folderPicker
+      .getByRole("navigation", { name: "Breadcrumbs" })
+      .getByRole("button", { name, exact: true });
+  }
+
+  /** In the open folder picker, names a New folder; Enter steps into it. */
+  async newFolder(name: string): Promise<void> {
+    await this.folderPicker
+      .getByRole("button", { name: "New folder", exact: true })
+      .click();
+    const input = this.folderPicker.getByRole("textbox", { name: "New folder name" });
+    await input.fill(name);
+    await input.press("Enter");
+  }
+
   /** In the open folder picker, goes to Home and steps down into `folder`, one folder at a time. */
   async pickFolder(folder: string): Promise<void> {
     await this.place("Home").click();
@@ -196,11 +213,7 @@ export class AppPage {
       await this.folderRow(name).click();
     }
     const here = folder === this.home ? "~" : basename(folder);
-    await expect(
-      this.folderPicker
-        .getByRole("navigation", { name: "Breadcrumbs" })
-        .getByRole("button", { name: here, exact: true }),
-    ).toHaveAttribute("aria-current", "location");
+    await expect(this.breadcrumb(here)).toHaveAttribute("aria-current", "location");
   }
 
   /** A Workspace's heading in the sidebar. */

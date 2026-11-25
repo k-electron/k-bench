@@ -97,6 +97,7 @@ export function createApp(
     const workspace = service.createWorkspace({
       folder,
       name: optionalString(body.name),
+      createMissingFolders: body.createMissingFolders === true,
     });
     return c.json(workspace, 201);
   });
@@ -116,6 +117,7 @@ export function createApp(
     const workspace = service.updateWorkspace(c.req.param("id"), {
       name: optionalString(body.name),
       folder: optionalString(body.folder),
+      createMissingFolders: body.createMissingFolders === true,
     });
     return c.json(workspace);
   });

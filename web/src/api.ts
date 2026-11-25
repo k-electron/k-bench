@@ -71,10 +71,16 @@ export const api = {
         ? "/api/directories"
         : `/api/directories?path=${encodeURIComponent(path)}`,
     ),
-  createWorkspace: (input: { folder: string; name?: string }) =>
+  createWorkspace: (input: {
+    folder: string;
+    name?: string;
+    createMissingFolders?: boolean;
+  }) =>
     send<{ id: string; name: string; folder: string }>("POST", "/api/workspaces", input),
-  updateWorkspace: (id: string, changes: { name?: string; folder?: string }) =>
-    send<void>("PATCH", `/api/workspaces/${id}`, changes),
+  updateWorkspace: (
+    id: string,
+    changes: { name?: string; folder?: string; createMissingFolders?: boolean },
+  ) => send<void>("PATCH", `/api/workspaces/${id}`, changes),
   /** `ids` is every Workspace, in the order wanted. */
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),

@@ -10,6 +10,36 @@ export function dirname(path: string): string {
   return path.slice(0, path.lastIndexOf("/")) || "/";
 }
 
+/** `names` inside `parent`, one level each. */
+export function join(parent: string, ...names: string[]): string {
+  return names.reduce(
+    (path, name) => (path === "/" ? `/${name}` : `${path}/${name}`),
+    parent,
+  );
+}
+
+/**
+ * The folder the picker has chosen: one that exists (`base`), plus new folders to make
+ * inside it on Create, outermost first. Only `base` is ever listed; new folders are empty.
+ */
+export interface FolderChoice {
+  base: string;
+  newFolders: string[];
+}
+
+/** The full path of a chosen folder, new folders included. */
+export function choicePath({ base, newFolders }: FolderChoice): string {
+  return join(base, ...newFolders);
+}
+
+/** Why `name` can't be a new folder's name, or undefined when it can. */
+export function folderNameProblem(name: string): string | undefined {
+  if (name === "") return "Type a name";
+  if (name.includes("/")) return "A folder name can't contain /";
+  if (name === "." || name === "..") return "Not a folder name";
+  return undefined;
+}
+
 /** `path` is `folder` or inside it. */
 export function isWithin(path: string, folder: string): boolean {
   return path === folder || path.startsWith(folder === "/" ? "/" : `${folder}/`);

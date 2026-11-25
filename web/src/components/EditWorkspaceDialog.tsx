@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { choicePath, type FolderChoice } from "@/folders";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { FOLDER_DIALOG_CLASS, FolderPicker } from "./FolderPicker";
 import { Button } from "./ui/button";
@@ -15,8 +16,10 @@ import { Input } from "./ui/input";
 export type WorkspaceEdit = "rename" | "folder";
 
 /**
- * Renames a Workspace or changes its folder (picked from the Host), showing the server's
- * message when refused.
+ * Renames a Workspace or changes its folder (picked from the Host, making any new folders
+ * named there), showing the server's message when refused. The picker opens at the
+ * Workspace's own folder (the nearest one above it that exists, when it is Missing), and
+ * Save waits until the owner picks a different folder.
  */
 export function EditWorkspaceDialog({
   workspace,
@@ -29,19 +32,32 @@ export function EditWorkspaceDialog({
   /** Every live Workspace, for the folder picker. */
   workspaces: WorkspaceState[];
   edit: WorkspaceEdit;
-  onSave: (changes: { name?: string; folder?: string }) => Promise<void>;
+  onSave: (changes: {
+    name?: string;
+    folder?: string;
+    createMissingFolders?: boolean;
+  }) => Promise<void>;
   onClose: () => void;
 }) {
   const renaming = edit === "rename";
   const [name, setName] = useState(workspace.name);
-  const [folder, setFolder] = useState<string>();
+  // Set only once the owner has moved in the picker.
+  const [choice, setChoice] = useState<FolderChoice>();
   const [error, setError] = useState<string>();
-  const value = renaming ? name.trim() : folder;
+  const folder = choice && choicePath(choice);
+  const value = renaming ? name.trim() : folder === workspace.folder ? undefined : folder;
 
   const submit = async () => {
     if (!value) return;
     try {
-      await onSave(renaming ? { name: value } : { folder: value });
+      await onSave(
+        renaming
+          ? { name: value }
+          : {
+              folder: value,
+              ...((choice?.newFolders.length ?? 0) > 0 && { createMissingFolders: true }),
+            },
+      );
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -79,8 +95,9 @@ export function EditWorkspaceDialog({
           ) : (
             <FolderPicker
               workspaces={workspaces}
-              onChange={(chosen) => {
-                setFolder(chosen);
+              start={workspace.folder}
+              onChange={(chosen, picked) => {
+                setChoice(picked ? chosen : undefined);
                 setError(undefined);
               }}
             />

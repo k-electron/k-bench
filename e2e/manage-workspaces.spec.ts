@@ -39,6 +39,9 @@ test("change a Workspace's folder by picking another one", async ({ app, kbench 
   await expect(app.workspace("old")).toBeVisible();
 
   await app.workspaceAction("old", "Change folder");
+  // It opens at the Workspace's own folder, with nothing to save until another is picked.
+  await expect(app.breadcrumb("old")).toHaveAttribute("aria-current", "location");
+  await expect(app.page.getByRole("button", { name: "Save" })).toBeDisabled();
   await app.pickFolder(moved);
   await app.page.getByRole("button", { name: "Save" }).click();
 

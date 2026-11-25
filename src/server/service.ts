@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { statSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import {
   DEFAULT_LAUNCH_OPTIONS,
@@ -60,6 +60,46 @@ function isDirectory(path: string): boolean {
   }
 }
 
+function assertDirectory(folder: string): void {
+  if (!isDirectory(folder)) {
+    throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
+  }
+}
+
+/** Why a folder couldn't be made, in the owner's words. */
+function mkdirFailure(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "EEXIST" || code === "ENOTDIR") return "a file is in the way";
+  if (code === "EACCES" || code === "EPERM") return "permission denied";
+  if (code === "ENAMETOOLONG") return "the name is too long";
+  return code ?? String(error);
+}
+
+/**
+ * Makes `folder` and any missing folders above it, from the top down. A failure names the
+ * folder that couldn't be made; the folders made before it stay.
+ */
+function makeFolders(folder: string): void {
+  const missing: string[] = [];
+  for (
+    let path = folder;
+    !isDirectory(path) && path !== dirname(path);
+    path = dirname(path)
+  ) {
+    missing.unshift(path);
+  }
+  for (const path of missing) {
+    try {
+      mkdirSync(path);
+    } catch (error) {
+      throw new ServiceError(
+        "invalid",
+        `Couldn't make the folder ${path}: ${mkdirFailure(error)}`,
+      );
+    }
+  }
+}
+
 /** The domain operations. The store holds what the owner chose; tmux says what is alive. */
 export class Service {
   private readonly store: Store;
@@ -83,14 +123,21 @@ export class Service {
     await this.reconciler.reconcile();
   }
 
-  createWorkspace(input: { name?: string; folder: string }) {
+  /**
+   * With `createMissingFolders`, a folder that doesn't exist yet is made (with any missing
+   * folders above it) once every other check has passed; without it, it is refused.
+   */
+  createWorkspace(input: {
+    name?: string;
+    folder: string;
+    createMissingFolders?: boolean;
+  }) {
     const folder = resolve(input.folder);
-    if (!isDirectory(folder)) {
-      throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
-    }
+    if (!input.createMissingFolders) assertDirectory(folder);
     this.assertFolderFree(folder);
     const explicit = input.name?.trim();
     if (explicit) this.assertWorkspaceNameFree(explicit);
+    if (input.createMissingFolders) makeFolders(folder);
     const name = explicit || availableName(basename(folder), this.workspaceNames());
     // The Prime and Worker are recorded with the Workspace and started only when asked to.
     const { id } = this.store.transaction(() => {
@@ -120,8 +167,14 @@ export class Service {
     return parent && isDirectory(parent) ? parent : root;
   }
 
-  /** Renames and/or re-folders a Workspace; both changes are checked before either is made. */
-  updateWorkspace(id: string, changes: { name?: string; folder?: string }) {
+  /**
+   * Renames and/or re-folders a Workspace; both changes are checked before either is made.
+   * `createMissingFolders` works as in `createWorkspace`.
+   */
+  updateWorkspace(
+    id: string,
+    changes: { name?: string; folder?: string; createMissingFolders?: boolean },
+  ) {
     const workspace = this.store.getWorkspace(id);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
     const update: { name?: string; folder?: string } = {};
@@ -133,11 +186,12 @@ export class Service {
     }
     if (changes.folder !== undefined) {
       const folder = resolve(changes.folder);
-      if (!isDirectory(folder)) {
-        throw new ServiceError("invalid", `Folder does not exist: ${folder}`);
-      }
+      if (!changes.createMissingFolders) assertDirectory(folder);
       this.assertFolderFree(folder, id);
       update.folder = folder;
+    }
+    if (update.folder !== undefined && changes.createMissingFolders) {
+      makeFolders(update.folder);
     }
     this.store.updateWorkspace(id, update);
     return { ...workspace, ...update };

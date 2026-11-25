@@ -1,6 +1,6 @@
 import { PlusIcon } from "lucide-react";
 import { useId, useState } from "react";
-import { basename } from "@/folders";
+import { basename, choicePath, type FolderChoice } from "@/folders";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { FOLDER_DIALOG_CLASS, FolderPicker } from "./FolderPicker";
 import { Button } from "./ui/button";
@@ -15,16 +15,25 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 
-/** Creates a Workspace on a folder picked from the Host. */
+/**
+ * Creates a Workspace on a folder picked from the Host, making any new folders named in the
+ * picker first.
+ */
 export function NewWorkspaceDialog({
   workspaces,
   onCreate,
 }: {
   workspaces: WorkspaceState[];
-  onCreate: (input: { folder: string; name?: string }) => Promise<void>;
+  onCreate: (input: {
+    folder: string;
+    name?: string;
+    createMissingFolders?: boolean;
+  }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [folder, setFolder] = useState<string>();
+  const [choice, setChoice] = useState<FolderChoice>();
+  const folder = choice && choicePath(choice);
+  const newFolders = choice?.newFolders.length ?? 0;
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
   const nameId = useId();
@@ -32,7 +41,11 @@ export function NewWorkspaceDialog({
   const submit = async () => {
     if (folder === undefined) return;
     try {
-      await onCreate({ folder, name: name.trim() || undefined });
+      await onCreate({
+        folder,
+        name: name.trim() || undefined,
+        ...(newFolders > 0 && { createMissingFolders: true }),
+      });
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -66,12 +79,14 @@ export function NewWorkspaceDialog({
         >
           <DialogHeader>
             <DialogTitle>New Workspace</DialogTitle>
-            <DialogDescription>Pick a project folder on the Host.</DialogDescription>
+            <DialogDescription>
+              Pick a project folder on the Host, or make new ones for it.
+            </DialogDescription>
           </DialogHeader>
           <FolderPicker
             workspaces={workspaces}
             onChange={(chosen) => {
-              setFolder(chosen);
+              setChoice(chosen);
               setError(undefined);
             }}
           />
@@ -95,7 +110,11 @@ export function NewWorkspaceDialog({
           )}
           <DialogFooter>
             <Button type="submit" disabled={folder === undefined}>
-              Create Workspace
+              {newFolders === 0
+                ? "Create Workspace"
+                : newFolders === 1
+                  ? "Create folder and Workspace"
+                  : `Create ${newFolders} folders and Workspace`}
             </Button>
           </DialogFooter>
         </form>

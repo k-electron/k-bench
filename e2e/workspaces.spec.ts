@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "./harness.ts";
 
@@ -31,6 +31,45 @@ test("pick a Place, step into a folder and create; the Workspace appears with th
     "title",
     join(projects, "search"),
   );
+});
+
+test("make nested New folders in the picker; Create makes them, then the Workspace", async ({
+  app,
+  kbench,
+}) => {
+  const projects = kbench.instance.makeFolder("projects");
+  mkdirSync(join(projects, "acme"));
+  const picker = app.folderPicker;
+
+  await app.page.getByRole("button", { name: "New Workspace" }).click();
+  await app.place("Home").click();
+  await app.folderRow("projects").click();
+  // A name that already exists just opens that folder.
+  await app.newFolder("acme");
+  await expect(app.breadcrumb("acme")).toHaveAttribute("aria-current", "location");
+  await expect(picker.getByText("doesn't exist yet")).toHaveCount(0);
+  await app.newFolder("client");
+  await expect(picker.getByText("client doesn't exist yet")).toBeVisible();
+  await app.newFolder("web");
+  await expect(picker.getByText("web doesn't exist yet")).toBeVisible();
+  await expect(app.page.getByRole("textbox", { name: "Name" })).toHaveAttribute(
+    "placeholder",
+    "web",
+  );
+  // An earlier breadcrumb drops the new folders after it.
+  await app.breadcrumb("client").click();
+  await expect(picker.getByText("client doesn't exist yet")).toBeVisible();
+  await app.newFolder("web");
+  // Nothing is made until Create.
+  expect(existsSync(join(projects, "acme", "client"))).toBe(false);
+  await app.page.getByRole("button", { name: "Create 2 folders and Workspace" }).click();
+
+  await expect(app.workspace("web")).toBeVisible();
+  await expect(app.workspace("web")).toHaveAttribute(
+    "title",
+    join(projects, "acme", "client", "web"),
+  );
+  expect(existsSync(join(projects, "acme", "client", "web"))).toBe(true);
 });
 
 test("a second Workspace on the same folder is refused, naming the one that has it", async ({
