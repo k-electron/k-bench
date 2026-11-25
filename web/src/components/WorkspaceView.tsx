@@ -1,4 +1,5 @@
 import { type ReactNode, useRef } from "react";
+import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import {
   MAX_RATIO,
   MIN_RATIO,
@@ -6,6 +7,7 @@ import {
   type Side,
   type WorkspaceView as View,
 } from "../workspaceView";
+import { MissingPane } from "./MissingPane";
 import { Pane } from "./Pane";
 import { SessionIcon } from "./SessionIcon";
 
@@ -27,16 +29,44 @@ function LabelBar({ children }: { children: ReactNode }) {
  * The main view on a desktop or tablet: the Open Workspace's Prime in the left Pane and
  * its Worker, or an Other Session, in the right, with a draggable divider between them.
  */
-export function WorkspaceView({ view }: { view: View }) {
+export function WorkspaceView({
+  view,
+  workspaces,
+}: {
+  view: View;
+  /** Every Workspace, for the folder picker of a Missing one's Change folder. */
+  workspaces: WorkspaceState[];
+}) {
   const grid = useRef<HTMLDivElement>(null);
 
-  if (!view.workspace) {
+  const { workspace } = view;
+  if (!workspace) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Create a Workspace to get started.
       </div>
     );
   }
+
+  /**
+   * A Pane's Session: its terminal, or why it has none. A starting Prime or Worker waits
+   * for its terminal, which shows Claude Code's own startup. Otherwise a Session that isn't
+   * running offers Restart, or in a Missing Workspace, where it can't start, Change folder.
+   */
+  const body = (side: Side, session: SessionState) => {
+    const starting = view.starting && session.role !== null;
+    if (session.status !== "running" && !starting && workspace.missing) {
+      return <MissingPane workspace={workspace} workspaces={workspaces} />;
+    }
+    return (
+      <Pane
+        key={session.id}
+        session={session}
+        focused={view.focus === side}
+        starting={starting}
+      />
+    );
+  };
 
   const slot = (side: Side, content: PaneContent, label: ReactNode) => (
     // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings form styling; this only names the slot
@@ -49,13 +79,7 @@ export function WorkspaceView({ view }: { view: View }) {
     >
       <LabelBar>{label}</LabelBar>
       <div className="min-h-0 flex-1">
-        {content.kind === "session" && (
-          <Pane
-            key={content.session.id}
-            session={content.session}
-            focused={view.focus === side}
-          />
-        )}
+        {content.kind === "session" && body(side, content.session)}
       </div>
     </div>
   );

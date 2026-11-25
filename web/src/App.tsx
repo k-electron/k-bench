@@ -133,7 +133,7 @@ export function App() {
                 }
               />
             ) : (
-              state && <WorkspaceView view={view} />
+              state && <WorkspaceView view={view} workspaces={state.workspaces} />
             )}
             {keyboardUp && phoneSessionId && <TypingKeys />}
           </div>

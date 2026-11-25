@@ -36,7 +36,7 @@ Every open tab shows changes at once, so a Session you create on your phone appe
 
 A Session is Stopped when its program no longer exists. That happens when the program exits (you type `exit` in a shell, or quit Claude Code in a Claude Session), and it happens when you log out of your Mac or restart it, because that ends every program in your login session.
 
-After a logout or a restart, k-bench comes back on its own when you log in again. Everything is still listed: every Workspace and every Session. The Sessions show Stopped, and you restart each one yourself: open its **...** menu and choose **Restart**. The Session keeps its name and folder, and what it starts depends on its kind:
+After a logout or a restart, k-bench comes back on its own when you log in again. Everything is still listed: every Workspace and every Session. The Sessions show Stopped, and you restart each one yourself: open its **...** menu and choose **Restart**, or, when it's in a Pane, press the **Restart** button that Pane shows in place of its terminal. Opening the Workspace restarts its Prime and Worker for you. The Session keeps its name and folder, and what it starts depends on its kind:
 
 - A shell Session gets a fresh shell. What was running in the old shell is gone, so a dev server needs starting again, and so does a Claude Code you started by hand: bring that conversation back with Claude Code's own `/resume`.
 - A Claude Session resumes its Claude conversation, with the same Launch options it was created with, and needs no `/resume`. See [Quitting, errors and restarting](claude-code.md#quitting-errors-and-restarting).
@@ -56,7 +56,9 @@ What that means in practice:
 - Starting a new Session, or restarting a Stopped one (a Claude Session too), fails and the sidebar says "Folder does not exist".
 - Every other Workspace and Session keeps working.
 
-To fix it, open the Workspace's **...** menu, choose **Change folder** and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
+A Pane whose Session isn't running says "This Workspace's folder is missing" instead of offering **Restart**, with a **Change folder** button, so you can fix it from there too.
+
+To fix it, open the Workspace's **...** menu, or press **Change folder** in a Pane, and point it at the folder's new location. If you put the folder back where it was, the Missing mark goes away by itself. If you no longer need the Workspace, delete it.
 
 ## Panes
 
