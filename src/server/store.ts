@@ -3,7 +3,11 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { type LaunchOptions, ROLE_LAUNCH_OPTIONS } from "../shared/launch-options.ts";
-import type { SessionKind, SessionRole } from "../shared/state-protocol.ts";
+import type {
+  RightPaneState,
+  SessionKind,
+  SessionRole,
+} from "../shared/state-protocol.ts";
 import { availableName } from "./naming.ts";
 
 /**
@@ -79,6 +83,15 @@ const MIGRATIONS: Array<string | ((db: DatabaseSync) => void)> = [
   CREATE TABLE open_workspace (
     id           INTEGER PRIMARY KEY CHECK (id = 1),
     workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL
+  );
+  `,
+  // Each Workspace's right Pane: its tabs (a JSON list of Other Session ids, in order) and
+  // the one shown, null for the Worker. A Workspace with no row shows the Worker, no tabs.
+  `
+  CREATE TABLE right_panes (
+    workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+    shown        TEXT,
+    tabs         TEXT NOT NULL
   );
   `,
 ];
@@ -366,6 +379,25 @@ export class Store {
          WHERE id = ? AND kind = 'claude' AND conversation_id IS NOT ?`,
       )
       .run(conversationId, id, conversationId);
+  }
+
+  /** What the Workspace's right Pane holds: the Worker and no tabs until it is set. */
+  getRightPane(workspaceId: string): RightPaneState {
+    const row = this.db
+      .prepare("SELECT shown, tabs FROM right_panes WHERE workspace_id = ?")
+      .get(workspaceId) as { shown: string | null; tabs: string } | undefined;
+    return row
+      ? { shown: row.shown, tabs: JSON.parse(row.tabs) }
+      : { shown: null, tabs: [] };
+  }
+
+  setRightPane(workspaceId: string, rightPane: RightPaneState): void {
+    this.db
+      .prepare(
+        `INSERT INTO right_panes (workspace_id, shown, tabs) VALUES (?, ?, ?)
+         ON CONFLICT (workspace_id) DO UPDATE SET shown = excluded.shown, tabs = excluded.tabs`,
+      )
+      .run(workspaceId, rightPane.shown, JSON.stringify(rightPane.tabs));
   }
 
   renameSession(id: string, name: string): void {

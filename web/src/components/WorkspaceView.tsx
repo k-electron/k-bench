@@ -7,6 +7,7 @@ import {
   type WorkspaceView as View,
 } from "../workspaceView";
 import { Pane } from "./Pane";
+import { RightPaneTabs } from "./RightPaneTabs";
 import { SessionIcon } from "./SessionIcon";
 
 /** The CSS grid columns of the two Panes, with the divider's 6px between them. */
@@ -108,12 +109,14 @@ export function WorkspaceView({ view }: { view: View }) {
       {slot(
         "right",
         right,
-        right.kind === "session" && (
-          <>
-            <SessionIcon session={right.session} className="size-3" />
-            <span className="truncate">{right.session.name}</span>
-          </>
-        ),
+        <RightPaneTabs
+          worker={view.worker}
+          tabs={view.tabs}
+          shownId={right.kind === "session" ? right.session.id : undefined}
+          onShowWorker={view.showWorker}
+          onShowTab={(id) => view.openOtherSession(view.workspace?.id ?? "", id)}
+          onCloseTab={view.closeTab}
+        />,
       )}
     </div>
   );

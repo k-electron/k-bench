@@ -26,6 +26,17 @@ export interface SessionState {
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
 }
+
+/**
+ * What a Workspace's right Pane holds, kept on the Host so it follows the owner between
+ * devices: its tabs after the Worker's, each an Other Session's id in the owner's order,
+ * and the one shown, or null for the Worker.
+ */
+export interface RightPaneState {
+  shown: string | null;
+  tabs: string[];
+}
+
 export interface WorkspaceState {
   id: string;
   name: string;
@@ -36,6 +47,7 @@ export interface WorkspaceState {
   /** The folder no longer exists on the Host. */
   missing: boolean;
   sessions: SessionState[];
+  rightPane: RightPaneState;
 }
 export interface State {
   workspaces: WorkspaceState[];

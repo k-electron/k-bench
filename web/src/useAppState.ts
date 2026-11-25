@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { EVENTS_PATH, type State } from "../../src/shared/state-protocol.ts";
+import {
+  EVENTS_PATH,
+  type RightPaneState,
+  type State,
+} from "../../src/shared/state-protocol.ts";
 import { ApiError, api, type Change } from "./api";
 import { createStateClient, type StateClient } from "./stateClient";
 
@@ -35,8 +39,16 @@ export interface Actions {
   ): Promise<void>;
   /** Shows the new Workspace order at once, then saves it. `ids` is every Workspace. */
   reorderWorkspaces(ids: string[]): Promise<void>;
-  /** Makes it the Open Workspace, on every device, and starts its Prime and Worker. */
-  openWorkspace(id: string): Promise<void>;
+  /**
+   * Makes it the Open Workspace, on every device, and starts its Prime and Worker. With
+   * `showWorker` (chosen by its name), its right Pane shows the Worker again, at once.
+   */
+  openWorkspace(id: string, options?: { showWorker?: boolean }): Promise<void>;
+  /**
+   * Shows what the Workspace's right Pane holds at once, then saves it on the Host, so
+   * every device follows.
+   */
+  setRightPane(workspaceId: string, rightPane: RightPaneState): Promise<void>;
   deleteWorkspace(id: string): Promise<void>;
   /**
    * The new Session's id, once it is in state. Undefined if it was refused (see `error`) or
@@ -98,6 +110,20 @@ export function useAppState(): {
     const act = async (request: Promise<Change<unknown>>) => {
       await whenShown(await request);
     };
+    /** Shows a change to a Workspace's right Pane before the Host has it. */
+    const showRightPane = (
+      workspaceId: string,
+      change: (current: RightPaneState) => RightPaneState,
+    ) =>
+      setState(
+        (current) =>
+          current && {
+            ...current,
+            workspaces: current.workspaces.map((w) =>
+              w.id === workspaceId ? { ...w, rightPane: change(w.rightPane) } : w,
+            ),
+          },
+      );
     /** For the actions with no form: a refusal goes in `error` rather than rejecting. */
     const reporting = async <T>(request: () => Promise<T>): Promise<T | undefined> => {
       setError(undefined);
@@ -137,8 +163,18 @@ export function useAppState(): {
         // A refused order sends no snapshot: resync for one, putting the order right.
         return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
       },
-      openWorkspace: async (id) => {
-        await reporting(() => act(api.openWorkspace(id)));
+      openWorkspace: async (id, options = {}) => {
+        if (options.showWorker) {
+          showRightPane(id, (current) => ({ ...current, shown: null }));
+        }
+        await reporting(() => act(api.openWorkspace(id, options)));
+      },
+      setRightPane: (workspaceId, rightPane) => {
+        showRightPane(workspaceId, () => rightPane);
+        // A refused change sends no snapshot: resync for one, putting the Pane right.
+        return act(api.setRightPane(workspaceId, rightPane)).catch(() =>
+          clientRef.current?.resync(),
+        );
       },
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>

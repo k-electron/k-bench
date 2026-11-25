@@ -1,7 +1,7 @@
 /** Typed client for the server's JSON API. The state it reports is in `src/shared/state-protocol.ts`. */
 
 import type { LaunchOptions } from "../../src/shared/launch-options.ts";
-import { revisionOf } from "../../src/shared/state-protocol.ts";
+import { type RightPaneState, revisionOf } from "../../src/shared/state-protocol.ts";
 
 export interface DirectoryListing {
   path: string;
@@ -101,9 +101,15 @@ export const api = {
   /** `ids` is every Workspace, in the order wanted. */
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
-  /** Makes it the Open Workspace and starts its Stopped Prime and Worker. */
-  openWorkspace: (id: string) =>
-    send<{ id: string }>("POST", `/api/workspaces/${id}/open`, {}),
+  /**
+   * Makes it the Open Workspace and starts its Stopped Prime and Worker. With `showWorker`,
+   * its right Pane shows the Worker again.
+   */
+  openWorkspace: (id: string, options: { showWorker?: boolean } = {}) =>
+    send<{ id: string }>("POST", `/api/workspaces/${id}/open`, options),
+  /** Sets the Workspace's right Pane: its tabs, and the one shown (null for the Worker). */
+  setRightPane: (id: string, rightPane: RightPaneState) =>
+    send<RightPaneState>("PUT", `/api/workspaces/${id}/right-pane`, rightPane),
   deleteWorkspace: (id: string) => send<void>("DELETE", `/api/workspaces/${id}`),
   /** The Launch options last used for a Claude Session; all Default if none has been. */
   lastLaunchOptions: () => get<LaunchOptions>("/api/claude/launch-options"),

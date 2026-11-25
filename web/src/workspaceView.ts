@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  RightPaneState,
   SessionState,
   State,
   WorkspaceState,
@@ -15,12 +16,6 @@ export type PaneContent =
 
 export type Side = "left" | "right";
 
-/**
- * What the right Pane shows for one Workspace: an Other Session's id, or null for the
- * Worker.
- */
-export type RightPaneShown = string | null;
-
 export interface WorkspaceView {
   /** The Open Workspace, which the main view belongs to. */
   workspace: WorkspaceState | undefined;
@@ -28,6 +23,10 @@ export interface WorkspaceView {
   left: PaneContent;
   /** The right Pane: the Worker, or the Other Session the owner opened there. */
   right: PaneContent;
+  /** The Open Workspace's Worker, whose tab comes first in the right Pane. */
+  worker: SessionState | undefined;
+  /** The Other Sessions opened in the right Pane, as its tabs after the Worker's, in order. */
+  tabs: SessionState[];
   /** Share of the width the left Pane takes. */
   ratio: number;
   /**
@@ -47,10 +46,15 @@ export interface WorkspaceView {
   /** Shows the Worker in the right Pane. */
   showWorker(): void;
   /**
-   * Opens an Other Session into the right Pane. Its Workspace is opened first if it is
-   * not the Open Workspace.
+   * Opens an Other Session into the right Pane, adding a tab for it if it has none. Its
+   * Workspace is opened first if it is not the Open Workspace.
    */
   openOtherSession(workspaceId: string, sessionId: string): void;
+  /**
+   * Removes an Other Session's tab from the right Pane; the Session keeps running. Closing
+   * the tab shown brings back the Worker.
+   */
+  closeTab(sessionId: string): void;
   /**
    * A Session chosen in the sidebar, of any role and any Workspace: the Prime, the Worker
    * or an Other Session, opening its Workspace first if it is not the Open Workspace.
@@ -70,27 +74,39 @@ export const MAX_RATIO = 0.8;
  */
 const RETIRED_LAYOUT_KEY = "k-bench.layout";
 
-/** The two Panes of a Workspace, given what its right Pane is set to show. */
-export function workspacePanes(
-  workspace: WorkspaceState | undefined,
-  rightShown: RightPaneShown,
-): { left: PaneContent; right: PaneContent } {
+const NO_RIGHT_PANE: RightPaneState = { shown: null, tabs: [] };
+
+/** The two Panes of a Workspace, and the right Pane's Worker and tabs. */
+export function workspacePanes(workspace: WorkspaceState | undefined): {
+  left: PaneContent;
+  right: PaneContent;
+  worker: SessionState | undefined;
+  tabs: SessionState[];
+} {
   const content = (session: SessionState | undefined): PaneContent =>
     session ? { kind: "session", session } : { kind: "empty" };
   const sessions = workspace?.sessions ?? [];
+  const { shown, tabs } = workspace?.rightPane ?? NO_RIGHT_PANE;
+  const others = new Map(sessions.filter((s) => s.role === null).map((s) => [s.id, s]));
   const prime = sessions.find((s) => s.role === "prime");
   const worker = sessions.find((s) => s.role === "worker");
   // An Other Session that was deleted (here or on another device) gives way to the Worker.
-  const other = sessions.find((s) => s.id === rightShown && s.role === null);
-  return { left: content(prime), right: content(other ?? worker) };
+  const other = shown === null ? undefined : others.get(shown);
+  return {
+    left: content(prime),
+    right: content(other ?? worker),
+    worker,
+    tabs: tabs.flatMap((id) => others.get(id) ?? []),
+  };
 }
 
 /**
  * The desktop and tablet view of the Open Workspace: the Prime in the left Pane, and the
  * Worker or one Other Session in the right.
  *
- * The Open Workspace comes from the state on every render, so every device follows it.
- * What the right Pane shows, and the divider, are kept per Workspace in memory for now.
+ * The Open Workspace, and what each Workspace's right Pane shows and its tabs, come from
+ * the state on the Host, so every device follows them. The divider is kept per Workspace
+ * in memory for now.
  *
  * It also does what any device does on load, whatever its size: it opens the Open
  * Workspace once, deletes the retired saved layout, and forgets Smart typing choices of
@@ -100,15 +116,15 @@ export function useWorkspaceView(
   state: State | undefined,
   actions: Actions,
 ): WorkspaceView {
-  const [rightShown, setRightShown] = useState<Record<string, RightPaneShown>>({});
   const [ratios, setRatios] = useState<Record<string, number>>({});
   const [focus, setFocus] = useState<Side>("left");
 
   const workspace = state?.workspaces.find((w) => w.id === state.openWorkspaceId);
-  const { left, right } = workspacePanes(
-    workspace,
-    workspace ? (rightShown[workspace.id] ?? null) : null,
-  );
+  const { left, right, worker, tabs } = workspacePanes(workspace);
+  // The latest state, for changes made after an await (a new Session opening once it is
+  // in state) or before the next render, so they build on the right Pane as it is now.
+  const latest = useRef(state);
+  latest.current = state;
 
   useOpenOnLoad(state, actions);
 
@@ -133,19 +149,33 @@ export function useWorkspaceView(
   }, [title]);
 
   const openId = workspace?.id;
-  const showOnRight = useCallback(
-    (workspaceId: string, shown: RightPaneShown) => {
-      setRightShown((current) => ({ ...current, [workspaceId]: shown }));
-      setFocus("right");
-      if (workspaceId !== openId) void actions.openWorkspace(workspaceId);
+  /** Changes a Workspace's right Pane, building on what it holds now. */
+  const changeRightPane = useCallback(
+    (workspaceId: string, change: (current: RightPaneState) => RightPaneState) => {
+      const current =
+        latest.current?.workspaces.find((w) => w.id === workspaceId)?.rightPane ??
+        NO_RIGHT_PANE;
+      void actions.setRightPane(workspaceId, change(current));
     },
-    [actions, openId],
+    [actions],
+  );
+  const showOnRight = useCallback(
+    (workspaceId: string, shown: string | null) => {
+      changeRightPane(workspaceId, ({ tabs }) => ({
+        shown,
+        tabs: shown === null || tabs.includes(shown) ? tabs : [...tabs, shown],
+      }));
+      setFocus("right");
+      if (workspaceId !== latest.current?.openWorkspaceId) {
+        void actions.openWorkspace(workspaceId);
+      }
+    },
+    [actions, changeRightPane],
   );
 
   const openWorkspace = (id: string) => {
-    setRightShown((current) => ({ ...current, [id]: null }));
     setFocus("left");
-    void actions.openWorkspace(id);
+    void actions.openWorkspace(id, { showWorker: true });
   };
 
   const shown = new Set<string>();
@@ -156,6 +186,8 @@ export function useWorkspaceView(
     workspace,
     left,
     right,
+    worker,
+    tabs,
     ratio: (openId && ratios[openId]) || 0.5,
     focus,
     shown,
@@ -165,6 +197,13 @@ export function useWorkspaceView(
       if (openId) showOnRight(openId, null);
     },
     openOtherSession: (workspaceId, sessionId) => showOnRight(workspaceId, sessionId),
+    closeTab: (sessionId) => {
+      if (!openId) return;
+      changeRightPane(openId, ({ shown, tabs }) => ({
+        shown: shown === sessionId ? null : shown,
+        tabs: tabs.filter((id) => id !== sessionId),
+      }));
+    },
     chooseSession: (workspaceId, session) => {
       if (session.role === "worker") showOnRight(workspaceId, null);
       else if (session.role === null) showOnRight(workspaceId, session.id);

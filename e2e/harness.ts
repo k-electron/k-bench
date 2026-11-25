@@ -99,6 +99,27 @@ export class AppPage {
     });
   }
 
+  /** A tab in the right Pane's tab bar: "Worker", or an Other Session's name. */
+  rightTab(name: string): Locator {
+    return this.pane("right").getByRole("button", { name, exact: true });
+  }
+
+  /** The × on an Other Session's tab in the right Pane. */
+  closeTabButton(name: string): Locator {
+    return this.pane("right").getByRole("button", {
+      name: `Close tab ${name}`,
+      exact: true,
+    });
+  }
+
+  /** The Bell dot on a right Pane tab; present only while its Session's Bell is raised. */
+  tabBell(name: string): Locator {
+    return this.pane("right").getByRole("img", {
+      name: `${name} rang the bell`,
+      exact: true,
+    });
+  }
+
   /** On a desktop or tablet: the Open Workspace's name in the top bar. */
   get workspaceTitle(): Locator {
     return this.page.getByRole("main").getByRole("heading", { level: 1 });

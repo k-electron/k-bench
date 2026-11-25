@@ -122,9 +122,27 @@ export function createApp(
     return c.json(workspace);
   });
 
-  app.post("/api/workspaces/:id/open", async (c) =>
-    c.json(await service.openWorkspace(c.req.param("id"))),
-  );
+  app.post("/api/workspaces/:id/open", async (c) => {
+    const body = await jsonBody(c.req.raw);
+    return c.json(
+      await service.openWorkspace(c.req.param("id"), {
+        showWorker: body.showWorker === true,
+      }),
+    );
+  });
+
+  // The whole record: the tabs in order, and the one shown (null for the Worker).
+  app.put("/api/workspaces/:id/right-pane", async (c) => {
+    const { shown, tabs } = await jsonBody(c.req.raw);
+    if (!Array.isArray(tabs) || !tabs.every((id) => typeof id === "string")) {
+      throw new ServiceError("invalid", "tabs must be a list of Session ids");
+    }
+    if (shown !== null && typeof shown !== "string") {
+      throw new ServiceError("invalid", "shown must be a Session id or null");
+    }
+    service.setRightPane(c.req.param("id"), { shown, tabs });
+    return c.json({ shown, tabs });
+  });
 
   app.delete("/api/workspaces/:id", async (c) => {
     await service.deleteWorkspace(c.req.param("id"));
