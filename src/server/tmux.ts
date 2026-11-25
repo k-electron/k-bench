@@ -2,7 +2,12 @@ import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
-import { type ClaudeLaunch, claudeCommand } from "./claude.ts";
+import {
+  type ClaudeLaunch,
+  CONVERSATION_CHANNEL,
+  CONVERSATION_OPTION,
+  claudeCommand,
+} from "./claude.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,13 +18,18 @@ const PREFIX = "kb-";
 const BELL_OPTION = "@kb-bell";
 /** The tmux `wait-for` channel signalled whenever a Bell may have been raised or cleared. */
 const BELL_CHANNEL = "kb-bell-changed";
-/** How long a Bell watch waits before trying again after tmux failed it unexpectedly. */
-const BELL_WATCH_RETRY_MS = 1_000;
+/** How long a channel watch waits before trying again after tmux failed it unexpectedly. */
+const WATCH_RETRY_MS = 1_000;
 
 /** A Session whose shell is alive, with its Bell. */
 export interface LiveSession {
   id: string;
   bell: boolean;
+  /**
+   * For a Claude Session, the conversation Claude Code last reported starting, as its hook
+   * wrote it (`CONVERSATION_OPTION`): unchecked, and empty until the hook has run.
+   */
+  conversation: string;
 }
 
 /** The owner's login shell. */
@@ -118,8 +128,8 @@ export interface TmuxClient {
   kill(signal?: NodeJS.Signals): void;
 }
 
-/** A running watch on the Bells (`TmuxDriver.watchBells`). */
-export interface BellWatch {
+/** A running watch on the Bells or the conversations (`TmuxDriver.watchBells`). */
+export interface ChannelWatch {
   /** Stops watching; resolves once nothing is left waiting on tmux. Idempotent. */
   stop(): Promise<void>;
 }
@@ -130,8 +140,8 @@ export interface BellWatch {
  */
 export class TmuxDriver {
   private readonly socket: string;
-  /** Bell watches, which a new tmux server must wake (see `watchBells`). */
-  private readonly bellWatches = new Set<BellWatcher>();
+  /** Channel watches, which a new tmux server must wake (see `watchBells`). */
+  private readonly watches = new Set<ChannelWatcher>();
 
   /** The program a Claude Session runs (`InstanceConfig.claudeProgram`). */
   private readonly claudeProgram: string;
@@ -190,8 +200,8 @@ export class TmuxDriver {
       "--",
       ...command,
     ]);
-    // This may have started the tmux server, which a Bell watch idles without.
-    for (const watch of this.bellWatches) watch.serverStarted();
+    // This may have started the tmux server, which a channel watch idles without.
+    for (const watch of this.watches) watch.serverStarted();
   }
 
   /**
@@ -211,16 +221,29 @@ export class TmuxDriver {
    * when nothing changed), until stopped. Changes are missed only while no tmux server runs,
    * when there are no Bells to change.
    */
-  watchBells(onChange: () => void): BellWatch {
-    const watch = new BellWatcher(
-      [...this.baseArgs(), "wait-for", BELL_CHANNEL],
+  watchBells(onChange: () => void): ChannelWatch {
+    return this.watchChannel(BELL_CHANNEL, onChange);
+  }
+
+  /**
+   * Calls `onChange` soon after Claude Code in any Claude Session reports starting a
+   * conversation (and now and then when none did), until stopped; `listSessions` then has
+   * it. Like the Bells, reports are missed only while no tmux server runs.
+   */
+  watchConversations(onChange: () => void): ChannelWatch {
+    return this.watchChannel(CONVERSATION_CHANNEL, onChange);
+  }
+
+  private watchChannel(channel: string, onChange: () => void): ChannelWatch {
+    const watch = new ChannelWatcher(
+      [...this.baseArgs(), "wait-for", channel],
       this.env(),
       {
         onChange,
-        onStop: () => this.bellWatches.delete(watch),
+        onStop: () => this.watches.delete(watch),
       },
     );
-    this.bellWatches.add(watch);
+    this.watches.add(watch);
     watch.start();
     return watch;
   }
@@ -233,14 +256,18 @@ export class TmuxDriver {
     }
   }
 
-  /** The Sessions whose shell is currently alive on this socket, with their Bells. */
+  /**
+   * The Sessions whose shell is currently alive on this socket, with their Bells and
+   * conversations. The conversation is a pane option; a session's format reads it from the
+   * session's one pane.
+   */
   async listSessions(): Promise<LiveSession[]> {
     let stdout: string;
     try {
       stdout = await this.run([
         "list-sessions",
         "-F",
-        `#{session_name} #{${BELL_OPTION}}`,
+        `#{session_name}\t#{${BELL_OPTION}}\t#{${CONVERSATION_OPTION}}`,
       ]);
     } catch (error) {
       if (isNoServer(error)) return [];
@@ -250,8 +277,12 @@ export class TmuxDriver {
       .split("\n")
       .filter((line) => line.startsWith(PREFIX))
       .map((line) => {
-        const [name = "", bell = ""] = line.split(" ");
-        return { id: name.slice(PREFIX.length), bell: bell !== "" };
+        const [name = "", bell = "", ...conversation] = line.split("\t");
+        return {
+          id: name.slice(PREFIX.length),
+          bell: bell !== "",
+          conversation: conversation.join("\t"),
+        };
       });
   }
 
@@ -306,11 +337,11 @@ export class TmuxDriver {
 }
 
 /**
- * Waits on the Bell channel with a `tmux wait-for` client, again and again. tmux keeps a
+ * Waits on a channel with a `tmux wait-for` client, again and again. tmux keeps a
  * signal sent while nobody is waiting for the next wait, so none is lost between two waits.
  * With no tmux server to wait on, it idles until told one has started.
  */
-class BellWatcher implements BellWatch {
+class ChannelWatcher implements ChannelWatch {
   private readonly args: string[];
   private readonly env: NodeJS.ProcessEnv;
   private readonly onChange: () => void;
@@ -381,7 +412,7 @@ class BellWatcher implements BellWatch {
       this.idle = true;
     } else {
       // tmux failed the wait some other way, such as its server being killed under it.
-      this.retry = setTimeout(() => this.start(), BELL_WATCH_RETRY_MS);
+      this.retry = setTimeout(() => this.start(), WATCH_RETRY_MS);
       this.retry.unref();
     }
   }

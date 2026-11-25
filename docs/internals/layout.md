@@ -18,9 +18,9 @@ The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsco
 - `config.ts`: instance config.
 - `access-guard.ts`: the `Tailscale-User-Login` check, ADR-0003 (see [Access](access.md)).
 - `store.ts`: SQLite and migrations, including each Session's kind, a Claude Session's conversation ID and Launch options, and the last-used Launch options.
-- `claude.ts`: everything k-bench knows about launching Claude Code (ADR 0005): the flags the Launch options map to, validating them, and the launcher that starts, resumes and holds an error on screen. It never reads Claude Code's output or files.
-- `tmux.ts`: the tmux driver, an adapter over the tmux CLI that keeps no state about Sessions, and owns the Bell rule (see [The Bell](bell.md)).
-- `reconciler.ts`: kills tmux sessions with no store row, at startup and on every state read.
+- `claude.ts`: everything k-bench knows about launching Claude Code (ADR 0005): the flags the Launch options map to, validating them, the silent `SessionStart` hook that reports which conversation Claude Code is on, and the launcher that starts, resumes and holds an error on screen.
+- `tmux.ts`: the tmux driver, an adapter over the tmux CLI that keeps no state about Sessions, and owns the Bell rule (see [The Bell](bell.md)). It watches the Bell's channel and the conversation hook's.
+- `reconciler.ts`: kills tmux sessions with no store row and stores the conversation each live Claude Session reports, at startup, on every state read and whenever the conversation hook signals.
 - `service.ts`: domain operations.
 - `app.ts`: the HTTP API (see [The API](api.md)).
 - `static.ts`: serves the built front end.

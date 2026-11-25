@@ -41,7 +41,11 @@ export class Service {
     this.reconciler = new Reconciler(store, tmux);
   }
 
-  /** Kills tmux sessions that have no store record. Runs at startup and on every state read. */
+  /**
+   * Kills tmux sessions that have no store record and stores the conversation each Claude
+   * Session is on. Runs at startup, on every state read and whenever Claude Code reports a
+   * conversation.
+   */
   async reconcile(): Promise<void> {
     await this.reconciler.reconcile();
   }
