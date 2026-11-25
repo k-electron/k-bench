@@ -277,6 +277,21 @@ export class AppPage {
     return this.sidebar.getByRole("heading", { name, exact: true });
   }
 
+  /** In the collapsed sidebar: a Workspace's tile, which opens it. */
+  workspaceTile(name: string): Locator {
+    return this.sidebar.getByRole("button", { name, exact: true });
+  }
+
+  /** Collapses the sidebar to a column of tiles. */
+  async collapseSidebar(): Promise<void> {
+    await this.sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
+  }
+
+  /** The button at the top of the collapsed sidebar that brings the tree back. */
+  get expandSidebarButton(): Locator {
+    return this.sidebar.getByRole("button", { name: "Expand sidebar" });
+  }
+
   /** The Bell badge on a Session's row; present only while its Bell is raised. */
   bellBadge(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {

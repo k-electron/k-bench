@@ -16,13 +16,15 @@ A **Workspace** is a named entry that points at a project folder on your Mac. A 
 
 **The Open Workspace** is the one you last opened, on any device: k-bench keeps it on your Mac, so your phone and your laptop agree on it, and opening another on one device switches the others too. Loading k-bench opens it, so its Stopped Prime and Worker start when you arrive. Until you open one, it's the first Workspace in your order, and deleting it makes the first one open. The Prime and Worker are always called "Prime" and "Worker", so no other Session can take those names, and they can't be renamed or deleted.
 
-**The sidebar** lists every Workspace in your order, each with a coloured tile of two letters from its name (the first letters of its first two words, or the first two letters of a one-word name), its colour worked out from the name. Only the Open Workspace is unfolded, showing its Prime, its Worker, a divider, then its other Sessions. Click another Workspace's name to open it. The header holds **New Workspace** (**+**).
+**The sidebar** lists every Workspace in your order, each with a coloured tile of two letters from its name (the first letters of its first two words, or the first two letters of a one-word name), its colour worked out from the name. Only the Open Workspace is unfolded, showing its Prime, its Worker, a divider, then its other Sessions. Click another Workspace's name to open it. The header holds **New Workspace** (**+**) and the collapse button.
 
 - Each Session has an icon: a crown for the Prime, a hammer for the Worker, a sparkle for another Claude Session and `>_` for a shell.
 - The Sessions on screen, in a Pane, are highlighted.
 - A Stopped Session is dimmed and labelled "stopped".
 - A Session with a [Bell](#bells) shows a bell icon. A Workspace that isn't open shows an amber dot on its tile when any of its Sessions has a Bell.
 - A [Missing](#missing-workspaces) Workspace has a warning mark on its tile.
+
+**Collapse the sidebar** with the button at the right of its header, to give the Panes the room. It becomes a narrow column of Workspace tiles, with the Open Workspace's Sessions as small icons under its tile: the same icons as the tree, dimmed when Stopped, with an amber dot when one has a Bell. Click a tile to open that Workspace, or an icon to open that Session. A Workspace that isn't open still shows its amber dot. **New Workspace** (**+**) is at the bottom of the column, and the button at the top expands the sidebar again. Collapsed or expanded is remembered on this device, so your laptop and your iPad can each keep their own; a phone's drawer is always the full tree.
 
 **Create a Session.** Choose the **+** next to the Open Workspace's name. It is a menu with two choices, and either way the new Session opens in the right Pane and starts in the Workspace's folder.
 

@@ -17,6 +17,8 @@ import {
   BellIcon,
   FolderInputIcon,
   MoreHorizontalIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   PencilIcon,
   PlusIcon,
   RotateCcwIcon,
@@ -28,6 +30,7 @@ import {
 import { type ComponentProps, type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
+import { useSidebarCollapsed } from "@/useSidebarCollapsed";
 import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
 import type {
   SessionState,
@@ -50,8 +53,9 @@ import {
 import { hasBell, WorkspaceTile } from "./WorkspaceTile";
 
 /**
- * Where the tree is shown: beside the Panes on a desktop or tablet, or in the phone's
- * drawer, where rows are taller for touch.
+ * Where the tree is shown: beside the Panes on a desktop or tablet, where it can collapse
+ * to a column of tiles, or in the phone's drawer, where it is always expanded and rows are
+ * taller for touch.
  */
 export type SidebarMode = "sidebar" | "drawer";
 
@@ -82,8 +86,9 @@ type SessionAction = "rename" | "delete";
 /**
  * The sidebar tree: every Workspace in the owner's order, each with its letter tile, and
  * only the Open Workspace unfolded into its Prime, Worker and Other Sessions. Only the Open
- * Workspace's row has the new-Session and Workspace menus. Opening a Workspace or a Session
- * is up to the caller; every other action comes from `useActions`.
+ * Workspace's row has the new-Session and Workspace menus. Beside the Panes it can collapse
+ * to a column of tiles, remembered on this device. Opening a Workspace or a Session is up
+ * to the caller; every other action comes from `useActions`.
  */
 export function Sidebar({
   state,
@@ -106,7 +111,58 @@ export function Sidebar({
     session: SessionState;
     action: SessionAction;
   }>();
+  const [collapsedHere, setCollapsed] = useSidebarCollapsed();
+  // The phone's drawer is always the full tree.
+  const collapsed = mode === "sidebar" && collapsedHere;
   const workspaces = state?.workspaces ?? [];
+  const newWorkspace = (trigger: ReactNode) => (
+    <NewWorkspaceDialog
+      workspaces={workspaces}
+      onCreate={actions.createWorkspace}
+      trigger={trigger}
+    />
+  );
+
+  if (collapsed) {
+    return (
+      <nav
+        aria-label="Workspaces"
+        // Narrower than whatever width the caller gives the expanded tree.
+        className={cn(
+          "flex shrink-0 flex-col items-center gap-2 border-r bg-card py-2",
+          className,
+          "w-14",
+        )}
+      >
+        <IconButton label="Expand sidebar" onClick={() => setCollapsed(false)}>
+          <PanelLeftOpenIcon className="size-4" />
+        </IconButton>
+        <div aria-hidden="true" className="w-8 border-t" />
+        <WorkspaceTiles
+          workspaces={workspaces}
+          openWorkspaceId={state?.openWorkspaceId}
+          shown={shown}
+          onOpenWorkspace={onOpenWorkspace}
+          onOpenSession={onOpenSession}
+        />
+        {newWorkspace(
+          <button
+            type="button"
+            aria-label="New Workspace"
+            title="New Workspace"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-dashed text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <PlusIcon className="size-4" />
+          </button>,
+        )}
+        {error && (
+          <span role="alert" aria-label={error} title={error} className="flex">
+            <TriangleAlertIcon className="size-4 text-destructive" />
+          </span>
+        )}
+      </nav>
+    );
+  }
 
   return (
     <nav
@@ -117,15 +173,16 @@ export function Sidebar({
         <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Workspaces
         </span>
-        <NewWorkspaceDialog
-          workspaces={workspaces}
-          onCreate={actions.createWorkspace}
-          trigger={
-            <IconButton label="New Workspace">
-              <PlusIcon className="size-4" />
-            </IconButton>
-          }
-        />
+        {newWorkspace(
+          <IconButton label="New Workspace">
+            <PlusIcon className="size-4" />
+          </IconButton>,
+        )}
+        {mode === "sidebar" && (
+          <IconButton label="Collapse sidebar" onClick={() => setCollapsed(true)}>
+            <PanelLeftCloseIcon className="size-4" />
+          </IconButton>
+        )}
       </div>
       <SortableWorkspaces
         workspaces={workspaces}
@@ -419,6 +476,122 @@ function WorkspaceItem({
   );
 }
 
+/** A Workspace's Prime, Worker and Other Sessions. */
+function sessionsByRole(workspace: WorkspaceState): {
+  prime: SessionState | undefined;
+  worker: SessionState | undefined;
+  others: SessionState[];
+} {
+  return {
+    prime: workspace.sessions.find((s) => s.role === "prime"),
+    worker: workspace.sessions.find((s) => s.role === "worker"),
+    others: workspace.sessions.filter((s) => s.role === null),
+  };
+}
+
+/**
+ * The collapsed sidebar's column: a tile per Workspace, which opens it, and under the Open
+ * Workspace's tile its Sessions as small icons, which open them.
+ */
+function WorkspaceTiles({
+  workspaces,
+  openWorkspaceId,
+  shown,
+  onOpenWorkspace,
+  onOpenSession,
+}: {
+  workspaces: WorkspaceState[];
+  openWorkspaceId: string | null | undefined;
+  shown: ReadonlySet<string>;
+  onOpenWorkspace: (workspaceId: string) => void;
+  onOpenSession: (workspaceId: string, session: SessionState) => void;
+}) {
+  return (
+    <ul className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto py-1">
+      {workspaces.map((workspace) => {
+        const isOpen = workspace.id === openWorkspaceId;
+        const { prime, worker, others } = sessionsByRole(workspace);
+        const sessions = [prime, worker, ...others].filter(
+          (s): s is SessionState => s !== undefined,
+        );
+        return (
+          <li key={workspace.id} className="flex flex-col items-center gap-1">
+            {/* The button lies over the tile, so the tile's Bell dot and Missing mark stay labelled. */}
+            <div className="relative">
+              <WorkspaceTile
+                workspace={workspace}
+                size="md"
+                bell={!isOpen && hasBell(workspace)}
+                className={cn("rounded-lg", isOpen && "ring-2 ring-foreground/80")}
+              />
+              <button
+                type="button"
+                aria-label={workspace.name}
+                aria-current={isOpen ? "true" : undefined}
+                title={`${workspace.name}\n${workspace.folder}`}
+                onClick={() => onOpenWorkspace(workspace.id)}
+                className="absolute inset-0 rounded-lg outline-none hover:bg-foreground/10 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            </div>
+            {isOpen && sessions.length > 0 && (
+              <ul className="flex flex-col items-center gap-0.5 rounded-lg bg-accent/40 p-0.5">
+                {sessions.map((session) => (
+                  <SessionIconItem
+                    key={session.id}
+                    session={session}
+                    isShown={shown.has(session.id)}
+                    onOpen={() => onOpenSession(workspace.id, session)}
+                  />
+                ))}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** One Session in the collapsed sidebar: its icon, dimmed when Stopped, and its Bell dot. */
+function SessionIconItem({
+  session,
+  isShown,
+  onOpen,
+}: {
+  session: SessionState;
+  /** It is on screen, in a Pane. */
+  isShown: boolean;
+  onOpen: () => void;
+}) {
+  const stopped = session.status === "stopped";
+  return (
+    <li
+      className={cn(
+        "relative grid size-7 place-items-center rounded-md",
+        isShown ? "bg-accent" : "hover:bg-accent/60",
+      )}
+    >
+      <SessionIcon session={session} className={cn("size-4", stopped && "opacity-50")} />
+      <button
+        type="button"
+        aria-label={session.name}
+        aria-current={isShown ? "true" : undefined}
+        title={stopped ? `${session.name} (stopped)` : session.name}
+        onClick={onOpen}
+        className="absolute inset-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      />
+      {stopped && <span className="sr-only">stopped</span>}
+      {session.bell && (
+        <span
+          role="img"
+          aria-label={`${session.name} rang the bell`}
+          className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-amber-400"
+        />
+      )}
+    </li>
+  );
+}
+
 /** The Open Workspace's Sessions: Prime, Worker, a divider, then its Other Sessions. */
 function SessionList({
   workspace,
@@ -433,9 +606,7 @@ function SessionList({
   onOpen: (session: SessionState) => void;
   onAction: (session: SessionState, action: SessionAction) => void;
 }) {
-  const prime = workspace.sessions.find((s) => s.role === "prime");
-  const worker = workspace.sessions.find((s) => s.role === "worker");
-  const others = workspace.sessions.filter((s) => s.role === null);
+  const { prime, worker, others } = sessionsByRole(workspace);
   const item = (session: SessionState) => (
     <SessionItem
       key={session.id}
