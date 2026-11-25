@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Fixed
+
+- A Session you open in the right Pane stays there. On a slow connection, the Pane could flick back for a moment to what it showed before, then return, and what you typed in the meantime was lost or arrived cut off.
+
 ## [0.4.0] - 2026-11-25
 
 ### Added

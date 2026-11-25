@@ -79,6 +79,30 @@ export interface Actions {
   reorderSessions(workspaceId: string, ids: string[]): Promise<void>;
 }
 
+/** A change to a Workspace's right Pane, shown before the Host's snapshots have it. */
+interface PendingRightPane {
+  workspaceId: string;
+  change: (current: RightPaneState) => RightPaneState;
+}
+
+/** `state` with the right Pane changes still on their way applied, oldest first. */
+function withPendingRightPanes(
+  state: State | undefined,
+  pending: readonly PendingRightPane[],
+): State | undefined {
+  if (!state || pending.length === 0) return state;
+  return {
+    ...state,
+    workspaces: state.workspaces.map((w) => ({
+      ...w,
+      rightPane: pending.reduce(
+        (rightPane, p) => (p.workspaceId === w.id ? p.change(rightPane) : rightPane),
+        w.rightPane,
+      ),
+    })),
+  };
+}
+
 /**
  * The Workspaces and Sessions the server reports, and the owner's actions on them.
  *
@@ -86,6 +110,10 @@ export interface Actions {
  * mirrors into React state. An action finishes when the client says its change shows. The
  * client resyncs at once when the tab regains focus, since a socket that slept with the
  * device may look open but be dead.
+ *
+ * A change to a right Pane shows at once and stays shown until a snapshot has it: a snapshot
+ * the Host sent before it got the change must not take the Pane back meanwhile, which would
+ * swap the terminal under the owner's typing.
  */
 export function useAppState(): {
   state: State | undefined;
@@ -97,6 +125,9 @@ export function useAppState(): {
   error: string | undefined;
 } {
   const [state, setState] = useState<State>();
+  const [pendingRightPanes, setPendingRightPanes] = useState<readonly PendingRightPane[]>(
+    [],
+  );
   const [error, setError] = useState<string>();
   const clientRef = useRef<StateClient>(undefined);
 
@@ -120,20 +151,23 @@ export function useAppState(): {
     const act = async (request: Promise<Change<unknown>>) => {
       await whenShown(await request);
     };
-    /** Shows a change to a Workspace's right Pane before the Host has it. */
-    const showRightPane = (
+    /**
+     * Shows a change to a Workspace's right Pane at once, over every snapshot, until `save`
+     * finishes: once its change shows, or it was refused or timed out, the Host's state rules.
+     */
+    const showRightPane = async (
       workspaceId: string,
       change: (current: RightPaneState) => RightPaneState,
-    ) =>
-      setState(
-        (current) =>
-          current && {
-            ...current,
-            workspaces: current.workspaces.map((w) =>
-              w.id === workspaceId ? { ...w, rightPane: change(w.rightPane) } : w,
-            ),
-          },
-      );
+      save: () => Promise<unknown>,
+    ) => {
+      const pending: PendingRightPane = { workspaceId, change };
+      setPendingRightPanes((list) => [...list, pending]);
+      try {
+        await save();
+      } finally {
+        setPendingRightPanes((list) => list.filter((p) => p !== pending));
+      }
+    };
     /** For the actions with no form: a refusal goes in `error` rather than rejecting. */
     const reporting = async <T>(request: () => Promise<T>): Promise<T | undefined> => {
       setError(undefined);
@@ -172,18 +206,23 @@ export function useAppState(): {
         return act(api.reorderWorkspaces(ids)).catch(() => clientRef.current?.resync());
       },
       openWorkspace: async (id, options = {}) => {
+        const open = () => reporting(() => act(api.openWorkspace(id, options)));
         if (options.showWorker) {
-          showRightPane(id, (current) => ({ ...current, shown: null }));
+          await showRightPane(id, (current) => ({ ...current, shown: null }), open);
+        } else {
+          await open();
         }
-        await reporting(() => act(api.openWorkspace(id, options)));
       },
-      setRightPane: (workspaceId, rightPane) => {
-        showRightPane(workspaceId, () => rightPane);
-        // A refused change sends no snapshot: resync for one, putting the Pane right.
-        return act(api.setRightPane(workspaceId, rightPane)).catch(() =>
-          clientRef.current?.resync(),
-        );
-      },
+      setRightPane: (workspaceId, rightPane) =>
+        showRightPane(
+          workspaceId,
+          () => rightPane,
+          // A refused change sends no snapshot: resync for one, putting the Pane right.
+          () =>
+            act(api.setRightPane(workspaceId, rightPane)).catch(() =>
+              clientRef.current?.resync(),
+            ),
+        ),
       deleteWorkspace: (id) => act(api.deleteWorkspace(id)),
       createSession: (workspaceId) =>
         reporting(async () => {
@@ -225,7 +264,11 @@ export function useAppState(): {
     };
   }, []);
 
-  return { state, actions, error };
+  const shown = useMemo(
+    () => withPendingRightPanes(state, pendingRightPanes),
+    [state, pendingRightPanes],
+  );
+  return { state: shown, actions, error };
 }
 
 const ActionsContext = createContext<Actions | undefined>(undefined);
