@@ -72,19 +72,34 @@ test("make nested New folders in the picker; Create makes them, then the Workspa
   expect(existsSync(join(projects, "acme", "client", "web"))).toBe(true);
 });
 
-test("a second Workspace on the same folder is refused, naming the one that has it", async ({
+test("Create on a folder that already has a Workspace says so and opens that Workspace", async ({
   app,
   kbench,
 }) => {
   const folder = kbench.instance.makeFolder("my-project");
-
+  // The first Workspace is the Open one until another is opened.
+  await app.createWorkspace(kbench.instance.makeFolder("search"));
+  await expect(app.workspace("search")).toBeVisible();
   await app.createWorkspace(folder, { name: "Billing" });
   await expect(app.workspace("Billing")).toBeVisible();
+  const openWorkspaceName = async () => {
+    const response = await app.page.request.get(`${kbench.url}/api/state`);
+    const state = (await response.json()) as {
+      openWorkspaceId: string | null;
+      workspaces: Array<{ id: string; name: string }>;
+    };
+    return state.workspaces.find((w) => w.id === state.openWorkspaceId)?.name;
+  };
+  expect(await openWorkspaceName()).toBe("search");
+
   await app.createWorkspace(folder);
 
   await expect(app.page.getByRole("alert")).toContainText(
-    'A Workspace for this folder already exists: "Billing"',
+    "A Workspace for this folder already exists",
   );
+  await expect(app.page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(openWorkspaceName).toBe("Billing");
+  expect(await app.workspaceNames()).toEqual(["search", "Billing"]);
 });
 
 test("a name that is already taken shows the message and keeps the dialog open", async ({

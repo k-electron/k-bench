@@ -14,10 +14,26 @@ export interface DirectoryListing {
 export class ApiError extends Error {
   /** The HTTP status the server answered with. */
   readonly status: number;
+  /** The refusal's whole JSON body, which can carry more than its `error` message. */
+  readonly body: Record<string, unknown>;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.body = body;
+  }
+
+  /**
+   * The Workspace that already has the folder, when that is why a create or folder change
+   * was refused.
+   */
+  get folderOwner(): { id: string; name: string } | undefined {
+    const owner = this.body.workspace as { id?: unknown; name?: unknown } | undefined;
+    return this.status === 409 &&
+      typeof owner?.id === "string" &&
+      typeof owner.name === "string"
+      ? { id: owner.id, name: owner.name }
+      : undefined;
   }
 }
 
@@ -33,11 +49,12 @@ export interface Change<T> {
 
 async function call<T>(path: string, init?: RequestInit): Promise<Change<T>> {
   const response = await fetch(path, init);
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok)
     throw new ApiError(
-      body.error ?? `Request failed (${response.status})`,
+      typeof body.error === "string" ? body.error : `Request failed (${response.status})`,
       response.status,
+      body,
     );
   return { value: body as T, revision: revisionOf(response.headers) };
 }

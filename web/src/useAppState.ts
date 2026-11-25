@@ -20,6 +20,10 @@ function eventsUrl(): string {
  * `error` instead.
  */
 export interface Actions {
+  /**
+   * When the folder already has a Workspace, opens that one instead and says so in `error`,
+   * so the owner ends up where they meant to be. Any other refusal rejects.
+   */
   createWorkspace(input: {
     folder: string;
     name?: string;
@@ -64,7 +68,10 @@ export interface Actions {
 export function useAppState(): {
   state: State | undefined;
   actions: Actions;
-  /** Why the last Session create or restart was refused, until the next one. */
+  /**
+   * Why the last Session create or restart, or Workspace open, was refused, or that a new
+   * Workspace's folder already had one; until the next of those.
+   */
   error: string | undefined;
 } {
   const [state, setState] = useState<State>();
@@ -104,7 +111,18 @@ export function useAppState(): {
     };
 
     return {
-      createWorkspace: (input) => act(api.createWorkspace(input)),
+      createWorkspace: async (input) => {
+        try {
+          await act(api.createWorkspace(input));
+        } catch (failure) {
+          if (!(failure instanceof ApiError) || !failure.folderOwner) throw failure;
+          const { id } = failure.folderOwner;
+          await reporting(async () => {
+            await act(api.openWorkspace(id));
+            setError(failure.message);
+          });
+        }
+      },
       updateWorkspace: (id, changes) => act(api.updateWorkspace(id, changes)),
       reorderWorkspaces: (ids) => {
         setState(
