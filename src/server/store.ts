@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { LaunchOptions } from "../shared/launch-options.ts";
+import { type LaunchOptions, ROLE_LAUNCH_OPTIONS } from "../shared/launch-options.ts";
 import type { SessionKind, SessionRole } from "../shared/state-protocol.ts";
+import { availableName } from "./naming.ts";
 
 /**
  * Migrations run in order on startup; `PRAGMA user_version` records how many have run.
+ * Each is SQL, or a function for a change SQL can't make, and runs in its own transaction.
  * Append only. Per ADR-0002 nothing here records process IDs or running/Stopped status.
  */
-const MIGRATIONS: string[] = [
+const MIGRATIONS: Array<string | ((db: DatabaseSync) => void)> = [
   `
   CREATE TABLE workspaces (
     id       TEXT PRIMARY KEY,
@@ -50,7 +52,54 @@ const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX sessions_one_per_role ON sessions (workspace_id, role)
     WHERE role IS NOT NULL;
   `,
+  // Every existing Workspace gets a Prime and a Worker, Stopped, each on a fresh conversation.
+  addPrimeAndWorker,
 ];
+
+/**
+ * Records a Prime and a Worker for every Workspace. Existing Sessions stay as Other Sessions;
+ * one already named "Prime" or "Worker" is renamed first, to "Prime (earlier)" for example,
+ * so the names stay unique and the upgrade never fails.
+ */
+function addPrimeAndWorker(db: DatabaseSync): void {
+  const roles = [
+    { role: "prime", name: "Prime" },
+    { role: "worker", name: "Worker" },
+  ] as const;
+  const workspaces = db.prepare("SELECT id FROM workspaces").all() as Array<{
+    id: string;
+  }>;
+  const namesIn = db.prepare("SELECT name FROM sessions WHERE workspace_id = ?");
+  const rename = db.prepare(
+    "UPDATE sessions SET name = ? WHERE workspace_id = ? AND name = ?",
+  );
+  const insert = db.prepare(
+    `INSERT INTO sessions
+       (id, workspace_id, name, created_at, kind, role, conversation_id, launch_options)
+     VALUES (?, ?, ?, ?, 'claude', ?, ?, ?)`,
+  );
+  for (const workspace of workspaces) {
+    const rows = namesIn.all(workspace.id) as Array<{ name: string }>;
+    const taken = new Set(rows.map((row) => row.name));
+    for (const { name } of roles) {
+      if (!taken.has(name)) continue;
+      const earlier = availableName(`${name} (earlier)`, taken);
+      rename.run(earlier, workspace.id, name);
+      taken.add(earlier);
+    }
+    for (const { role, name } of roles) {
+      insert.run(
+        randomUUID(),
+        workspace.id,
+        name,
+        Date.now(),
+        role,
+        randomUUID(),
+        JSON.stringify(ROLE_LAUNCH_OPTIONS[role]),
+      );
+    }
+  }
+}
 
 export interface WorkspaceRow {
   id: string;
@@ -98,7 +147,9 @@ export class Store {
     for (let version = row.user_version; version < MIGRATIONS.length; version++) {
       this.db.exec("BEGIN");
       try {
-        this.db.exec(MIGRATIONS[version] as string);
+        const migration = MIGRATIONS[version];
+        if (typeof migration === "function") migration(this.db);
+        else this.db.exec(migration as string);
         this.db.exec(`PRAGMA user_version = ${version + 1}`);
         this.db.exec("COMMIT");
       } catch (error) {
