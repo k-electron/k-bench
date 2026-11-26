@@ -41,7 +41,7 @@ The server, the browser and the tests all import these, so they use no Node APIs
 
 ## `web/src/`
 
-Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, inside the one `TooltipProvider`. The shell picks the desktop layout or the Phone layout. `index.css` is the global styles and the theme tokens, `lib/utils.ts` shadcn/ui's class helper, and `lib/focus.ts` decides whether a closing menu or dialog hands focus back to its trigger. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it.
+Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, inside the one `TooltipProvider`. The shell sits inside shadcn/ui's `SidebarProvider`, with everything beside the sidebar in its `SidebarInset`, and picks the desktop layout or the Phone layout. `index.css` is the global styles and the theme tokens, `lib/utils.ts` shadcn/ui's class helper, and `lib/focus.ts` decides whether a closing menu or dialog hands focus back to its trigger. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it.
 
 State and connections:
 
@@ -55,7 +55,7 @@ Views:
 - `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device.
 - `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, and whether a Workspace has a Bell.
 - `folders.ts`: the folder picker's pure path work: Places, breadcrumbs, typed paths and new folder names.
-- `useIsPhone.ts`: the one breakpoint for the Phone layout. `useKeyboardUp.ts`: whether the on-screen keyboard is up, and the area the app fits into then. `useSidebarCollapsed.ts`: whether the sidebar is collapsed on this Device.
+- `useIsPhone.ts`: the one breakpoint for the Phone layout. `useKeyboardUp.ts`: whether the on-screen keyboard is up, and the area the app fits into then. `useSidebarCollapsed.ts`: whether the sidebar is collapsed on this Device, which `App.tsx` hands the `SidebarProvider`.
 
 The terminal:
 
@@ -72,10 +72,10 @@ Components render what the view modules decide.
 - `WorkspaceView`: the desktop's two Panes, the divider and the Rails. `RightPaneTabs` is the right Pane's Tabs. `Pane` is a Session's terminal, or Restart when it is Stopped; `MissingPane` stands in for a Stopped Session of a Missing Workspace.
 - `PhoneView`: the Phone layout's Session and title. `ExtraKeys` is the Extra keys row, `TypingKeys` the few that float over the terminal while the on-screen keyboard is up.
 - `TerminalView`: xterm.js on a terminal connection, where the terminal modules above plug in.
-- `Sidebar`: the sidebar and its menus. `SidebarTree` is its expanded rows, `SidebarTiles` its collapsed tiles, `SidebarDialogs` the dialogs its menus open. `Reorderable` is every drag-to-reorder list, so a click, tap or swipe stays itself.
+- `Sidebar`: the sidebar and its menus, on shadcn/ui's `Sidebar`: beside the Panes it collapses to tiles, and in the Phone layout it is the drawer. `SidebarTree` is its expanded rows, `SidebarTiles` its collapsed tiles, `SidebarDialogs` the dialogs its menus open. `Reorderable` is every drag-to-reorder list, so a click, tap or swipe stays itself.
 - `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `NewClaudeDialog`, `RenameSessionDialog`, `DeleteSessionDialog`: one dialog each. `FolderPicker` is the folder picker New Workspace and Change folder share.
 - `WorkspaceTile`: a Workspace's letter tile, coloured from its name. `SessionIcon`: a Session's icon, by role and kind. `IconButton`: an icon-only button, named in a tooltip except in the Phone layout. `NativeSelect`: a native single choice, so a phone opens its own picker.
-- `ui/`: the shadcn/ui components.
+- `ui/`: the shadcn/ui components. `ui/sidebar.tsx` differs from shadcn/ui's in three ways: it has no keyboard shortcut, so Ctrl+B always reaches the terminal; it keeps no cookie, since `useSidebarCollapsed.ts` remembers the choice; and it uses `useIsPhone.ts` as its breakpoint.
 
 ## `test/` and `e2e/`
 

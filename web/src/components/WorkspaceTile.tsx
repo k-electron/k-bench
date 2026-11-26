@@ -1,6 +1,7 @@
 import { TriangleAlertIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import { Avatar, AvatarFallback } from "./ui/avatar";
 
 /**
  * A Workspace's monogram: the first letter of each of its first two words, or the first
@@ -21,7 +22,7 @@ export function tileHue(name: string): number {
 }
 
 /**
- * A Workspace's coloured letter tile, with an amber dot when `bell` and a warning mark
+ * A Workspace's coloured letter tile, a shadcn `Avatar`, with an amber dot when `bell` and a warning mark
  * when it is Missing. The letters are decoration; the dot and the mark are labelled.
  * `sm` sits in an expanded sidebar row, `md` is a tile on its own.
  */
@@ -41,25 +42,29 @@ export function WorkspaceTile({
   const md = size === "md";
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
-      <span
+      <Avatar
         aria-hidden="true"
-        className={cn(
-          "grid place-items-center font-semibold tracking-tight",
-          md ? "size-9 rounded-lg text-sm" : "size-5 rounded text-[10px]",
-        )}
-        style={{
-          background: `oklch(0.42 0.09 ${hue})`,
-          color: `oklch(0.95 0.04 ${hue})`,
-        }}
+        className={md ? "size-8 rounded-lg" : "size-5 rounded-md"}
       >
-        {initials(workspace.name)}
-      </span>
+        <AvatarFallback
+          className={cn(
+            "rounded-[inherit] font-semibold tracking-tight",
+            md ? "text-xs" : "text-[9px]",
+          )}
+          style={{
+            background: `oklch(0.36 0.07 ${hue})`,
+            color: `oklch(0.92 0.06 ${hue})`,
+          }}
+        >
+          {initials(workspace.name)}
+        </AvatarFallback>
+      </Avatar>
       {bell && (
         <span
           role="img"
           aria-label={`${workspace.name} has a session that rang the bell`}
           className={cn(
-            "absolute -top-0.5 -right-0.5 rounded-full bg-amber-400 ring-2 ring-card",
+            "absolute -top-0.5 -right-0.5 rounded-full bg-status-bell ring-2 ring-sidebar",
             md ? "size-2.5" : "size-2",
           )}
         />
@@ -68,7 +73,7 @@ export function WorkspaceTile({
         <span
           role="img"
           aria-label={`${workspace.name} is Missing`}
-          className="absolute -right-1 -bottom-1 rounded-full bg-card text-destructive"
+          className="absolute -right-1 -bottom-1 rounded-full bg-sidebar text-destructive"
         >
           <TriangleAlertIcon className={md ? "size-3.5" : "size-3"} />
         </span>

@@ -90,6 +90,8 @@ test("tapping a Workspace's name in the drawer opens it on its Prime and closes 
   await expect(app.page.getByRole("alert")).toContainText(
     "A Workspace for this folder already exists",
   );
+  // The drawer stays open to show why; behind it, beta is open.
+  await app.page.keyboard.press("Escape");
   await expect(app.phoneTitle).toHaveText("beta › Prime");
 });
 
