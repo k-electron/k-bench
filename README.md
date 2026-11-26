@@ -33,14 +33,14 @@ It is not only for Claude Code. **New shell** gives you a plain shell Session, s
 
 ## Quick start
 
-You need a Mac, Node 26 or later, tmux, and [Tailscale](https://tailscale.com/download) signed in with HTTPS certificates turned on for your tailnet. [Setup](docs/guide/setup.md#1-set-up-tailscale) has the steps.
+First get what [Setup](docs/guide/setup.md) says you need, and [set up Tailscale](docs/guide/setup.md#1-set-up-tailscale). Then:
 
 ```sh
 npm i -g @k-electron/k-bench
 k-bench install
 ```
 
-`k-bench install` publishes k-bench on your tailnet and prints its URL. Open that URL from any device signed in to your tailnet with the same login. [Setup](docs/guide/setup.md) covers what the install does, updating and uninstalling. If something isn't working, run `k-bench status`.
+`k-bench install` publishes k-bench on your tailnet and prints its URL. Open that URL from any device signed in to your tailnet with the same login. [Setup](docs/guide/setup.md) covers the install, updating and uninstalling. If something isn't working, run `k-bench status`.
 
 ## Guide
 

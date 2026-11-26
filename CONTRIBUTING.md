@@ -134,8 +134,6 @@ Follow these rules in every doc and CHANGELOG entry:
 5. **Capitalise every glossary term** wherever it means the k-bench concept: Rail, Extra keys, Other Session, Tab, Device, Phone layout. The browser's own tab is always a "browser tab", and a Session's earlier output is always its History.
 6. **Never cite issue numbers or branch names.** They go stale. An ADR's evidence points at a merged pull request.
 
-Use placeholders for anything personal: `<your-host>.<tailnet>.ts.net`, `you@example.com`, `~/code/...`.
-
 Where things live:
 
 - [The guide](docs/guide/README.md): for an owner using k-bench.
@@ -152,5 +150,5 @@ Where things live:
 - Add or change tests as [Testing](docs/testing.md) describes: few, outcome-level, and able to fail.
 - If you change the installer or the packaging, run through [Install verification](docs/internals/install-verification.md) by hand, since automated tests cover only its pure parts and the packed command's dry run.
 - Machine-local files (runtime data, logs, `.env*`, build output, editor and agent state) stay out of git. If your change introduces a new kind, update `.gitignore` in the same change.
-- Never put a real hostname, tailnet name, login, email or personal path in a commit, issue, pull request or doc.
+- Never put a real hostname, tailnet name, login, email or personal path in a commit, issue, pull request or doc. Use placeholders such as `<your-host>.<tailnet>.ts.net`, `you@example.com` and `~/code/...`.
 - Report security problems privately, not in a pull request or issue: see [SECURITY.md](SECURITY.md).

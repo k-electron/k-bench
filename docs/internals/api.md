@@ -28,7 +28,7 @@ A Claude Session's Launch options and conversation ID are not in the state.
 - `PUT /api/workspaces/order` `{ids}`: 200 `{ids}`. 422 unless it lists every Workspace exactly once.
 - `DELETE /api/workspaces/:id`: 204. Ends its Sessions and forgets it; the folder is never touched. 404.
 - `POST /api/workspaces/:id/open` `{showWorker?}`: 200 `{id}`. Makes it the Open Workspace and, unless it is Missing, starts its Stopped Prime and Worker, answering once they have started. `showWorker: true` makes the right Pane show the Worker again, keeping its Tabs. 404.
-- `PUT /api/workspaces/:id/right-pane` `{shown, tabs}`: 200 `{shown, tabs}`. Replaces the right Pane record. 422 unless every tab is an Other Session of the Workspace, at most once, and `shown` is `null` or one of the tabs. 404.
+- `PUT /api/workspaces/:id/right-pane` `{shown, tabs}`: 200 `{shown, tabs}`. Replaces the right Pane record. 422 unless every Tab is an Other Session of the Workspace, at most once, and `shown` is `null` or one of the tabs. 404.
 - `POST /api/workspaces/:id/sessions` `{name?, claude?}`: 201 `{id, name}`. Creates and starts a shell Session or, with `claude`, a Claude Session with those [Launch options](#launch-options). A blank name gives "session N". 409 for a taken name, "Prime" or "Worker". 422 for a Missing Workspace or a Launch option that isn't one of the choices, naming the field (`claude.model`). 404.
 - `PUT /api/workspaces/:id/sessions/order` `{ids}`: 200 `{ids}`. 422 unless it lists every Other Session of the Workspace exactly once (never the Prime or Worker). 404.
 - `PATCH /api/sessions/:id` `{name}`: 200 `{id, name}`. 409 for a taken name, "Prime" or "Worker", or a Prime or Worker; 422 for a blank name; 404.
@@ -45,7 +45,7 @@ A Claude Session's Launch options and conversation ID are not in the state.
 - `advisor`: `default`, `off`, `fable`, `opus` or `sonnet`.
 - `focusView`: a boolean, `false` by default.
 
-k-bench doesn't check which model and advisor go together: Claude Code refuses a bad pairing when it starts. A Prime or Worker is always launched with k-bench's fixed options for its role, whatever is stored with it.
+A Prime or Worker is always launched with k-bench's fixed options for its role, whatever is stored with it.
 
 ## WebSockets
 

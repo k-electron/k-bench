@@ -1,6 +1,6 @@
 # Test seams
 
-[Testing](../testing.md) says what a good test is here. This page describes the three harnesses tests go through: Seam 1, the server's HTTP and WebSocket API with Vitest; Seam 2, the browser with Playwright; and Seam 3, the packed `k-bench` command run as a process, also with Vitest. Run them with `pnpm test` (Seams 1 and 3) and `pnpm test:e2e` (Seam 2); Playwright needs its browsers once (`pnpm exec playwright install chromium webkit`).
+[Testing](../testing.md) says what a good test is here. This page describes the three harnesses tests go through: Seam 1, the server's HTTP and WebSocket API with Vitest; Seam 2, the browser with Playwright; and Seam 3, the packed `k-bench` command run as a process, also with Vitest. Run them with `pnpm test` (Seams 1 and 3) and `pnpm test:e2e` (Seam 2); Playwright needs its browsers installed once, as [CONTRIBUTING](../../CONTRIBUTING.md#prerequisites-and-setup) says.
 
 ## Seam 1: the server (Vitest)
 

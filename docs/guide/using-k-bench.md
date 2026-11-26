@@ -95,7 +95,7 @@ Each Session keeps up to 50,000 lines of History on your Mac, so it is there how
 - **Copy** by dragging over text with the mouse: it is copied when you let go. If that doesn't work in your browser, hold **Shift** while you drag, then copy with `⌘C`.
 - The Phone layout has no way to select text. Use a desktop browser to copy from a Session.
 
-A Claude Session in [Focus view](claude-code.md#focus-view) leaves the History empty while it runs.
+For what Focus view does to the History, see [Focus view](claude-code.md#focus-view).
 
 ## The Phone layout
 
@@ -106,7 +106,7 @@ On a narrow screen, such as a phone's, k-bench shows one Session of the Open Wor
 - **The drawer**, from the menu button, holds the sidebar. Choosing a Workspace's name there opens it on its Prime.
 - **The title sheet.** Tap the title at the top to switch between the Open Workspace's Sessions without the drawer.
 - **Bell dots** in the top bar: a dot on the title means another Session of this Workspace has a Bell, and a dot on the menu button means a Session of another Workspace has one.
-- Each Device remembers the Session it last showed in each Workspace, apart from the right Pane on your desktop, so the two never fight.
+- The Session the Phone layout shows is kept apart from the right Pane on your desktop, so the two never fight.
 - **The Extra keys** along the bottom are Esc (⎋), Tab (⇥), Shift-Tab (⇤), Ctrl, the four arrows and Enter (⏎). **Ctrl** is one-shot: it applies to the next key you press, on the Extra keys or the on-screen keyboard. While the on-screen keyboard is up, only a few of the Extra keys show, in the terminal's top-right corner, with a key to close the keyboard. Close it to get Ctrl and Shift-Tab back.
 - **Paste**, among the keys shown while the keyboard is up, pastes your clipboard's text into the Session. It appears only where the browser lets a page read the clipboard. On an iPhone, the system may ask you to tap "Paste" first.
 - **Smart typing**, on an iPhone only, lets the keyboard's autocorrect, suggestions, double-space for a period and hold to delete work in a Session. The changes reach the program as Backspaces and new text, so Claude Code's `/` menu and shell completion still work. In a shell Session it suggests words but never replaces them or adds capitals, so `ls` stays `ls`. It is on for a new Session. Turn it off, with the last of the Extra keys, for a Session that runs a full-screen program such as vim or less. The switch shows only while the keyboard is down, and takes effect the next time it opens.

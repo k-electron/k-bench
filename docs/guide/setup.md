@@ -31,14 +31,7 @@ npm i -g @k-electron/k-bench
 k-bench install
 ```
 
-The install:
-
-- checks that tmux and the Tailscale CLI are there, and stops with a message saying what to fix if either is missing;
-- reads your tailnet login from Tailscale and records it as the only login allowed in (`--login you@example.com` sets it yourself);
-- copies k-bench into `~/Library/Application Support/k-bench/app/` and installs its dependencies there, which needs the network (node-pty ships prebuilt binaries, so there is no compiler or Xcode step);
-- writes a LaunchAgent, `~/Library/LaunchAgents/com.k-bench.server.plist`, so k-bench starts every time you log in and restarts if it crashes, and loads it;
-- publishes k-bench with `tailscale serve` on HTTPS port 443;
-- prints the URL, which looks like `https://<your-host>.<tailnet>.ts.net/`.
+`k-bench install` sets k-bench up as a service that starts when you log in, publishes it with `tailscale serve` on HTTPS port 443, and prints its URL, which looks like `https://<your-host>.<tailnet>.ts.net/`. It lets in only your own tailnet login, which it reads from Tailscale; `--login you@example.com` sets it yourself. [Packaging and the install](../internals/packaging.md#k-bench-install) says what it does, step by step.
 
 Open that URL in a browser on any of your machines on the tailnet, signed in with the same login. Your data lives in `~/Library/Application Support/k-bench/`, and k-bench's log is `~/Library/Logs/k-bench/k-bench.log`.
 
@@ -108,9 +101,7 @@ k-bench uninstall --dry-run   # shows what it would do, changes nothing
 k-bench uninstall
 ```
 
-`k-bench uninstall` stops the service, removes it from your login items (the LaunchAgent), removes k-bench's own `tailscale serve` entry, and deletes the installed app folder. It leaves your other `tailscale serve` entries alone.
-
-It keeps your data. Every Workspace and Session is still listed in the database, Sessions that are running carry on in the background until you end them or restart the Mac, and the logs stay. Run `k-bench install` again and k-bench is back as it was.
+`k-bench uninstall` removes the service and keeps your data: every Workspace and Session is still listed, Sessions that are running carry on until you end them or restart the Mac, and the logs stay. Run `k-bench install` again and k-bench is back as it was. [Packaging and the install](../internals/packaging.md#k-bench-uninstall) says what it removes, step by step.
 
 To remove everything, including your data:
 
@@ -118,7 +109,7 @@ To remove everything, including your data:
 k-bench uninstall --purge
 ```
 
-`--purge` also deletes the database and the logs, and ends every Session. That cannot be undone, and anything running in a Session stops. Use `--dry-run` with it first if you want to see what it would delete.
+`--purge` also deletes the database and the logs, and ends every Session. That cannot be undone. Use `--dry-run` with it first if you want to see what it would delete.
 
 Neither form removes the `k-bench` command itself. For that, run `npm uninstall -g @k-electron/k-bench`.
 

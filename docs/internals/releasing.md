@@ -2,11 +2,11 @@
 
 k-bench releases are automated. A maintainer prepares a release pull request with `pnpm release <version>`; merging it to `main` runs the release workflow, which checks the build, publishes `@k-electron/k-bench` to npm with provenance, tags the commit and creates the GitHub Release. Nobody publishes from a laptop, and there is no npm token anywhere.
 
-Versions follow [semantic versioning](https://semver.org/) and the changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versions follow [semantic versioning](https://semver.org/).
 
 ## Cutting a release
 
-1. Make sure the changelog's Unreleased section describes what changed, in the sections Added, Changed, Deprecated, Removed, Fixed and Security.
+1. Make sure the changelog's Unreleased section describes what changed, as [CONTRIBUTING](../../CONTRIBUTING.md#changelog) says.
 2. From a clean, up-to-date `main`, run:
 
    ```sh

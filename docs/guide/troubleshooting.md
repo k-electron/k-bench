@@ -1,24 +1,6 @@
 # Troubleshooting
 
-Start with `k-bench status`. It only looks: it never changes your Mac, your tailnet or k-bench. It runs each check, says `ok` or `FAIL` for it (with a one-line fix when it fails), prints the installed version and the URL, and exits non-zero when any check failed, so you can use it in scripts too.
-
-```text
-k-bench status
-
-  ok    tmux is found (/opt/homebrew/bin/tmux)
-  ok    the Tailscale CLI is found (/Applications/Tailscale.app/Contents/MacOS/Tailscale)
-  ok    Tailscale is logged in (you@example.com)
-  ok    HTTPS certificates are available (<your-host>.<tailnet>.ts.net)
-  ok    the LaunchAgent is loaded (com.k-bench.server)
-  ok    the server answers its health check
-
-  version  <version>
-  url      https://<your-host>.<tailnet>.ts.net/
-
-All checks passed.
-```
-
-A check shows `skip` when it depends on an earlier check that failed. Fix the first `FAIL` and run it again.
+Start with `k-bench status`. It only looks: it never changes your Mac, your tailnet or k-bench. Fix the first of [its checks](../internals/packaging.md#k-bench-status) that says `FAIL`, using the fix it prints or the table below, then run it again; a check that depends on a failed one says `skip` until then.
 
 | A check that fails                  | What to do                                                                                                                                                                                             |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -64,7 +64,7 @@ For when a Prime or Worker that exits starts again, see [The Prime and the Worke
 
 ### Restarting resumes the conversation
 
-Restart a Stopped Claude Session from its **...** menu or its Pane's **Restart** button, or, for the Prime and Worker, by opening the Workspace. There is no dialog. Claude Code resumes the Claude conversation last running in the Session, with the same Launch options, even after a logout or a Mac restart, so you don't need `/resume`. k-bench knows the conversation by its ID, so it can't pick the wrong one when several share a folder.
+[Restarting](using-k-bench.md#stopped-sessions) a Stopped Claude Session opens no dialog. Claude Code resumes the Claude conversation last running in the Session, with the same Launch options, even after a logout or a Mac restart, so you don't need `/resume`. k-bench knows the conversation by its ID, so it can't pick the wrong one when several share a folder.
 
 A Claude Session follows its conversation. When you move to another one inside Claude Code, with `/clear`, `/resume`, `/branch` or `/fork`, k-bench saves it at once, whether or not a browser is open, and a later restart resumes that one. Compacting keeps the same conversation. k-bench does this with a `SessionStart` hook it adds to each Claude Code it launches, for that launch only. The hook prints nothing, and your own settings and hooks are left alone.
 
