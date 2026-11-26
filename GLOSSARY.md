@@ -68,6 +68,18 @@ _Avoid_: scrollback, buffer
 A Session's request for attention, raised when the Session's program rings the terminal bell and cleared once the owner views that Session.
 _Avoid_: notification, alert, activity
 
+**Working**:
+The state of a Claude Session whose Claude Code is in a turn, thinking or running tools.
+_Avoid_: busy, running, active
+
+**Waiting**:
+The state of a Claude Session whose Claude Code has stopped partway through a turn and needs the owner: a permission prompt, a question it asked, or a plan to approve. Unlike a Bell, viewing the Session doesn't clear it; only answering does.
+_Avoid_: blocked, needs input, pending
+
+**Idle**:
+The state of a Claude Session whose Claude Code is doing nothing and isn't waiting on the owner for anything: it has finished its turn, or the owner interrupted it. Only Claude Sessions have this state, or Working and Waiting; a shell has none of them, and a Stopped Session is never Idle.
+_Avoid_: done, finished, inactive, ready
+
 **Claude conversation**:
 A Claude Code conversation. A Claude Session runs one at a time and knows it by its conversation ID. One started by hand in an ordinary Session is invisible to k-bench.
 _Avoid_: session, Claude session id (use conversation ID)
