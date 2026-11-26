@@ -288,15 +288,22 @@ export class AppPage {
   /** The Places in the folder picker (Home, folders holding Workspaces, Computer). */
   place(name: string): Locator {
     return this.folderPicker
-      .getByRole("navigation", { name: "Places" })
-      .getByRole("button", { name, exact: true });
+      .getByRole("listbox", { name: "Places" })
+      .getByRole("option", { name, exact: true });
   }
 
   /** A subfolder in the folder picker's list. */
   folderRow(name: string): Locator {
     return this.folderPicker
-      .getByRole("list", { name: "Folders" })
-      .getByRole("button", { name, exact: true });
+      .getByRole("listbox", { name: "Folders" })
+      .getByRole("option", { name, exact: true });
+  }
+
+  /** A suggestion under the folder picker's path field. */
+  pathSuggestion(name: string): Locator {
+    return this.folderPicker
+      .getByRole("listbox", { name: "Suggestions" })
+      .getByRole("option", { name, exact: true });
   }
 
   /** A crumb in the folder picker's breadcrumbs (Home is `~`). */

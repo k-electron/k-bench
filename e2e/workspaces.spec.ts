@@ -81,7 +81,7 @@ test("type a path in the picker: Tab completes a folder, Enter goes there, and a
   mkdirSync(join(projects, ".secret"));
   const picker = app.folderPicker;
   const field = picker.getByRole("combobox", { name: "Folder path" });
-  const suggestion = (name: string) => picker.getByRole("option", { name, exact: true });
+  const suggestion = (name: string) => app.pathSuggestion(name);
 
   await app.page.getByRole("button", { name: "New Workspace" }).click();
   await picker.getByRole("button", { name: "Type a path" }).click();

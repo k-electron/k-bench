@@ -73,7 +73,7 @@ Components render what the view modules decide.
 - `PhoneView`: the Phone layout's Session and title. `ExtraKeys` is the Extra keys row, `TypingKeys` the few that float over the terminal while the on-screen keyboard is up.
 - `TerminalView`: xterm.js on a terminal connection, where the terminal modules above plug in.
 - `Sidebar`: the sidebar and its menus. `SidebarTree` is its expanded rows, `SidebarTiles` its collapsed tiles, `SidebarDialogs` the dialogs its menus open. `Reorderable` is every drag-to-reorder list, so a click, tap or swipe stays itself.
-- `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `NewClaudeDialog`, `RenameSessionDialog`, `DeleteSessionDialog`: one dialog each. `FolderPicker` is the folder picker New Workspace and Change folder share.
+- `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `NewClaudeDialog`, `RenameSessionDialog`, `DeleteSessionDialog`: one dialog each. `FolderPicker` is the folder picker New Workspace and Change folder share: its Places and folder list are shadcn `Command`s, and it renders what `folders.ts` works out. Its path field's suggestions are hand-built, because a `Command` always selects one and Enter must go to the typed path.
 - `WorkspaceTile`: a Workspace's letter tile, coloured from its name. `SessionIcon`: a Session's icon, by role and kind. `IconButton`: an icon-only button, named in a tooltip except in the Phone layout. `NativeSelect`: a native single choice, so a phone opens its own picker.
 - `ui/`: the shadcn/ui components.
 
