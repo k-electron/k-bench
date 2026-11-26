@@ -6,7 +6,7 @@ Open the URL that `k-bench install` printed. The sidebar lists your Workspaces, 
 
 ## Workspaces
 
-A Workspace points at one project folder on your Mac, and every Session in it starts in that folder. A folder has at most one Workspace, so a project never gets two Primes and two Workers editing the same files. Choosing a folder that already has a Workspace takes you to that Workspace instead of making a second one.
+A Workspace points at one project folder on your Mac, and every Session in it starts in that folder. A folder has at most one Workspace, so a project never gets two Primes and two Workers editing the same files. Creating a Workspace on a folder that already has one takes you to that Workspace instead, and **Change folder** refuses such a folder, naming the Workspace that has it.
 
 **New Workspace** opens a folder picker. **Places** on its left jumps to Home, to the folders that already hold your Workspaces, or to Computer, the top of the disk. You can also type or paste a path into the bar above the list, and make new folders for a new project: nothing is made on disk until you choose **Create**.
 
@@ -24,14 +24,7 @@ To fix it, open the Workspace and choose **Change folder**, from the note under 
 
 Every Workspace has exactly one Prime and one Worker. They are Claude Sessions that k-bench makes with the Workspace, and they last as long as it does. They can't be renamed or deleted, and no Other Session can take their names.
 
-k-bench sets their Launch options, and passes them again on every launch:
-
-| Session    | Model  | Effort | Advisor | Focus view |
-| ---------- | ------ | ------ | ------- | ---------- |
-| **Prime**  | Opus   | High   | Off     | On         |
-| **Worker** | Sonnet | High   | Opus    | On         |
-
-The Prime is for planning and the Worker for building. [Using k-bench with Claude Code](claude-code.md) covers how to work with them.
+k-bench sets their Launch options. The Prime is for planning and the Worker for building: [The Prime plans and the Worker builds](claude-code.md#the-prime-plans-and-the-worker-builds) gives their Launch options and how to work with them.
 
 **Opening a Workspace starts them.** That means choosing its name in the sidebar, or loading k-bench in a browser while it is the Open Workspace. A Stopped Prime or Worker starts then, resuming its Claude conversation, and one that is running is left alone. A reconnect doesn't count as opening.
 
@@ -50,7 +43,7 @@ The **+** next to the Open Workspace's name makes an Other Session, which opens 
 - **New shell** starts your login shell. Use it for a dev server, a test watcher or anything else.
 - **New Claude…** opens a dialog for a name and the Launch options, then launches Claude Code. See [Using k-bench with Claude Code](claude-code.md#start-a-claude-session).
 
-A Session left unnamed is called "session 1", "session 2" and so on. You rename, reorder and delete Other Sessions from the sidebar; dragging reorders them, and the Prime and Worker always stay at the top. Deleting a Session ends its program and everything running in it. Deleting a Claude Session leaves its Claude conversation alone.
+A Session left unnamed is called "session 1", "session 2" and so on. You rename, reorder and delete Other Sessions from the sidebar; dragging reorders them, and the Prime and Worker always stay at the top. Deleting a Session ends its program and everything running in it.
 
 A Session is a program on your Mac, not a page in your browser. Closing the browser tab, locking your phone or losing your connection leaves it running, and the page reconnects on its own. You can view one Session on several Devices at once; the terminal then takes the size of the Device you used most recently.
 

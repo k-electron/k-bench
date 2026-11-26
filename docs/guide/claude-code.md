@@ -11,7 +11,7 @@ Each Workspace's [Prime and Worker](using-k-bench.md#the-prime-and-the-worker) a
 - **The Prime**, in the left Pane, runs Opus at high effort with the advisor off. Use it to think through the work and plan it.
 - **The Worker**, in the right Pane, runs Sonnet at high effort with an Opus advisor. Hand it the plan to carry out.
 
-Both run in [Focus view](#focus-view). Opening the Workspace starts them, and resumes each one's Claude conversation. You don't choose their Launch options, and k-bench passes them again on every launch.
+Both run in [Focus view](#focus-view). You don't choose their Launch options, and k-bench passes them again on every launch. When they start and stop is in [The Prime and the Worker](using-k-bench.md#the-prime-and-the-worker).
 
 ## Other Sessions
 
@@ -60,7 +60,7 @@ When you quit Claude Code (with `/exit`, say), the Session is [Stopped](using-k-
 
 If Claude Code exits with an error, such as a model and advisor it won't pair, or a `claude` that isn't installed, the Session keeps the error on screen: "Claude Code exited with an error. Press any key to close." It is Stopped once you press a key, so a bad choice never looks like nothing happened.
 
-A Prime or Worker that exits stays Stopped until you open its Workspace again or choose **Restart**. k-bench never restarts one by itself.
+For when a Prime or Worker that exits starts again, see [The Prime and the Worker](using-k-bench.md#the-prime-and-the-worker).
 
 ### Restarting resumes the conversation
 
@@ -95,7 +95,7 @@ Claude Code can ring the terminal bell when it finishes a task or waits on a per
 
 You can also set it from inside Claude Code: run `/config` and change **Local notifications**. With the default, `"auto"`, Claude Code rings nothing in most terminals, so set it explicitly. Claude Code's documentation covers [the setting](https://code.claude.com/docs/en/settings-reference#preferrednotifchannel) and [when it notifies](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification).
 
-To check it, start a short task in the Worker, then switch the right Pane to another Tab. When Claude Code finishes, the Worker's Tab shows a Bell. If it doesn't, see [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
+To check it, start a short task in the Worker, then open an Other Session in the right Pane. When Claude Code finishes, the Worker's Tab shows a Bell. If it doesn't, see [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 
 ## Driving Claude Code from your phone
 
