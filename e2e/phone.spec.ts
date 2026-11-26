@@ -291,7 +291,7 @@ test("the extra keys' Enter runs the line the owner typed", async ({ app, kbench
   await expect(terminal.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
 });
 
-test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", async ({
+test("the extra keys fit in one row on a 375px-wide phone, each 40px tall and as wide as the others", async ({
   app,
   kbench,
 }) => {
@@ -325,6 +325,7 @@ test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", asyn
   const rowBox = await row.boundingBox();
   if (!rowBox) throw new Error("The Extra keys row should show");
   let top: number | undefined;
+  const widths: number[] = [];
   for (const name of names) {
     const box = await app.extraKey(name).boundingBox();
     if (!box) throw new Error(`${name} should show`);
@@ -333,7 +334,10 @@ test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", asyn
     top ??= box.y;
     expect(box.y).toBe(top);
     expect(box.x + box.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+    widths.push(box.width);
   }
+  // Every key the same width, the arrow keys too.
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
 });
 
 test("Ctrl applies to the next key only, including keys typed on the keyboard", async ({
