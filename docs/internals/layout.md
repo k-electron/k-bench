@@ -41,7 +41,7 @@ The server, the browser and the tests all import these, so they use no Node APIs
 
 ## `web/src/`
 
-Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, inside the one `TooltipProvider`. The shell picks the desktop layout or the Phone layout. `index.css` is the global styles and the theme tokens, `lib/utils.ts` shadcn/ui's class helper. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it.
+Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, inside the one `TooltipProvider`. The shell picks the desktop layout or the Phone layout. `index.css` is the global styles and the theme tokens, `lib/utils.ts` shadcn/ui's class helper, and `lib/focus.ts` decides whether a closing menu or dialog hands focus back to its trigger. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it.
 
 State and connections:
 
