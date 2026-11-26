@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createTestInstance, type State } from "./harness/instance.ts";
+import type { SessionActivity } from "../src/shared/state-protocol.ts";
+import { createTestInstance, type State, type TestServer } from "./harness/instance.ts";
 import { pollUntil } from "./harness/poll.ts";
+import { attachedClientCount, typeIntoSession } from "./harness/tmux.ts";
 
-// A Claude Session is Working while Claude Code is in a turn and Idle once the turn ends.
-// The fake Claude Code runs k-bench's hooks as Claude Code does: a message starts a turn and
-// ends it once answered, and `think` starts one and holds it.
+// A Claude Session is Working while Claude Code is in a turn, Waiting while it asks the
+// owner something, and Idle once the turn ends. The fake Claude Code runs k-bench's hooks as
+// Claude Code does: a message starts a turn and ends it once answered, `think` starts one
+// and holds it, and its other commands ask and answer (see fake-claude.sh).
 
 /**
  * Long enough that the state feed's poll never runs during a test, so a snapshot that
@@ -24,6 +27,16 @@ async function boot(options = {}) {
 function activityOf(state: State, sessionId: string) {
   return state.workspaces.flatMap((w) => w.sessions).find((s) => s.id === sessionId)
     ?.activity;
+}
+
+async function waitForActivity(
+  server: TestServer,
+  sessionId: string,
+  activity: SessionActivity,
+): Promise<void> {
+  await pollUntil(async () => activityOf(await server.state(), sessionId) === activity, {
+    description: `the Session ${activity}`,
+  });
 }
 
 describe("A Claude Session's state", () => {
@@ -66,6 +79,64 @@ describe("A Claude Session's state", () => {
     await pollUntil(async () => activityOf(await server.state(), claude.id) === "idle", {
       description: "the Session Idle in its new conversation",
     });
+  });
+
+  it("is Waiting while Claude Code asks permission, even once viewed, and Working once answered", async () => {
+    const { instance, server, workspace } = await boot();
+    const socket = instance.config.tmuxSocket;
+    const claude = await server.createClaudeSession(workspace.id);
+    await waitForActivity(server, claude.id, "idle");
+    // Typed with no terminal attached, so no key of the owner's answers the prompt.
+    typeIntoSession(socket, claude.id, "think");
+    await waitForActivity(server, claude.id, "working");
+
+    typeIntoSession(socket, claude.id, "ask-permission");
+    await waitForActivity(server, claude.id, "waiting");
+
+    const terminal = await server.openTerminal(claude.id);
+    await pollUntil(() => attachedClientCount(socket, claude.id) === 1);
+    expect(activityOf(await server.state(), claude.id)).toBe("waiting");
+
+    typeIntoSession(socket, claude.id, "answer");
+    await waitForActivity(server, claude.id, "working");
+    terminal.close();
+  });
+
+  it("is Waiting while Claude Code asks a question, and Working once the owner sends it a key", async () => {
+    const { instance, server, workspace } = await boot();
+    const socket = instance.config.tmuxSocket;
+    const claude = await server.createClaudeSession(workspace.id);
+    const terminal = await server.openTerminal(claude.id);
+    await terminal.waitForOutput("claude-stub ready");
+    // Each line the stub prints says the hooks for it have run.
+    typeIntoSession(socket, claude.id, "think");
+    await terminal.waitForOutput("claude-stub thinking");
+    // Another tool is running, which isn't a question.
+    expect(activityOf(await server.state(), claude.id)).toBe("working");
+    typeIntoSession(socket, claude.id, "ask-question");
+    await terminal.waitForOutput("claude-stub asking a question");
+    expect(activityOf(await server.state(), claude.id)).toBe("waiting");
+
+    // The owner picks an option, which no hook reports when it denies the tool.
+    terminal.type("1");
+
+    await waitForActivity(server, claude.id, "working");
+  });
+
+  it("is unchanged by a subagent's tool use and finish", async () => {
+    const { instance, server, workspace } = await boot();
+    const socket = instance.config.tmuxSocket;
+    const claude = await server.createClaudeSession(workspace.id);
+    const terminal = await server.openTerminal(claude.id);
+    await terminal.waitForOutput("claude-stub ready");
+    typeIntoSession(socket, claude.id, "think");
+    typeIntoSession(socket, claude.id, "ask-permission");
+    await terminal.waitForOutput("claude-stub asking permission");
+
+    typeIntoSession(socket, claude.id, "subagent-stop");
+    await terminal.waitForOutput("claude-stub subagent finished");
+
+    expect(activityOf(await server.state(), claude.id)).toBe("waiting");
   });
 
   it("is reported by hooks that add nothing to the Claude conversation", async () => {

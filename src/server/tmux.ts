@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
+import type { SessionActivity } from "../shared/state-protocol.ts";
 import {
   ACTIVITY_CHANNEL,
   ACTIVITY_OPTION,
@@ -302,6 +303,33 @@ export class TmuxDriver {
           conversation: conversation.join("\t"),
         };
       });
+  }
+
+  /**
+   * Makes a Waiting Claude Session Working, for a key the owner sent it, which is how they
+   * answer or deny what it asked (see Waiting in the glossary). Any other state is left
+   * alone, even when a hook changes it in between: the change is one tmux command that keeps
+   * a state that is no longer Waiting. Signals the activity channel when it was Waiting.
+   */
+  async endWaiting(id: string): Promise<void> {
+    const pane = `=${PREFIX}${id}:`;
+    const option = `#{${ACTIVITY_OPTION}}`;
+    const waiting: SessionActivity = "waiting";
+    const working: SessionActivity = "working";
+    const activity = await this.run(["display-message", "-p", "-t", pane, option]);
+    if (activity.trim() !== waiting) return;
+    await this.run(
+      [
+        "set-option",
+        "-p",
+        "-F",
+        "-t",
+        pane,
+        ACTIVITY_OPTION,
+        `#{?#{==:${option},${waiting}},${working},${option}}`,
+      ],
+      ["wait-for", "-S", ACTIVITY_CHANNEL],
+    );
   }
 
   /**

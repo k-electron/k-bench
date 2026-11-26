@@ -1,7 +1,7 @@
 /**
  * Launching Claude Code for a Claude Session (ADR-0005). k-bench starts it through its
  * documented command-line flags and learns which conversation it is on, and whether it is
- * Working or Idle, through silent hooks, so everything k-bench knows about Claude Code is in
+ * Working, Waiting or Idle, through silent hooks, so everything k-bench knows about Claude Code is in
  * this file: the flags it passes, the hooks, and the launcher script that runs it.
  */
 
@@ -99,7 +99,8 @@ export const ACTIVITY_CHANNEL = "kb-activity-changed";
  * Matches the stdin of an event fired inside a subagent (or a teammate), which carries an
  * `agent_id` key. It can't match inside a value, such as a prompt, since JSON escapes a `"`
  * there. Such events say nothing about the Session's own turn, so the activity hooks ignore
- * them.
+ * them. The hooks reference documents `agent_id` as the subagent's or teammate's ID; the
+ * main agent started with `--agent` carries only `agent_type`, so that is never tested.
  */
 const FROM_AN_AGENT = '"agent_id"[[:space:]]*:';
 
@@ -130,31 +131,53 @@ function activityHook(activity: SessionActivity, ignore?: string): string {
  * - `SessionStart`: a new or restarted Claude Session, or a new conversation in one, starts
  *   Idle. Not on compaction, which can happen mid-turn and keeps the turn going.
  * - `UserPromptSubmit`: a turn starts, so Working.
+ * - `PermissionRequest` (a permission prompt or a plan to approve), `PreToolUse` for
+ *   `AskUserQuestion` (a question), and `Elicitation` (an MCP server's question): Claude Code
+ *   stops mid-turn for the owner, so Waiting. `PermissionRequest` fires as the prompt shows;
+ *   the `Notification` for it waits about six seconds, so it isn't used.
+ * - `PostToolUse`, `PostToolUseFailure` and `ElicitationResult`: the owner answered, or a
+ *   tool finished, so Working. No hook fires when the owner denies a tool, so the owner's
+ *   own key ends Waiting too (see `TmuxDriver.endWaiting`).
  * - `Stop`, and `StopFailure` (fired instead when an API error ends the turn): the turn is
  *   over, so Idle. Neither fires for a subagent.
+ * `matcher` is the hook group's tool name matcher, for a tool event.
  */
-const ACTIVITY_EVENTS: { event: string; activity: SessionActivity; ignore?: string }[] = [
+const ACTIVITY_EVENTS: {
+  event: string;
+  activity: SessionActivity;
+  matcher?: string;
+  ignore?: string;
+}[] = [
   {
     event: "SessionStart",
     activity: "idle",
     ignore: '"source"[[:space:]]*:[[:space:]]*"compact"',
   },
   { event: "UserPromptSubmit", activity: "working" },
+  { event: "PermissionRequest", activity: "waiting" },
+  { event: "PreToolUse", activity: "waiting", matcher: "AskUserQuestion" },
+  { event: "Elicitation", activity: "waiting" },
+  { event: "PostToolUse", activity: "working" },
+  { event: "PostToolUseFailure", activity: "working" },
+  { event: "ElicitationResult", activity: "working" },
   { event: "Stop", activity: "idle" },
   { event: "StopFailure", activity: "idle" },
 ];
 
-type HookGroups = { hooks: { type: "command"; command: string }[] }[];
+type HookGroups = { matcher?: string; hooks: { type: "command"; command: string }[] }[];
 
 /** Every hook k-bench passes, by Claude Code hook event: the conversation's, then the states'. */
 function launchHooks(): Record<string, HookGroups> {
   const hooks: Record<string, HookGroups> = {
     SessionStart: [{ hooks: [{ type: "command", command: CONVERSATION_HOOK }] }],
   };
-  for (const { event, activity, ignore } of ACTIVITY_EVENTS) {
+  for (const { event, activity, matcher, ignore } of ACTIVITY_EVENTS) {
     hooks[event] = [
       ...(hooks[event] ?? []),
-      { hooks: [{ type: "command", command: activityHook(activity, ignore) }] },
+      {
+        ...(matcher ? { matcher } : {}),
+        hooks: [{ type: "command", command: activityHook(activity, ignore) }],
+      },
     ];
   }
   return hooks;
