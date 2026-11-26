@@ -52,6 +52,22 @@ describe("A Claude Session's state", () => {
     );
   });
 
+  it("is Idle in a new conversation", async () => {
+    const { server, workspace } = await boot();
+    const claude = await server.createClaudeSession(workspace.id);
+    const terminal = await server.openTerminal(claude.id);
+    terminal.run("think");
+    await pollUntil(
+      async () => activityOf(await server.state(), claude.id) === "working",
+    );
+
+    terminal.run("clear");
+
+    await pollUntil(async () => activityOf(await server.state(), claude.id) === "idle", {
+      description: "the Session Idle in its new conversation",
+    });
+  });
+
   it("is reported by hooks that add nothing to the Claude conversation", async () => {
     const { server, workspace } = await boot();
     const claude = await server.createClaudeSession(workspace.id);
