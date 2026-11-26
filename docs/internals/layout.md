@@ -1,76 +1,85 @@
 # Source layout
 
+What each module owns, and any rule that lives only there. The code says how.
+
 ## `scripts/`
 
-- `dev.mjs`: `pnpm dev`.
-- `dev-serve.ts`: `pnpm dev:serve`.
-- `k-bench.ts`: the `k-bench` command (the package's `bin`); `pnpm install-app` runs `k-bench install`.
-- `install.ts`: `k-bench install`, with its pure, unit-tested parts in `install-lib.ts`. `uninstall.ts` is `k-bench uninstall` and `status.ts` is `k-bench status`; `command-lib.ts` holds what the three share (the LaunchAgent label, the log, plist and `build-info.json` locations, the `launchctl` and PATH helpers, and the `say`/`step` reporting).
-- `tailscale-serve.ts`: reads the `tailscale serve` configuration (pure parsing plus one thin call to the CLI); shared by the `k-bench` commands: see [Packaging](packaging.md#the-tailscale-serve-configuration).
+- `k-bench.ts`: the `k-bench` command. `install.ts`, `uninstall.ts` and `status.ts` are its subcommands, `install-lib.ts` the installer's pure parts, and `command-lib.ts` what the three share. [Packaging](packaging.md) owns how they work.
+- `tailscale-serve.ts`: reads the `tailscale serve` configuration, and owns the rule for which entry is k-bench's.
+- `dev.mjs` and `dev-serve.ts`: `pnpm dev` and `pnpm dev:serve`, the Dev instance.
 - `smoke.ts`: `pnpm smoke`.
-- `release.ts`: `pnpm release <version>`. `release-plan.ts` and `check-npm.ts` are steps of the release workflow; `release-lib.ts` holds the pure parts they share. See [Releasing](releasing.md).
-- `fix-node-pty.mjs`: restores the execute bit on node-pty's `spawn-helper`.
-
-The command and the server are compiled to `dist/js` (`pnpm build:server`, `tsconfig.build.json`) for the npm package: see [Packaging](packaging.md).
+- `release.ts`, `release-plan.ts`, `check-npm.ts` and `release-lib.ts`: the release tooling ([Releasing](releasing.md)).
+- `fix-node-pty.mjs`: restores the execute bit pnpm drops from node-pty's `spawn-helper`.
+- `record-hero.ts` and `scrub-recording.ts`: `pnpm screenshots:record` and `pnpm screenshots:scrub`, which make the README's hero recording and scrub private strings from it.
+- `screenshots/`: `pnpm screenshots`, which takes the docs' images with Playwright, one set per `*.shots.ts` file. `demo-home.ts` is the made-up home folder they run in, `privacy.ts` what must never show in an image, `recording.ts` the recording format and `play.ts` its player; `images.ts`, `fixtures.ts` and `global-setup.ts` support them.
 
 ## `src/server/`
 
-- `config.ts`: instance config.
-- `access-guard.ts`: the `Tailscale-User-Login` check, ADR-0003 (see [Access](access.md)).
-- `store.ts`: SQLite and migrations, including each Session's kind, a Claude Session's conversation ID and Launch options, the last-used Launch options, and each Workspace's right Pane record.
-- `claude.ts`: everything k-bench knows about launching Claude Code (ADR 0005): the flags the Launch options map to, validating them, the silent `SessionStart` hook that reports which conversation Claude Code is on, and the launcher that starts, resumes and holds an error on screen.
-- `tmux.ts`: the tmux driver, an adapter over the tmux CLI that keeps no state about Sessions, and owns the Bell rule (see [The Bell](bell.md)). It watches the Bell's channel and the conversation hook's.
-- `reconciler.ts`: kills tmux sessions with no store row and stores the conversation each live Claude Session reports, at startup, on every state read and whenever the conversation hook signals.
-- `service.ts`: domain operations.
-- `app.ts`: the HTTP API (see [The API](api.md)).
+- `main.ts`: the entry point. `server.ts` wires one instance together and stops it in order.
+- `config.ts`: what differs between the Installed instance, the Dev instance and tests.
+- `access-guard.ts`: the login and Origin checks ([Access](access.md)).
+- `app.ts`: the HTTP API ([The API](api.md)), mapping the service's refusals to status codes.
 - `static.ts`: serves the built front end.
-- `attachments.ts`: every browser terminal's life on a Session, from attach to drained on stop.
-- `terminal.ts`: the terminal WebSocket, a thin adapter onto `attachments.ts`.
-- `state-feed.ts`: change detection. It re-reads the state after a mutation or a Bell change and on a short poll, and hands each changed snapshot to subscribers.
-- `events.ts`: the events WebSocket.
-- `server.ts`: `startServer`.
-- `main.ts`: the entry point.
+- `service.ts`: the domain rules: what may be created, changed, opened, deleted or restarted, and when a Prime and Worker start.
+- `store.ts`: the SQLite database and its append-only migrations. It never records whether a Session is running ([ADR 0002](../adr/0002-tmux-is-the-source-of-truth-for-liveness.md)).
+- `tmux.ts`: the only module that runs tmux. It keeps no state about Sessions, owns the Bell rule ([The Bell](bell.md)), and binds the wheel to scroll History one line per report.
+- `claude.ts`: everything k-bench knows about Claude Code ([ADR 0005](../adr/0005-k-bench-launches-claude-code.md)): the flags the Launch options map to, the `SessionStart` hook and the launcher script.
+- `reconciler.ts`: squares the store with tmux. It kills tmux sessions with no store row, and stores the conversation each Claude Session reports.
+- `attachments.ts`: a browser terminal's whole life on a Session. `terminal.ts` is the terminal WebSocket, a thin adapter onto it.
+- `state-feed.ts`: change detection and revisions for the events WebSocket, `events.ts`.
+- `directories.ts`: a folder's subfolders, for the folder picker.
+- `naming.ts`: the "(2)"-style suffix for a name already taken.
 
 ## `src/shared/`
 
-- `terminal-protocol.ts` defines the terminal WebSocket protocol once; the server, the browser and the tests all import it.
-- `launch-options.ts` defines the Launch options, their choices and the all-Default value once, for the server and the New Claude dialog.
-- `state-protocol.ts` does the same for state: the snapshot types, the `State-Revision` header, the events path, and decoding a snapshot or a response's revision.
-- `session-roles.ts` sorts a Workspace's Sessions into its Prime, its Worker and its Other Sessions (`sessionsByRole`), the one way the server and the browser both tell them apart.
+The server, the browser and the tests all import these, so they use no Node APIs.
 
-## `web/`
+- `state-protocol.ts`: the state snapshot, the `State-Revision` header and the events path.
+- `terminal-protocol.ts`: the terminal WebSocket's messages and close codes.
+- `launch-options.ts`: the Launch options, their choices, the defaults, and the fixed ones a Prime and a Worker get.
+- `session-roles.ts`: the one way the server and the browser tell the Prime, the Worker and the Other Sessions apart.
 
-The front end: Vite, React, Tailwind, shadcn/ui, Lucide, xterm.js. `@/` aliases `web/src/`.
+## `web/src/`
 
-- `src/App.tsx` is the shell.
-- `src/components/` holds:
-  - `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`;
-  - `FolderPicker`, the folder picker both New Workspace and Change folder use: Places, breadcrumbs, a filter and one folder's subfolders, each marked with the Workspace it holds, if any, and New folder, which names folders to make on Create (the choice is a `FolderChoice`: an existing folder plus new folder names). New Workspace opens it where `GET /api/directories` without a path says, Change folder at the Workspace's folder, and on a phone its dialog is a full-screen sheet with Places as chips. Its path helpers, Places ranking and breadcrumbs are pure functions in `src/folders.ts`;
-  - `NewClaudeDialog`, the New Claude… dialog (it loads the last-used Launch options when it opens);
-  - `Sidebar`, the sidebar tree (its rows, `WorkspaceItem` and `SessionList`, are in `SidebarTree.tsx`): every Workspace (sortable by dragging its row, or its tile when collapsed), with only the Open Workspace unfolded into its Session rows (the Other Sessions sortable by dragging their row; the Prime and Worker sit outside the sortable list) and carrying the ＋ and ⋯ menus. Every sortable list is a `Reorderable` (`Reorderable.tsx`), whose sensors start a drag after 6px of mouse movement or a 200ms touch press, so a click, tap or swipe stays itself; it hosts the Workspace and Session dialogs (`useSidebarDialogs`, `SidebarDialogs.tsx`), and its `mode` makes rows taller in the phone's drawer. In `sidebar` mode it can collapse to a 56px column of Workspace tiles (`WorkspaceTiles`, `SidebarTiles.tsx`), with the Open Workspace's Sessions as icons under its tile; whether it is collapsed is kept per device in browser storage (`k-bench.sidebar-collapsed`, `src/useSidebarCollapsed.ts`), and the drawer ignores it;
-  - `WorkspaceTile`, a Workspace's letter tile (two letters, its hue a hash of the name) with the Bell dot and the Missing mark;
-  - `WorkspaceView`, the desktop and tablet main view: the left Pane (a slim "Prime" label bar over the Prime), the draggable divider, and the right Pane (under its tab bar, `RightPaneTabs`: the Worker, then a tab with a × for each Other Session opened there, each with a Bell dot). A shut Pane is a 28px rail instead (its Session's icon, its name written vertically and a Bell dot), with no `Pane` mounted. The divider snaps a Pane shut, remembering where a drag began so the Pane reopens there, and double-click gives half and half. It renders what `src/workspaceView.ts` works out and looks nothing up. Its `SessionBody` picks what a Session's slot shows (the `Pane`, nothing while a Prime or Worker is starting, or `MissingPane`), for the phone too;
-  - `PhoneView`, the phone's main view (one Session of the Open Workspace) and `PhoneTitle`, its `Workspace › Session ▾` title beside the Menu button, where the Workspace's name truncates first. It renders what `src/phoneView.ts` works out;
-  - `Pane`, a Session's terminal in one slot, or **Restart** when it is Stopped (nothing while a Prime or Worker is starting); `MissingPane`, what a Pane shows instead for a Stopped Session of a Missing Workspace: the notice, and **Change folder** with its own dialog;
-  - `SessionIcon`, a Session's icon: a crown for the Prime, a hammer for the Worker, a sparkle for another Claude Session and a terminal for a shell;
-  - `TerminalView`, xterm.js on the terminal WebSocket, in the look from `src/terminalLook.ts` (the Graphite theme, JetBrains Mono 13px bundled through `@fontsource`, and the wait for the font before xterm.js opens, since it measures its cells once; `Pane` reads the same module for its background, so no seam shows): wheel and touch scroll tmux history (below), OSC 52 copies to the clipboard, shift-drag selects in the browser, and a "reconnecting…" badge shows while the connection retries;
-  - `ExtraKeys`, for the phone layout (below).
-- `src/components/ui/` holds the shadcn/ui components.
-- `src/api.ts` is the API client.
-- `src/stateClient.ts` is the state client, with no React: it keeps the events WebSocket connected (backoff, resync), hands each snapshot to subscribers and answers `whenShown(change)`. `src/useAppState.ts` is a thin wrapper that mirrors it into React state and builds the owner's actions. A right Pane change shows at once and is laid over every snapshot until its own shows (or it is refused or times out), so a snapshot the Host sent before it got the change cannot swap the Pane back under the owner's typing.
-- `src/terminalConnection.ts` is the terminal's connection, with no React and no xterm.js, the browser's counterpart of the server's `Attachments`: it opens the terminal WebSocket at the terminal's size, keeps input and resizes sent while it is opening until it opens, drops them while a retry waits, reconnects with backoff (and at once when the page is visible or online again), and stops for good when the Session ended. `TerminalView` plugs xterm.js into it.
-- `src/workspaceView.ts` is the view module for desktops and tablets. From the state it takes the Open Workspace (on every render, so every device follows it) and works out its two Panes: the Prime on the left, and on the right the Worker or the Other Session the Workspace's right Pane record shows, plus that Pane's tabs (`workspacePanes`, which falls back to the Worker when that Session is gone). It also gives the Sessions on screen, for the sidebar's highlight, which Pane's terminal should have the keyboard, and `starting` (until the open on load, and while an open request is in flight), so a Prime or Worker being started never flashes **Restart**. Its operations are `openWorkspace` (the open request, back to Prime with Worker), `open` (the open request alone, which the phone uses), `showPrime`, `showWorker`, `openOtherSession` (adds a tab if new and shows it), `closeTab`, `chooseSession` (a sidebar row of any role, opening its Workspace first if needed), `setRatio` and `reopen`. `setRatio` (through `moveDivider`) shuts a Pane when the divider comes within `SHUT_EDGE` (8%) of its edge, keeping the ratio to reopen it at. Opening into a shut Pane reopens it: the Prime the left one, and the Workspace's name, the Worker or an Other Session the right one. A shut Pane's Session is left out of the Sessions on screen, and a shut Pane never has the keyboard. What the right Pane shows and its tabs are the Workspace's `rightPane` record on the Host: a change shows at once and is then saved with `PUT /api/workspaces/:id/right-pane`, so every device follows; the open by name asks the Host to show the Worker. Hidden tabs have no `TerminalView`, so they are detached and can raise a Bell. Each Workspace's divider (the ratio, and which Pane is shut) is kept per device in browser storage (`k-bench.dividers`). Whatever the screen size, it opens the Open Workspace once per page load (never again on a reconnect, so a Prime the owner quit stays Stopped), deletes the retired saved layout (`k-bench.layout`), titles the tab `Workspace — k-bench` and forgets the Smart typing choices of Sessions that no longer exist. Only Sessions in a Pane have a `TerminalView` mounted, and a terminal is attached exactly while one is, so every other Session can raise a Bell.
-- `src/phoneView.ts` is the view module for phones: one Session of the Open Workspace (taken from the state on every render, like the desktop's). Which Session is kept per Workspace in browser storage (`k-bench.phone-sessions`), apart from the desktop's right Pane, and is the Prime when nothing is saved or the saved Session is gone. Its operations are `show` (a Session of the Open Workspace, from the drawer or a create) and `openWorkspace` (forgets the Workspace's saved Session, so it shows the Prime, and calls `useWorkspaceView`'s `open`, the open request without the desktop's right Pane changes). The open on load and `starting` come from `useWorkspaceView`, which runs at every size. It deletes the retired `k-bench.phone-session` key on load.
-- `src/workspaces.ts` holds what both view modules and the sidebar read off the state about Workspaces: the Open Workspace (`findOpenWorkspace`) and whether a Workspace has a Bell (`hasBell`).
-- `src/useIsPhone.ts` is the single desktop/phone breakpoint (767px). On a phone `usePhoneView` shows one Session, the sidebar as a slide-out drawer opened by the "Menu" button, and `components/ExtraKeys` (Esc, Tab, Shift Tab, one-shot Ctrl, arrows, Enter, as symbols so ten keys fit a 375px row), whose keys and Ctrl state live in `src/terminalInput.ts` and reach the Session's program through the terminal's normal input path. `registerTerminal` there also takes how to end the line Smart typing mirrors, which every Extra key does. The row ends with the Smart typing switch, shown only where Smart typing is offered. With the on-screen keyboard up, `components/TypingKeys` floats a subset over the terminal in a four-column grid of three rows (Esc, Tab, Enter, Paste / the four arrows / Close keyboard alone in the fourth column; without Paste, Close keyboard takes the top row's fourth slot; the grid ignores touches except on its keys). Paste is `pasteFromClipboard()` in `terminalInput.ts`: it starts `navigator.clipboard.readText()` synchronously in the click (WebKit rejects a read outside the gesture), does nothing on a rejection or an empty clipboard, then clears an armed Ctrl, calls the registered terminal's `paste` (`terminal.paste`, so it is bracketed when the program asked for it) and ends the Smart typing line. The button is not rendered where `canReadClipboard()` is false.
-- `src/smartTyping.ts` is Smart typing's per-Session choice: `useSmartTypingOffered()` (an iPhone, by its user agent, and the phone layout), `useSmartTypingChoice(sessionId)`, `setSmartTyping` and `forgetSmartTypingOfMissing`. The choice is kept in browser storage (`k-bench.smart-typing`, the IDs of the Sessions it is off for; no entry means on), and `useWorkspaceView` forgets the Sessions that no longer exist. `TerminalView` turns the mirrored field on for a Session when it is offered and chosen.
-- `src/mirroredField.ts` is Smart typing's DOM and xterm.js side (ADR 0006), on for a Session on an iPhone in the phone layout (`useSmartTypingOffered()`) unless its owner switched it off (`smartTyping.ts`). `mirrorTypedLine(terminal, kind)` takes the terminal's hidden field over from xterm.js: it keeps the typed text there and sends each change to the Session through `terminal.input`, the path the Extra keys use, so the one-shot Ctrl and input queued while the connection opens apply to it. It also sets the field's keyboard settings from the Session's kind, and returns `clear()` (empties the field from script, then adds the filler: about 120 zero-width spaces before the caret, which count as text already in the program, so deleting one sends a Backspace and a held ⌫ keeps repeating past what was typed; WebKit only resets the keyboard's idea of the text when a page empties the field, hence the empty-then-fill order) and `dispose()` (gives the field back to xterm.js as it was; it leaves the key handler alone once the terminal is disposed). It relies on `terminal.textarea` and `terminal.element` (it warns and leaves input as it was if the field is missing), on `attachCustomKeyEventHandler`, and on capture-phase listeners on `terminal.element` ahead of xterm.js's own on the field (`input`, composition and `paste` events). A `selectionchange` listener puts a collapsed caret back at the end of the field (not while composing), so a spacebar-drag caret move doesn't swallow the next typed letter. `TerminalView` creates it and clears it on a reconnect; the field also clears on blur, on a key that isn't text, and through `terminalInput.ts` for every Extra key. A new Session means a new terminal and so a new field.
-- `src/smartTypingEdit.ts` is the pure part, with no DOM and no xterm.js: the conversion of the keyboard's typographic characters to plain ASCII and `sessionEdit(before, after)`, the Backspaces and new text that turn what the Session has been sent into the field's text. The filler (`FILLER_CHAR`) counts for Backspaces when deleted but is never in the new text; if a replacement started inside the filler and left some after it, the mirrored field clears itself, since that filler no longer stands for text in the program.
-- `src/touchScroll.ts` turns one-finger drags into whole-line scrolls that follow the finger, and keeps a flick gliding with iOS-style deceleration that settles to an even stop once it is slow (a slow fade in whole lines visibly steps). It knows nothing about xterm.js or tmux.
-- `src/wheelReports.ts` turns line counts into mouse-wheel reports through xterm.js, one report per line. tmux is bound to scroll History one line per report (`serverConfiguration` in `src/server/tmux.ts`), so this module also sends five reports per desktop wheel step to keep the desktop feel. The two halves of that pairing point at each other.
+Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, which picks the desktop layout or the Phone layout. `index.css` is the global styles, `lib/utils.ts` shadcn/ui's class helper. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it.
+
+State and connections:
+
+- `api.ts`: the typed client for the HTTP API.
+- `stateClient.ts`: the events WebSocket kept connected, and waiting for a change to show, with no React. `useAppState.ts` mirrors it into React and builds the owner's actions. It lays a right Pane change over every snapshot until one from the Host shows it, so an older snapshot can't swap the Pane back.
+- `terminalConnection.ts`: one terminal's WebSocket, with no React and no xterm.js: when it retries and when it stops for good. The browser's counterpart of `attachments.ts`.
+
+Views:
+
+- `workspaceView.ts`: works out the desktop's Panes from the state (what each shows, the Tabs, which is shut, which has the keyboard), and components render what it says. It also owns what runs once per page load at any size: opening the Open Workspace, the browser tab's title, and forgetting stale stored choices.
+- `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device.
+- `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, and whether a Workspace has a Bell.
+- `folders.ts`: the folder picker's pure path work: Places, breadcrumbs, typed paths and new folder names.
+- `useIsPhone.ts`: the one breakpoint for the Phone layout. `useKeyboardUp.ts`: whether the on-screen keyboard is up, and the area the app fits into then. `useSidebarCollapsed.ts`: whether the sidebar is collapsed on this Device.
+
+The terminal:
+
+- `terminalLook.ts`: the terminal's one look ([ADR 0009](../adr/0009-the-terminal-stays-on-xterm-js-drawn-in-the-dom.md)), which `Pane` shares so no seam shows.
+- `terminalInput.ts`: input that doesn't come from the keyboard (the Extra keys, the one-shot Ctrl, Paste), sent the way typed keys are.
+- `wheelReports.ts`: the only web module that knows tmux scrolls one line per wheel report, the binding in `tmux.ts`.
+- `touchScroll.ts`: turns drags and flicks into whole-line scrolls, knowing nothing of xterm.js or tmux.
+- `smartTyping.ts`: where Smart typing is offered, and each Session's choice on this Device. `mirroredField.ts` is its DOM and xterm.js side ([ADR 0006](../adr/0006-smart-typing-mirrors-the-typed-line.md)), `smartTypingEdit.ts` the pure comparison that turns a keyboard edit into Backspaces and text.
+
+## `web/src/components/`
+
+Components render what the view modules decide.
+
+- `WorkspaceView`: the desktop's two Panes, the divider and the Rails. `RightPaneTabs` is the right Pane's Tabs. `Pane` is a Session's terminal, or Restart when it is Stopped; `MissingPane` stands in for a Stopped Session of a Missing Workspace.
+- `PhoneView`: the Phone layout's Session and title. `ExtraKeys` is the Extra keys row, `TypingKeys` the few that float over the terminal while the on-screen keyboard is up.
+- `TerminalView`: xterm.js on a terminal connection, where the terminal modules above plug in.
+- `Sidebar`: the sidebar and its menus. `SidebarTree` is its expanded rows, `SidebarTiles` its collapsed tiles, `SidebarDialogs` the dialogs its menus open. `Reorderable` is every drag-to-reorder list, so a click, tap or swipe stays itself.
+- `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `NewClaudeDialog`, `RenameSessionDialog`, `DeleteSessionDialog`: one dialog each. `FolderPicker` is the folder picker New Workspace and Change folder share.
+- `WorkspaceTile`: a Workspace's letter tile, coloured from its name. `SessionIcon`: a Session's icon, by role and kind. `IconButton`: an icon-only button.
+- `ui/`: the shadcn/ui components.
 
 ## `test/` and `e2e/`
 
-- `test/`: outcome-based tests, see [docs/testing.md](../testing.md).
-- `test/harness/`: the Seam 1 harness (and `packed.ts`, the Seam 3 harness, and `fake-claude.sh`, the stand-in for Claude Code), see [Test seams](test-seams.md).
-- `e2e/`: the Seam 2 (Playwright) specs and harness, see [Test seams](test-seams.md).
+- `test/`: the Vitest tests, Seams 1 and 3. `test/harness/` holds their harnesses and `fake-claude.sh`, the stand-in for Claude Code.
+- `e2e/`: the Playwright specs and harness, Seam 2.
+
+See [Test seams](test-seams.md) and [Testing](../testing.md).
