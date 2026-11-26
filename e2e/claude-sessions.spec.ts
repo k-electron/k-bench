@@ -46,12 +46,12 @@ test("the Claude dialog opens with every option Default, and a choice reaches Cl
 
   await app.openClaudeDialog("project");
   for (const field of ["Model", "Effort", "Advisor"]) {
-    await expect(app.claudeDialog.getByLabel(field, { exact: true })).toHaveValue(
-      "default",
-    );
+    await expect(
+      app.claudeDialog.getByRole("combobox", { name: field, exact: true }),
+    ).toHaveText("Default");
   }
   await expect(
-    app.claudeDialog.getByRole("checkbox", { name: "Focus view" }),
+    app.claudeDialog.getByRole("switch", { name: "Focus view" }),
   ).not.toBeChecked();
   await app.launchClaude({
     model: "Opus",
@@ -135,10 +135,10 @@ test("the Claude dialog reopens with the last Launch options, on any device, and
   for (const device of [app, otherDevice]) {
     await device.openClaudeDialog("project");
     const dialog = device.claudeDialog;
-    await expect(dialog.getByLabel("Model", { exact: true })).toHaveValue("opus");
-    await expect(dialog.getByLabel("Effort", { exact: true })).toHaveValue("high");
-    await expect(dialog.getByLabel("Advisor", { exact: true })).toHaveValue("off");
-    await expect(dialog.getByRole("checkbox", { name: "Focus view" })).toBeChecked();
+    await expect(dialog.getByRole("combobox", { name: "Model" })).toHaveText("Opus");
+    await expect(dialog.getByRole("combobox", { name: "Effort" })).toHaveText("High");
+    await expect(dialog.getByRole("combobox", { name: "Advisor" })).toHaveText("Off");
+    await expect(dialog.getByRole("switch", { name: "Focus view" })).toBeChecked();
     await expect(dialog.getByRole("textbox", { name: "Session name" })).toHaveValue("");
     await device.page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();

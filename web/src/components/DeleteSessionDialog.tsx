@@ -8,7 +8,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { buttonVariants } from "./ui/button";
 
 /** Confirms deleting a Session, which ends its shell and everything running in it. */
 export function DeleteSessionDialog({
@@ -32,13 +31,8 @@ export function DeleteSessionDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "ghost" })}>
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            className={buttonVariants({ variant: "default" })}
-            onClick={() => void onDelete()}
-          >
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={() => void onDelete()}>
             Delete session
           </AlertDialogAction>
         </AlertDialogFooter>

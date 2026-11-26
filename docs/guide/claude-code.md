@@ -26,15 +26,15 @@ A Claude Session runs one Claude conversation at a time. You can move it to anot
 
 Choose the **+** next to the Open Workspace's name, then **New Claude…**, fill in the dialog and choose **Launch**. The new Session opens in the right Pane.
 
-![The New Claude dialog, with a name, model, effort, advisor and the Focus view checkbox](../images/new-claude.png)
+![The New Claude dialog, with a name, model, effort, advisor and the Focus view switch](../images/new-claude.png)
 
-| Field          | Choices                                                                                                                                  |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Name**       | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused, and your other choices stay. |
-| **Model**      | Default, Fable, Opus, Sonnet, Haiku                                                                                                      |
-| **Effort**     | Default, Low, Medium, High, XHigh, Max                                                                                                   |
-| **Advisor**    | Default, Off, Fable, Opus, Sonnet                                                                                                        |
-| **Focus view** | A checkbox                                                                                                                               |
+| Field            | Choices                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session name** | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused, and your other choices stay. |
+| **Model**        | Default, Fable, Opus, Sonnet, Haiku                                                                                                      |
+| **Effort**       | Default, Low, Medium, High, XHigh, Max                                                                                                   |
+| **Advisor**      | Default, Off, Fable, Opus, Sonnet                                                                                                        |
+| **Focus view**   | A switch                                                                                                                                 |
 
 The Model, Effort, Advisor and Focus view are the Session's **Launch options**.
 

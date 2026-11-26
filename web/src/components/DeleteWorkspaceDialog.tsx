@@ -9,7 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { Button, buttonVariants } from "./ui/button";
+import { Button } from "./ui/button";
+import { FieldError } from "./ui/field";
 
 /** Asks before deleting a Workspace; confirming ends all its Sessions. */
 export function DeleteWorkspaceDialog({
@@ -36,15 +37,9 @@ export function DeleteWorkspaceDialog({
             The folder on disk is not touched.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <FieldError>{error}</FieldError>}
         <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "ghost" })}>
-            Cancel
-          </AlertDialogCancel>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <Button
             variant="destructive"
             onClick={() => {
