@@ -1,4 +1,5 @@
-// The hero image: real Claude Code running in a Pane, played back from a recording.
+// The hero image: real Claude Code running in the Prime, played back from a recording, with
+// the sidebar's tree beside it. The right Pane is shut, so the Worker's terminal is not shown.
 //
 // STATUS: recorded. docs/recordings/claude-hero.json is one real Claude Code run, made in a
 // made-up demo project on the owner's account and scrubbed. If it is absent this test is
@@ -35,18 +36,22 @@ import { expect, fitTerminal, test } from "./fixtures.ts";
 import { HERO_RECORDING } from "./images.ts";
 import { readRecording } from "./recording.ts";
 
-test("hero: Claude Code in a Pane", async ({ app, demo, page }) => {
+test("hero: Claude Code in the Prime", async ({ app, demo, page }) => {
   test.skip(
     !existsSync(HERO_RECORDING),
     "pending owner recording: docs/recordings/claude-hero.json does not exist yet",
   );
   const recording = readRecording(HERO_RECORDING);
 
-  await demo.workspace("acme-api", ["claude"]);
-  await demo.workspace("website", ["dev server"]);
+  await demo.workspace("acme-api", ["dev server", "tests"]);
+  await demo.workspace("website", []);
   await demo.workspace("dotfiles", []);
-  await app.session("claude").click();
-  const terminal = app.terminal("claude");
+  await app.openWorkspace("acme-api");
+  await expect(app.sessionStatus("Prime", "running")).toBeVisible();
+  await expect(app.sessionStatus("Worker", "running")).toBeVisible();
+  await app.shutPane("right");
+  await expect(app.rail("right", "Worker")).toBeVisible();
+  const terminal = app.terminalIn("left", "Prime");
   await expect(terminal).toBeVisible();
   await fitTerminal(app, page, terminal, recording);
 

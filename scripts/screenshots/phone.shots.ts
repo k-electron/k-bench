@@ -1,22 +1,16 @@
-// Phone: the drawer listing Workspaces and Sessions, and a terminal with the extra keys.
+// Phone: a shell Session in the Phone layout, with the Extra keys along the bottom.
 import { expect, test } from "./fixtures.ts";
 
-test("the phone layout: the drawer, then a terminal with the extra keys", async ({
-  app,
-  demo,
-}) => {
-  await demo.workspace("acme-api", ["main", "tests"]);
-  await demo.workspace("website", ["dev server"]);
+test("the Phone layout: a Session with the Extra keys", async ({ app, demo }) => {
+  await demo.workspace("acme-api", ["shell", "dev server"]);
+  await demo.workspace("website", []);
   await demo.workspace("dotfiles", []);
 
   await app.openDrawer();
-  await expect(app.session("tests")).toBeVisible();
-  await expect(app.session("dev server")).toBeVisible();
-  await demo.shoot("phone-drawer.png");
-
-  await app.session("main").tap();
-  const terminal = app.terminal("main");
+  await app.session("shell").tap();
+  const terminal = app.terminal("shell");
   await expect(terminal).toBeVisible();
+  await expect(app.phoneTitle).toContainText("shell");
   await app.runMarker(terminal, "shellready");
   await app.runCommand(
     terminal,
