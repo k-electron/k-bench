@@ -1,33 +1,38 @@
-// Desktop: the Open Workspace with a shell in the right Pane, then the same scene after a
-// Session rings its Bell. The left Pane holds the Prime, which runs the test stub here.
-import { expect, test } from "./fixtures.ts";
+// Desktop: the Open Workspace with Claude Code in the Prime (the hero recording, played
+// back) and a dev server in the right Pane, whose Tabs show the Worker and the dev server.
+import { expect, fitTerminal, test } from "./fixtures.ts";
+import { HERO_RECORDING } from "./images.ts";
+import { readRecording } from "./recording.ts";
 
-test("desktop with a Session in the right Pane, and a Session that rang the Bell", async ({
+// The left Pane's share of the two Panes: wide enough for the recording, leaving the dev
+// server room to read.
+const PRIME_SHARE = 0.62;
+
+test("desktop: the Prime, and a dev server in the right Pane", async ({
   app,
-  kbench,
   demo,
+  page,
 }) => {
-  await demo.workspace("acme-api", ["main", "tests"]);
-  await demo.workspace("website", ["dev server"]);
+  const recording = readRecording(HERO_RECORDING);
+  await demo.workspace("acme-api", ["dev server", "tests"]);
+  await demo.workspace("website", []);
   await demo.workspace("dotfiles", []);
-  await expect(app.session("tests")).toBeVisible();
+  await app.openWorkspace("acme-api");
+  await expect(app.sessionStatus("Prime", "running")).toBeVisible();
+  await expect(app.sessionStatus("Worker", "running")).toBeVisible();
 
-  await app.session("main").click();
-  const right = app.terminalIn("right", "main");
+  await app.session("dev server").click();
+  const right = app.terminalIn("right", "dev server");
   await expect(right).toBeVisible();
-
+  await expect(app.rightTab("Worker")).toBeVisible();
+  await expect(app.rightTab("dev server")).toHaveAttribute("aria-current", "true");
   await app.runMarker(right, "shellready");
-  await app.runCommand(
-    right,
-    "clear; git log --oneline; ls -lg src; cat package.json",
-    '"version": "1.4.0"',
-  );
-  await expect(right).toContainText("orders.ts");
+  await app.runCommand(right, "clear; dev-server", "Ready in");
 
+  await app.dragDividerTo(PRIME_SHARE);
+  const prime = app.terminalIn("left", "Prime");
+  await fitTerminal(app, page, prime, recording, PRIME_SHARE);
+  await demo.play(app, prime, HERO_RECORDING);
+  await expect(right).toContainText("GET /owed");
   await demo.shoot("desktop.png");
-
-  // "tests" is in no Pane, so nobody is looking at it when its shell rings the bell.
-  await kbench.ringBell("tests");
-  await expect(app.bellBadge("tests")).toBeVisible();
-  await demo.shoot("bell.png");
 });

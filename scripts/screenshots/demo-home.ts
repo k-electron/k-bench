@@ -85,13 +85,14 @@ function seedShellConfig(home: string): void {
   write(join(home, ".bash_profile"), bash);
   write(join(home, ".bashrc"), bash);
   // A dev server that is obviously a stand-in: it prints a few made-up lines and waits.
+  // The requests are acme-api's, the project the hero recording talks about.
   write(
     join(home, "bin", "dev-server"),
     `#!/bin/sh
-printf '\\033[1mwebsite\\033[0m dev server\\n\\n'
+printf '\\033[1m%s\\033[0m dev server\\n\\n' "$(basename "$PWD")"
 printf '  Local:   \\033[36mhttp://localhost:3000/\\033[0m\\n'
 printf '  Ready in 412 ms\\n\\n'
-for line in 'GET /' 'GET /pricing' 'GET /docs/getting-started' 'GET /blog' 'GET /blog/launch-week' 'GET /about'; do
+for line in 'GET /invoices' 'GET /owed' 'GET /invoices' 'GET /invoices' 'GET /owed'; do
   printf '\\033[2m10:42:07\\033[0m %s \\033[32m200\\033[0m\\n' "$line"
 done
 exec sleep 100000

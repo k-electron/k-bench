@@ -2,7 +2,7 @@
 
 Persistent terminal Sessions on your Mac, organised into Workspaces, reachable from any browser on your tailnet. It launches Claude Code, and resumes it when you restart.
 
-![Claude Code running in a k-bench Session, with the Workspaces and Sessions in the sidebar](docs/images/hero.png)
+![Claude Code running in a Workspace's Prime, with the sidebar listing the Workspaces and the Open Workspace's Sessions](docs/images/hero.png)
 
 k-bench is macOS-only, and Tailscale is the only way in. It runs on your Mac as a background service and shows your terminals in a web page that only your own tailnet login can open.
 
@@ -19,43 +19,32 @@ It is not only for Claude Code. **New shell** gives you a plain shell Session, s
 
 ## What you get
 
-- **Sessions that keep running** when you close the tab, lock your phone or lose your connection. Come back from any device and pick up where you left off.
-- **Claude Sessions.** Pick **New Claude…** from a Workspace's **+**, choose the model, effort, advisor and Focus view (a condensed view that suits a phone), and k-bench launches Claude Code for you. Restart a Stopped Claude Session, even after a reboot, and the conversation you were last in resumes, even after a `/clear`.
-- **Workspaces per project.** A Workspace points at a project folder on your Mac, and its Sessions start there.
-- **Two Panes** side by side for the Workspace you're in: its Prime on the left, and its Worker, or a dev server, on the right.
-- **Bells.** When a Session rings the terminal bell, its row in the sidebar shows a Bell until you look at it.
-- **A phone layout** with a drawer for your Workspaces and a row of extra keys (Esc, Tab, Shift-Tab, Ctrl, the arrows and Enter) for the keys a phone keyboard lacks.
+- **Sessions that keep running** when you close the browser tab, lock your phone or lose your connection. Come back from any Device and pick up where you left off.
+- **A Workspace per project.** A Workspace points at a project folder on your Mac, and its Sessions start there.
+- **A Prime and a Worker in every Workspace.** Two Claude Sessions that k-bench launches with fixed Launch options: the Prime plans in the left Pane, and the Worker builds in the right one. Opening the Workspace starts them, and a restart resumes each one's Claude conversation, even after a reboot or a `/clear`.
+- **The Open Workspace follows you between Devices.** Open a Workspace on your laptop, and your phone shows it too.
+- **Other Sessions in the right Pane's Tabs.** **New shell** for a dev server or a test watcher, or **New Claude…** to launch Claude Code with the model, effort, advisor and Focus view you choose.
+- **Room when you need it.** Drag the divider to an edge to shut a Pane, and give the other one the whole width.
+- **Bells.** When a Session rings the terminal bell, the sidebar marks it until you look at it.
+- **A Phone layout** with a drawer for your Workspaces and Extra keys (Esc, Tab, Shift-Tab, Ctrl, the arrows and Enter) for the keys a phone keyboard lacks.
 - **Access only for your tailnet login.** k-bench listens on localhost only and is published with `tailscale serve`. It admits only requests that carry your own tailnet login.
 
-![Two Panes side by side on a desktop: a shell and a dev server](docs/images/desktop.png)
+![The Prime in the left Pane, and a dev server in the right Pane, whose Tabs show the Worker and the dev server](docs/images/desktop.png)
 
 ## Quick start
 
-**You need:**
-
-- A Mac (k-bench is macOS-only).
-- [Node](https://nodejs.org/) 26 or later.
-- tmux (`brew install tmux`).
-- [Tailscale](https://tailscale.com/download), signed in, with HTTPS certificates turned on for your tailnet. [Setup](docs/guide/setup.md#1-set-up-tailscale) has the steps.
-
-**Then:**
+First get what [Setup](docs/guide/setup.md) says you need, and [set up Tailscale](docs/guide/setup.md#1-set-up-tailscale). Then:
 
 ```sh
 npm i -g @k-electron/k-bench
 k-bench install
 ```
 
-`k-bench install` finds your tailnet login by itself, starts k-bench as a background service that starts when you log in, publishes it with `tailscale serve`, and prints the URL it is now reachable at. Open that URL from any device signed in to your tailnet with the same login. To see what the install would do first, run `k-bench install --dry-run`: it changes nothing.
-
-Something not working? Run `k-bench status`: it checks each part and says how to fix what fails.
+`k-bench install` publishes k-bench on your tailnet and prints its URL. Open that URL from any device signed in to your tailnet with the same login. [Setup](docs/guide/setup.md) covers the install, updating and uninstalling. If something isn't working, run `k-bench status`.
 
 ## Guide
 
-- [The guide](docs/guide/README.md), with
-  - [Setup](docs/guide/setup.md): Tailscale, installing, updating, uninstalling.
-  - [Using k-bench](docs/guide/using-k-bench.md): Workspaces, Sessions, Claude Sessions, Panes, Bells, scrolling and copying, the phone layout.
-  - [Using k-bench with Claude Code](docs/guide/claude-code.md): Claude Sessions and the New Claude dialog, Focus view, resuming on restart, making Claude Code ring the Bell, and working with several conversations.
-  - [Troubleshooting](docs/guide/troubleshooting.md): start from `k-bench status`.
+- [The guide](docs/guide/README.md): setup, using k-bench, using it with Claude Code, and troubleshooting.
 - [CHANGELOG](CHANGELOG.md): what changed in each version.
 
 ## Security

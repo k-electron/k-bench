@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page } from "@playwright/test";
@@ -13,20 +13,15 @@ export { expect };
 const PLAYER = fileURLToPath(new URL("./play.ts", import.meta.url));
 const LOGIN = "owner@example.com";
 
-interface ClaudeSessionSpec {
-  name: string;
-  claude: Record<string, unknown>;
-}
-
 interface Demo {
   /** The fake home folder. */
   home: string;
   /**
-   * Creates a Workspace on `~/code/<name>` with these Sessions; the sidebar updates itself.
-   * A Session given as `{ name, claude }` is a Claude Session with those Launch options (it
-   * runs the test stub, not Claude Code, so its terminal is never shown in an image).
+   * Creates a Workspace on `~/code/<name>` with these shell Sessions; the sidebar updates
+   * itself. Its Prime and Worker come with it, Stopped until the Workspace is opened, and
+   * then run a demo shell rather than the test stub (see the `kbench` fixture).
    */
-  workspace(name: string, sessions: Array<string | ClaudeSessionSpec>): Promise<void>;
+  workspace(name: string, sessions: string[]): Promise<void>;
   /**
    * Makes a command on the fake PATH that plays `recording` back in the terminal it runs
    * in, so what is typed into the Session is short and names no real path.
@@ -34,7 +29,7 @@ interface Demo {
   playerCommand(recording: string): { command: string; done: string };
   /** Plays the recording in the terminal and waits until it has finished drawing. */
   play(app: AppPage, terminal: Locator, recording: string): Promise<void>;
-  /** Fails if the page's text has anything of the real machine in it. */
+  /** Fails if the page's text has anything of the real machine, or of the test stub, in it. */
   assertNothingPrivate(): Promise<void>;
   /**
    * Saves a screenshot into docs/images, after checking nothing private is on the page. With
@@ -47,12 +42,21 @@ interface Demo {
 }
 
 export const test = base.extend<{ demo: Demo }>({
-  // Start the instance's tmux server with the fake environment before the first Session
-  // exists. A tmux server hands its own environment to every shell it starts, and the
-  // k-bench server, which runs with the real one, would otherwise start it.
   kbench: async ({ kbench }, use) => {
     const home = process.env[HOME_ENV];
     if (!home) throw new Error("Run this with `pnpm screenshots`");
+    // Every Prime and Worker is a Claude Session, which in a test instance runs the stub and
+    // prints its `claude-stub` lines. Here they run a demo shell instead (its arguments, the
+    // Claude Code flags, are ignored), so a shot can play the hero recording into the Prime
+    // with `demo.play`, and the Claude Code on screen is the real one.
+    const claude = join(kbench.instance.root, "claude-shell");
+    writeFileSync(claude, '#!/bin/sh\nexec "$SHELL" -i\n', { mode: 0o755 });
+    kbench.instance.config.claudeProgram = claude;
+    await kbench.stopServer();
+    await kbench.startServer();
+    // Start the instance's tmux server with the fake environment before the first Session
+    // exists. A tmux server hands its own environment to every shell it starts, and the
+    // k-bench server, which runs with the real one, would otherwise start it.
     const socket = kbench.instance.config.tmuxSocket;
     if (!socket.startsWith("kb-test-")) throw new Error(`refusing tmux socket ${socket}`);
     execFileSync(
@@ -91,15 +95,14 @@ export const test = base.extend<{ demo: Demo }>({
         });
         const { id } = (await created.json()) as { id: string };
         for (const session of sessions) {
-          await post(
-            `/api/workspaces/${id}/sessions`,
-            typeof session === "string" ? { name: session } : session,
-          );
+          await post(`/api/workspaces/${id}/sessions`, { name: session });
         }
       },
       playerCommand: (recording) => {
         const command = `play-${++players}`;
+        // The fake home lasts the whole run, so an earlier test may have left this file.
         const done = join(home, `${command}.done`);
+        rmSync(done, { force: true });
         writeFileSync(
           join(home, "bin", command),
           `#!/bin/sh\nK_BENCH_PLAY_DONE='${done}' exec '${process.execPath}' '${PLAYER}' '${recording}'\n`,
@@ -123,6 +126,9 @@ export const test = base.extend<{ demo: Demo }>({
         const text = `${await page.title()}\n${await page.locator("body").textContent()}`;
         const findings = findPrivate(text);
         expect(findings, describeFindings(findings)).toEqual([]);
+        expect(text, "the test stub's output is on the page").not.toContain(
+          "claude-stub",
+        );
       },
       shoot: async (name, area) => {
         await demo.assertNothingPrivate();
@@ -163,13 +169,16 @@ export async function settled(terminal: Locator): Promise<void> {
 
 /**
  * Sizes the browser window so `terminal` is exactly `cols` x `rows` characters: a recording
- * of a full-screen program only draws right at the size it was made for.
+ * of a full-screen program only draws right at the size it was made for. `widthShare` is the
+ * part of a change in the window's width that reaches the terminal: below 1 when it shares
+ * the width with the other Pane.
  */
 export async function fitTerminal(
   app: AppPage,
   page: Page,
   terminal: Locator,
   size: { cols: number; rows: number },
+  widthShare = 1,
 ): Promise<void> {
   // A window resize reaches the shell some moments later, in steps, so a size is only
   // believed once it has been measured twice with a pause between.
@@ -195,7 +204,7 @@ export async function fitTerminal(
     const step = (diff: number, cell: number) =>
       Math.sign(diff) * Math.ceil(Math.abs(diff) * cell);
     await page.setViewportSize({
-      width: view.width + step(size.cols - now.cols, cellWidth),
+      width: view.width + Math.round(step(size.cols - now.cols, cellWidth) / widthShare),
       height: view.height + step(size.rows - now.rows, cellHeight),
     });
   }
