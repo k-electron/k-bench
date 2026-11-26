@@ -12,7 +12,7 @@ k-bench status
   ok    the LaunchAgent is loaded (com.k-bench.server)
   ok    the server answers its health check
 
-  version  0.1.0
+  version  <version>
   url      https://<your-host>.<tailnet>.ts.net/
 
 All checks passed.
@@ -50,22 +50,20 @@ k-bench admits only requests that come through `tailscale serve` carrying your o
 
 There are two ports, and the fix differs.
 
-- **HTTPS port 443 on your tailnet name.** `k-bench install` stops, changing nothing, when `tailscale serve` already publishes something else there. Use `k-bench install --https-port 8443` to publish k-bench beside it, or `k-bench install --force` to replace it. See [If the HTTPS port is already taken](setup.md#if-the-https-port-is-already-taken). `tailscale serve status` shows what is published.
+- **HTTPS port 443 on your tailnet name.** `k-bench install` stops, changing nothing, when `tailscale serve` already publishes something else there. See [If the HTTPS port is already taken](setup.md#if-the-https-port-is-already-taken).
 - **Port 7680 on the Host itself.** k-bench listens on `127.0.0.1` port 7680. If `k-bench status` says something answered there "but not like k-bench", another program is using that port: stop it, then run `k-bench install`.
 
 ## A Session won't start in a Missing Workspace
 
-A Workspace is [Missing](using-k-bench.md#missing-workspaces) when its folder is gone, and no Session can start in it until the folder is fixed. Starting or restarting one shows "Folder does not exist" in the sidebar.
-
-Open the Workspace, choose **Change folder** in the note under its name (or in its **...** menu) and point it at the folder's new place. Or put the folder back where it was. Sessions that were already running in it were never affected, and other Workspaces work as normal.
+Starting or restarting a Session says "Folder does not exist" when its Workspace is [Missing](using-k-bench.md#missing): its folder was moved, renamed or deleted. [Missing](using-k-bench.md#missing) says how to fix it.
 
 ## Every Session says Stopped
 
-After you log out of your Mac or restart it, that is expected: k-bench comes back on its own when you log in, everything is still listed, and you restart each Session from its **...** menu. See [Stopped Sessions](using-k-bench.md#stopped-sessions-logging-out-and-restarting). If you did neither and every Session is Stopped, tmux, which holds the Sessions' programs, was stopped, so run `k-bench status` and look in [the log](#where-the-logs-are).
+After you log out of your Mac or restart it, that is expected: see [Stopped Sessions](using-k-bench.md#stopped-sessions). If you did neither and every Session is Stopped, tmux, which holds the Sessions' programs, was stopped, so run `k-bench status` and look in [the log](#where-the-logs-are).
 
 ## A Session never shows a Bell
 
-A Session raises a [Bell](using-k-bench.md#bells) only while nothing is viewing it, and a browser tab on any device that still has the Session open counts as viewing it. A tab left open on your laptop, or a phone that still has the Session in front, can therefore hide the Bell from you everywhere. Close the stale tab, or open a different Session in it, and Bells appear again.
+A Session raises a [Bell](using-k-bench.md#bells) only while nothing is viewing it, and a browser tab on any Device that still shows the Session counts as viewing it. A browser tab left open on your laptop, or a phone that still has the Session on screen, therefore hides its Bell from you everywhere. Close that browser tab, or show a different Session in it, and Bells appear again.
 
 If it is Claude Code that should ring, check that [the setting is on](claude-code.md#make-claude-code-ring-the-bell-when-it-is-waiting).
 

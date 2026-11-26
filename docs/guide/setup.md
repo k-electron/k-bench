@@ -1,19 +1,19 @@
 # Setup
 
-This page takes you from nothing to a running k-bench, and then covers updating and uninstalling it. k-bench works on macOS only, and Tailscale is the only way to reach it.
+From nothing to a running k-bench, then updating and uninstalling it. k-bench works on macOS only, and Tailscale is the only way to reach it.
 
 You need:
 
 - A Mac, which k-bench calls the Host.
 - Node 26 or later. Check with `node --version`.
 - tmux: `brew install tmux`.
-- Tailscale on the Host, and on every device you will browse from, all signed in to the same tailnet.
+- Tailscale on the Host, and on every phone or computer you will browse from, all signed in to the same tailnet login.
 
 ## 1. Set up Tailscale
 
 k-bench is published on your tailnet with `tailscale serve`, which serves it over HTTPS. That needs HTTPS certificates turned on for your tailnet, and it is the one step people most often miss.
 
-1. Install Tailscale on the Host from [tailscale.com/download](https://tailscale.com/download) and sign in. Do the same on your phone and any other device you want to use k-bench from, with the same account.
+1. Install Tailscale on the Host from [tailscale.com/download](https://tailscale.com/download) and sign in. Do the same, with the same account, on your phone and any other computer you want to use k-bench from.
 2. Open the [DNS page of the Tailscale admin console](https://login.tailscale.com/admin/dns). You need to be an admin of your tailnet to change it.
 3. Turn on MagicDNS, if it is not on already.
 4. Under **HTTPS Certificates**, choose **Enable HTTPS**, and acknowledge the notice that your machine names and your tailnet's DNS name will be published on a public ledger (Certificate Transparency, where every public TLS certificate is recorded).
@@ -40,7 +40,7 @@ The install:
 - publishes k-bench with `tailscale serve` on HTTPS port 443;
 - prints the URL, which looks like `https://<your-host>.<tailnet>.ts.net/`.
 
-Open that URL from any device on your tailnet, signed in with the same login. Your data lives in `~/Library/Application Support/k-bench/`, and k-bench's log is `~/Library/Logs/k-bench/k-bench.log`.
+Open that URL in a browser on any of your machines on the tailnet, signed in with the same login. Your data lives in `~/Library/Application Support/k-bench/`, and k-bench's log is `~/Library/Logs/k-bench/k-bench.log`.
 
 To see every step before anything happens, run:
 
@@ -97,9 +97,9 @@ npm i -g @k-electron/k-bench
 k-bench install
 ```
 
-The first upgrades the npm package, and the second installs it as the running service. Every Session keeps running through an update, and browser tabs you have open reconnect on their own, so there is nothing to reload. `k-bench status` shows the installed version. Read the [CHANGELOG](../../CHANGELOG.md) to see what changed.
+The first upgrades the npm package, and the second installs it as the running service. Upgrading the package alone changes nothing that is running: k-bench keeps serving the copy it installed until you run `k-bench install`.
 
-Upgrading the npm package alone does not change what is running: k-bench keeps serving the copy it installed until you run `k-bench install`.
+Every Session keeps running through an update, and open browser tabs reconnect on their own, so there is nothing to reload. `k-bench status` shows the installed version, and the [CHANGELOG](../../CHANGELOG.md) says what changed.
 
 ## 4. Uninstalling
 
