@@ -89,22 +89,32 @@ export class AppPage {
     return this.page.getByRole("main").getByRole("heading", { level: 1 });
   }
 
-  /** On a phone: the sheet listing the Open Workspace's Sessions, opened from the title. */
+  /**
+   * On a phone: the sheet listing the Open Workspace's Sessions, opened from the title. It is
+   * named after the Workspace, so it is found by its list of Sessions.
+   */
   get sessionsSheet(): Locator {
-    return this.page.getByRole("dialog", { name: "Sessions", exact: true });
+    return this.page.getByRole("dialog").filter({
+      has: this.page.getByRole("list", { name: "Sessions", exact: true }),
+    });
   }
 
   /** On a phone: taps the title to open the Sessions sheet. */
   async openSessionsSheet(): Promise<void> {
     await this.phoneTitle.getByRole("button").tap();
-    await expect(this.sessionsSheet).toBeVisible();
+    // Done once it has slid up to the bottom edge, so its rows are where they will stay.
+    const height = this.page.viewportSize()?.height;
+    await expect
+      .poll(async () => {
+        const box = await this.sessionsSheet.boundingBox();
+        return box && Math.round(box.y + box.height);
+      })
+      .toBe(height);
   }
 
   /** On a phone: a Session's row in the Sessions sheet. */
   sheetRow(name: string): Locator {
-    return this.sessionsSheet.getByRole("button").filter({
-      has: this.page.getByText(name, { exact: true }),
-    });
+    return this.sessionsSheet.getByRole("button", { name, exact: true });
   }
 
   /** On a phone: the dot on the title's Workspace name, for a Bell elsewhere in it. */
