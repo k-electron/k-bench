@@ -106,6 +106,8 @@ test("tapping the title lists the Workspace's Sessions, and tapping one shows it
 
   await app.openSessionsSheet();
 
+  // It is headed by the Workspace's name.
+  await expect(app.sessionsSheet).toHaveAccessibleName("alpha");
   // Prime, Worker, then the Other Sessions; the one on screen is highlighted.
   await expect(app.sessionsSheet.getByRole("listitem")).toHaveText([
     /^Prime/,
@@ -122,9 +124,9 @@ test("tapping the title lists the Workspace's Sessions, and tapping one shows it
   await expect(app.phoneTitle).toHaveText("alpha › Worker");
   await expect(app.terminal("session 1")).toHaveCount(0);
 
-  // Tapping outside the sheet closes it without choosing.
+  // Tapping outside the sheet, above it, closes it without choosing.
   await app.openSessionsSheet();
-  await app.sessionsSheet.getByRole("button", { name: "Close sessions" }).tap();
+  await app.page.touchscreen.tap(10, 10);
   await expect(app.sessionsSheet).toBeHidden();
   await expect(app.phoneTitle).toHaveText("alpha › Worker");
 });
