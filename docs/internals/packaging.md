@@ -25,7 +25,7 @@ The installer finds its files in the package folder, the nearest folder with a `
 2. Copy `dist/js/src`, `dist/web` and `scripts/fix-node-pty.mjs` into `app.staging` beside the database, with a generated `package.json` holding only the name, version, `engines` and `dependencies`, so installing runs none of the package's own scripts.
 3. Write `build-info.json` there: the `version` and `installedAt`, plus `commit` and `dirty` from git when installing from a checkout. The server's startup line names the version and, from a checkout, the commit.
 4. `npm install --omit=dev` in the staging folder, then the `spawn-helper` fix and check. This is the only step that needs the network.
-5. Stop the LaunchAgent, swap `app.staging` in as `app` (two renames), write the plist, load it, and wait until the server answers 403 on `127.0.0.1`.
+5. Stop the LaunchAgent, swap `app.staging` in as `app` (two renames), write the plist (`~/Library/LaunchAgents/com.k-bench.server.plist`, which starts the server at login and again after a crash, with `K_BENCH_ALLOWED_LOGIN` set to the login read from Tailscale or given with `--login`), load it, and wait until the server answers 403 on `127.0.0.1`.
 6. Publish with `tailscale serve --bg --https=<port>`. With `--force` over someone else's entry, that entry is switched off first.
 
 It ends by printing the URL: `https://<your-host>.<tailnet>.ts.net/`, with `:<port>` when the port isn't 443.

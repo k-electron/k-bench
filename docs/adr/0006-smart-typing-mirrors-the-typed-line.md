@@ -15,4 +15,4 @@ The field is cleared after every key that isn't text: Enter, Tab, Esc, arrows, C
 - iOS sends Enter before it applies a pending autocorrection. So Enter goes to the Session when the field reports the line break, after the correction has been sent.
 - Spacebar-drag caret moves aren't followed. Programs differ in how they move the cursor, and in a hidden field iOS puts the caret in odd places. k-bench moves the caret back to the end instead. An edit away from the end is still sent correctly, by deleting back to it and retyping.
 - k-bench can't tell when a full-screen program such as vim is running, because xterm.js only ever talks to tmux. Smart typing is therefore a per-Session switch in the Extra keys, and off behaves exactly as before.
-- The evidence is a device probe. [PR #97](https://github.com/k-electron/k-bench/pull/97) built smart typing, and its spec has the probe's findings.
+- The evidence is a device probe. [PR #97](https://github.com/k-electron/k-bench/pull/97) built Smart typing, and its spec has the probe's findings.
