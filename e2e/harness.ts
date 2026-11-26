@@ -528,10 +528,10 @@ export class AppPage {
   }
 
   /**
-   * Fills in the open New Claude dialog and presses Launch. Everything is optional: the name,
-   * and each Launch option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
+   * Fills in the open New Claude dialog. Everything is optional: the name, and each Launch
+   * option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
    */
-  async launchClaude(
+  async fillClaudeDialog(
     options: {
       name?: string;
       model?: string;
@@ -548,14 +548,29 @@ export class AppPage {
     for (const field of ["Model", "Effort", "Advisor"] as const) {
       const choice = options[field.toLowerCase() as "model" | "effort" | "advisor"];
       if (choice !== undefined) {
-        await this.claudeDialog.getByLabel(field, { exact: true }).selectOption(choice);
+        const select = this.claudeDialog.getByRole("combobox", {
+          name: field,
+          exact: true,
+        });
+        await select.click();
+        await this.page.getByRole("option", { name: choice, exact: true }).click();
+        // Until the list has animated out, it hides the rest of the page from the accessibility tree.
+        await expect(this.page.getByRole("listbox")).toHaveCount(0);
+        await expect(select).toHaveText(choice);
       }
     }
     if (options.focusView !== undefined) {
       await this.claudeDialog
-        .getByRole("checkbox", { name: "Focus view" })
+        .getByRole("switch", { name: "Focus view" })
         .setChecked(options.focusView);
     }
+  }
+
+  /** Fills in the open New Claude dialog, as `fillClaudeDialog` does, and presses Launch. */
+  async launchClaude(
+    options: Parameters<AppPage["fillClaudeDialog"]>[0] = {},
+  ): Promise<void> {
+    await this.fillClaudeDialog(options);
     await this.claudeDialog.getByRole("button", { name: "Launch", exact: true }).click();
   }
 

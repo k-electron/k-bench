@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog";
+import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 
 /**
@@ -87,8 +88,8 @@ export function NewWorkspaceDialog({
               setError(undefined);
             }}
           />
-          <div className="grid gap-1.5 text-sm">
-            <label htmlFor={nameId}>Name</label>
+          <Field>
+            <FieldLabel htmlFor={nameId}>Name</FieldLabel>
             <Input
               id={nameId}
               // Follows the folder until the owner types a name of their own.
@@ -99,12 +100,8 @@ export function NewWorkspaceDialog({
                 setError(undefined);
               }}
             />
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          </Field>
+          {error && <FieldError>{error}</FieldError>}
           <DialogFooter>
             <Button type="submit" disabled={folder === undefined}>
               {newFolders === 0

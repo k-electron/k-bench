@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { choicePath, type FolderChoice } from "@/folders";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { FOLDER_DIALOG_CLASS, FolderPicker } from "./FolderPicker";
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 
 export type WorkspaceEdit = "rename" | "folder";
@@ -44,6 +45,7 @@ export function EditWorkspaceDialog({
   // Set only once the owner has moved in the picker.
   const [choice, setChoice] = useState<FolderChoice>();
   const [error, setError] = useState<string>();
+  const nameId = useId();
   const folder = choice && choicePath(choice);
   const value = renaming ? name.trim() : folder === workspace.folder ? undefined : folder;
 
@@ -83,15 +85,18 @@ export function EditWorkspaceDialog({
             </DialogDescription>
           </DialogHeader>
           {renaming ? (
-            <Input
-              aria-label="Name"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                setError(undefined);
-              }}
-              autoFocus
-            />
+            <Field>
+              <FieldLabel htmlFor={nameId}>Name</FieldLabel>
+              <Input
+                id={nameId}
+                value={name}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setError(undefined);
+                }}
+                autoFocus
+              />
+            </Field>
           ) : (
             <FolderPicker
               workspaces={workspaces}
@@ -102,11 +107,7 @@ export function EditWorkspaceDialog({
               }}
             />
           )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <FieldError>{error}</FieldError>}
           <DialogFooter>
             <Button type="submit" disabled={!value}>
               Save
