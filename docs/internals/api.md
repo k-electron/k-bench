@@ -14,7 +14,7 @@ The contract between the server and its clients. The rules the owner sees are in
 
 - `openWorkspaceId`: the Open Workspace (the one last opened, else the first by position), or `null` when there are no Workspaces.
 - `workspaces`, in the owner's order, each `{id, name, folder, position, createdAt, missing, sessions, rightPane}`. `createdAt` only orders by age. `missing` is true when the folder no longer exists.
-- `sessions`: the Prime, the Worker, then the Other Sessions in the owner's order, each `{id, name, kind, role, status, bell}`. `kind` is `"shell"` or `"claude"`, `role` is `"prime"`, `"worker"` or `null` for an Other Session, and `status` is `"running"` or `"stopped"`.
+- `sessions`: the Prime, the Worker, then the Other Sessions in the owner's order, each `{id, name, kind, role, status, bell, activity}`. `kind` is `"shell"` or `"claude"`, `role` is `"prime"`, `"worker"` or `null` for an Other Session, and `status` is `"running"` or `"stopped"`. `bell` is whether it has a [Bell](bell.md). `activity` is a running Claude Session's state, `"working"`, `"waiting"` or `"idle"` ([Claude Session states](session-states.md)), and `null` for a shell or a Stopped Session.
 - `rightPane`: `{shown, tabs}`, the Other Session ids opened in the right Pane as Tabs, in order, and the one shown, `null` for the Worker.
 
 A Claude Session's Launch options and conversation ID are not in the state.

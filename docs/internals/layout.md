@@ -23,7 +23,7 @@ What each module owns, and any rule that lives only there. The code says how.
 - `service.ts`: the domain rules: what may be created, changed, opened, deleted or restarted, and when a Prime and Worker start.
 - `store.ts`: the SQLite database and its append-only migrations. It never records whether a Session is running ([ADR 0002](../adr/0002-tmux-is-the-source-of-truth-for-liveness.md)).
 - `tmux.ts`: the only module that runs tmux. It keeps no state about Sessions, owns the Bell rule ([The Bell](bell.md)), and binds the wheel to scroll History one line per report.
-- `claude.ts`: everything k-bench knows about Claude Code ([ADR 0005](../adr/0005-k-bench-launches-claude-code.md)): the flags the Launch options map to, the `SessionStart` hook and the launcher script.
+- `claude.ts`: everything k-bench knows about Claude Code ([ADR 0005](../adr/0005-k-bench-launches-claude-code.md)): the flags the Launch options map to, the hooks that report the conversation and the [Claude Session states](session-states.md), and the launcher script.
 - `reconciler.ts`: squares the store with tmux. It kills tmux sessions with no store row, and stores the conversation each Claude Session reports.
 - `attachments.ts`: a browser terminal's whole life on a Session. `terminal.ts` is the terminal WebSocket, a thin adapter onto it.
 - `state-feed.ts`: change detection and revisions for the events WebSocket, `events.ts`.
@@ -53,7 +53,7 @@ Views:
 
 - `workspaceView.ts`: works out the desktop's Panes from the state (what each shows, the Tabs, which is shut, which has the keyboard), and components render what it says. It also owns what runs once per page load at any size: opening the Open Workspace, the browser tab's title, and forgetting stale stored choices.
 - `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device.
-- `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, and whether a Workspace has a Bell.
+- `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, whether a Workspace has a Bell, and which one marker a Session shows, the most urgent first (Waiting, its Bell, Working, Idle).
 - `folders.ts`: the folder picker's pure path work: Places, breadcrumbs, typed paths and new folder names.
 - `useIsPhone.ts`: the one breakpoint for the Phone layout. `useKeyboardUp.ts`: whether the on-screen keyboard is up, and the area the app fits into then. `useSidebarCollapsed.ts`: whether the sidebar is collapsed on this Device, which `App.tsx` hands the `SidebarProvider`.
 
@@ -69,8 +69,8 @@ The terminal:
 
 Components render what the view modules decide.
 
-- `WorkspaceView`: the desktop's two Panes, their label bars, the divider and the Rails. `RightPaneTabs` is the right Pane's Tabs, on shadcn/ui's `Tabs` with no `TabsContent`, so switching Tabs never animates the Pane. `DesktopTitle` is the desktop's top bar: the Open Workspace, then the Session with the keyboard, which `workspaceView.ts` works out. `SessionMarker` is a Session's marker slot on its Tab, its Rail and the left Pane's label bar, for now only its Bell; it sits beside the button it marks, never inside, so its label stays out of that button's accessible name. `Pane` is a Session's terminal, or Restart when it is Stopped; `MissingPane` stands in for a Stopped Session of a Missing Workspace.
-- `PhoneView`: the Phone layout's Session, its title and the Sessions sheet the title opens, with a marker slot for each Session. `ExtraKeys` is the Extra keys row, laid out as equal columns so every key is the same width, and `TypingKeys` the few that float over the terminal while the on-screen keyboard is up.
+- `WorkspaceView`: the desktop's two Panes, their label bars, the divider and the Rails. `RightPaneTabs` is the right Pane's Tabs, on shadcn/ui's `Tabs` with no `TabsContent`, so switching Tabs never animates the Pane. `DesktopTitle` is the desktop's top bar: the Open Workspace, then the Session with the keyboard, which `workspaceView.ts` works out. `SessionMarker` is a Session's one marker, the same everywhere it shows: its sidebar row, the collapsed sidebar's icon, its Tab, its Rail, the left Pane's label bar, the phone's title and the Sessions sheet. It sits beside the button it marks, never inside, so screen readers read its label and it stays out of that button's accessible name. `Pane` is a Session's terminal, or Restart when it is Stopped; `MissingPane` stands in for a Stopped Session of a Missing Workspace.
+- `PhoneView`: the Phone layout's Session, its title and the Sessions sheet the title opens, each with the Session's `SessionMarker`. `ExtraKeys` is the Extra keys row, laid out as equal columns so every key is the same width, and `TypingKeys` the few that float over the terminal while the on-screen keyboard is up.
 - `TerminalView`: xterm.js on a terminal connection, where the terminal modules above plug in.
 - `Sidebar`: the sidebar and its menus, on shadcn/ui's `Sidebar`: beside the Panes it collapses to tiles, and in the Phone layout it is the drawer. `SidebarTree` is its expanded rows, `SidebarTiles` its collapsed tiles, `SidebarDialogs` the dialogs its menus open. `Reorderable` is every drag-to-reorder list, so a click, tap or swipe stays itself.
 - `NewWorkspaceDialog`, `EditWorkspaceDialog`, `DeleteWorkspaceDialog`, `NewClaudeDialog`, `RenameSessionDialog`, `DeleteSessionDialog`: one dialog each. `FolderPicker` is the folder picker New Workspace and Change folder share: its Places and folder list are shadcn `Command`s, and it renders what `folders.ts` works out. Its path field's suggestions are hand-built, because a `Command` always selects one and Enter must go to the typed path.

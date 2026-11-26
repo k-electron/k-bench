@@ -2,7 +2,7 @@
 
 k-bench launches Claude Code for you and resumes it when you restart. Every Workspace comes with two Claude Sessions, the Prime and the Worker, and you can launch more from the New Claude dialog.
 
-k-bench starts and resumes Claude Code with its documented command-line flags, and adds one silent hook so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
+k-bench starts and resumes Claude Code with its documented command-line flags, and adds silent hooks so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)) and [what it is doing](#see-what-a-claude-session-is-doing). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
 
 ## The Prime plans and the Worker builds
 
@@ -73,6 +73,12 @@ It can't follow a move when Claude Code doesn't run hooks: in a folder you haven
 Claude Code saves a conversation only after your first message. If you quit before sending one, including after a `/clear`, the restart starts a fresh conversation with the same ID and Launch options.
 
 Deleting a Claude Session leaves its conversation alone, so `claude --resume` in a terminal still finds it.
+
+## See what a Claude Session is doing
+
+Each Claude Session shows whether it is **Working**, in a turn, or **Idle**, its turn over and nothing asked of you. The state is kept on your Mac, so every Device shows the same, and it changes live. A Session shows one marker, so while it has a [Bell](using-k-bench.md#bells) the Bell shows instead, until you view the Session. Shells and Stopped Sessions have no state, and Working and Idle never show on a Workspace's tile.
+
+k-bench learns the state from hooks it adds to each Claude Code it launches, alongside the conversation hook, and like it they print nothing. Where Claude Code doesn't run hooks (an untrusted folder, or `disableAllHooks`), the Session always shows Idle, and so does one started by an older k-bench until you restart it. Claude Code reports nothing when you press Esc to interrupt a turn, so the Session shows Working until its next turn ends.
 
 ## Typing `claude` in an ordinary Session
 

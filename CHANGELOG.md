@@ -6,6 +6,10 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Added
+
+- Each Claude Session shows whether it is **Working** (a small blue spinner) or **Idle** (a grey dot) on its sidebar row, Tab, Rail and Pane label bar, the collapsed sidebar and, on a phone, the title and the Sessions sheet, live on every Device; a Bell's amber dot takes its place until you view the Session. k-bench learns the state from silent hooks it adds to each Claude Code it launches, so nothing reaches the conversation.
+
 ### Changed
 
 - A new look outside the terminal: the frame's greys now match the terminal's background, so no seam shows around the Panes, with one blue accent for the main buttons, focus rings and the Sessions on screen in the sidebar, and dialogs, menus and the sidebar that animate. On a desktop the top bar reads Workspace › the Session with the keyboard, the right Pane's active Tab is underlined in blue, the divider lights up while you hover or drag it, and icon-only buttons, Rails and the collapsed sidebar's tiles and Session icons show their name in a tooltip; a Stopped Session's row is dimmed with a "stopped" badge, every dialog field has its label above it, Focus view is a switch, the arrow keys and Enter work in the folder picker's Places and folders, the phone's Sessions sheet slides up from the bottom headed by its Workspace, and the Extra keys are all the same width, with Ctrl and Smart typing filling blue while on; the terminal looks exactly as before.
