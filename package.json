@@ -58,7 +58,7 @@
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.6",
+    "@hono/node-server": "2.1.11",
     "hono": "4.13.16",
     "node-pty": "1.1.0",
     "ws": "8.22.1"
