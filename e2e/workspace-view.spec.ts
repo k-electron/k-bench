@@ -32,7 +32,7 @@ test("opening a Workspace shows its Prime on the left and its Worker on the righ
   await expect(page).toHaveTitle("beta — k-bench");
 });
 
-test("an Other Session opens in the right Pane, never the left, and only Pane Sessions are highlighted", async ({
+test("an Other Session opens in the right Pane, never the left, and only Pane Sessions are highlighted; the top bar names the Session with the keyboard", async ({
   app,
   kbench,
 }) => {
@@ -42,6 +42,11 @@ test("an Other Session opens in the right Pane, never the left, and only Pane Se
   await expect(app.terminalIn("right", "session 2")).toBeVisible();
   await app.session("session 1").click();
   await expect(app.terminalIn("right", "session 1")).toBeVisible();
+  await expect(app.workspaceTitle).toHaveText("project");
+  await expect(app.headerSession).toHaveText("session 1");
+  // The top bar follows the keyboard into the other Pane.
+  await app.terminalIn("left", "Prime").click();
+  await expect(app.headerSession).toHaveText("Prime");
   await expect(app.terminal("session 2")).toHaveCount(0);
   await expect(app.pane("left").getByRole("region")).toHaveAccessibleName(
     "Terminal Prime",
@@ -108,6 +113,8 @@ test("dragging the divider to an edge shuts the left Pane to a rail, and opening
   await expect(app.rail("left", "Prime")).toBeVisible();
   await expect(app.terminal("Prime")).toHaveCount(0);
   await expect(app.terminalIn("right", "Worker")).toBeVisible();
+  await app.rail("left", "Prime").hover();
+  await expect(app.page.getByRole("tooltip", { name: "Show Prime" })).toBeVisible();
 
   await app.rail("left", "Prime").click();
 

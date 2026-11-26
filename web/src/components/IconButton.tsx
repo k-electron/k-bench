@@ -5,15 +5,19 @@ import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 /**
- * An icon-only ghost `Button`, named by `label`, which a `Tooltip` shows on desktop. The
- * Phone layout has no tooltip: there is no hover, and one opened by focus only gets in the way.
+ * An icon-only ghost `Button`, named by `label`, which a `Tooltip` shows on desktop (or
+ * `tooltip`, when it should say more than the name). The Phone layout has no tooltip:
+ * there is no hover, and one opened by focus only gets in the way.
  */
 export function IconButton({
   label,
+  tooltip = label,
   className,
   children,
   ...rest
-}: { label: string; children: ReactNode } & ComponentProps<typeof Button>) {
+}: { label: string; tooltip?: ReactNode; children: ReactNode } & ComponentProps<
+  typeof Button
+>) {
   const phone = useIsPhone();
   const button = (
     <Button
@@ -37,7 +41,7 @@ export function IconButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
   );
 }

@@ -41,6 +41,8 @@ export interface WorkspaceView {
    * something for, or last clicked into, unless that one is shut.
    */
   focusedTerminal: Side;
+  /** The Session in the Pane with the keyboard, which the top bar names, if it shows one. */
+  focusedSession: SessionState | undefined;
   /**
    * The Open Workspace is being opened, which starts its Stopped Prime and Worker: their
    * Panes wait for their terminals rather than offering Restart.
@@ -288,6 +290,9 @@ export function useWorkspaceView(
     open(id, { showWorker: true });
   };
 
+  const focusedTerminal = focused === divider.shut ? otherSide(focused) : focused;
+  const focusedContent = focusedTerminal === "left" ? left : right;
+
   const shown = new Set<string>();
   if (divider.shut !== "left" && left.kind === "session") shown.add(left.session.id);
   if (divider.shut !== "right" && right.kind === "session") shown.add(right.session.id);
@@ -300,7 +305,9 @@ export function useWorkspaceView(
     tabs,
     ratio: divider.ratio,
     shut: divider.shut,
-    focusedTerminal: focused === divider.shut ? otherSide(focused) : focused,
+    focusedTerminal,
+    focusedSession:
+      focusedContent.kind === "session" ? focusedContent.session : undefined,
     starting: !openedOnLoad || opening > 0,
     shown,
     openWorkspace,

@@ -139,7 +139,7 @@ export class AppPage {
 
   /** A tab in the right Pane's tab bar: "Worker", or an Other Session's name. */
   rightTab(name: string): Locator {
-    return this.pane("right").getByRole("button", { name, exact: true });
+    return this.pane("right").getByRole("tab", { name, exact: true });
   }
 
   /** The × on an Other Session's tab in the right Pane. */
@@ -161,6 +161,14 @@ export class AppPage {
   /** On a desktop or tablet: the Open Workspace's name in the top bar. */
   get workspaceTitle(): Locator {
     return this.page.getByRole("main").getByRole("heading", { level: 1 });
+  }
+
+  /** On a desktop or tablet: the Session with the keyboard, after the top bar's Workspace. */
+  get headerSession(): Locator {
+    return this.page
+      .getByRole("main")
+      .getByRole("navigation", { name: "breadcrumb", exact: true })
+      .getByRole("link");
   }
 
   /** Opens a Workspace by clicking its name in the sidebar. */

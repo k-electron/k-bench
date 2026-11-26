@@ -1,3 +1,4 @@
+import { DesktopTitle } from "@/components/DesktopTitle";
 import { ExtraKeys } from "@/components/ExtraKeys";
 import { PhoneMenuButton, PhoneTitle, PhoneView } from "@/components/PhoneView";
 import { Sidebar } from "@/components/Sidebar";
@@ -92,7 +93,7 @@ function Shell() {
         )}
       >
         {!keyboardUp && (
-          <div className="flex h-9 shrink-0 items-center border-b">
+          <header className="flex h-11 shrink-0 items-center gap-1 border-b px-2">
             {phone ? (
               <>
                 <PhoneMenuButton view={phoneView} onOpen={() => setOpenMobile(true)} />
@@ -100,15 +101,10 @@ function Shell() {
               </>
             ) : (
               view.workspace && (
-                <h1
-                  className="min-w-0 truncate px-3 text-sm font-medium"
-                  title={view.workspace.folder}
-                >
-                  {view.workspace.name}
-                </h1>
+                <DesktopTitle workspace={view.workspace} session={view.focusedSession} />
               )
             )}
-          </div>
+          </header>
         )}
         <div className="relative flex min-h-0 flex-1 flex-col">
           {state &&
