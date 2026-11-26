@@ -12,10 +12,7 @@ export const HERO_RECORDING =
 export const IMAGE_NAMES = [
   "hero.png",
   "desktop.png",
-  "bell.png",
   "new-claude.png",
-  "claude-sidebar.png",
-  "phone-drawer.png",
   "phone-terminal.png",
 ] as const;
 export type ImageName = (typeof IMAGE_NAMES)[number];
