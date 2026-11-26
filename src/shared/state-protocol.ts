@@ -17,6 +17,12 @@ export type SessionKind = "shell" | "claude";
  */
 export type SessionRole = "prime" | "worker";
 
+/**
+ * What a running Claude Session's Claude Code is doing: Working in a turn, Waiting on the
+ * owner mid-turn, or Idle. Only Claude Sessions have one.
+ */
+export type SessionActivity = "working" | "waiting" | "idle";
+
 export interface SessionState {
   id: string;
   name: string;
@@ -25,6 +31,8 @@ export interface SessionState {
   status: "running" | "stopped";
   /** The Session's program rang the terminal bell and nobody has seen it since. */
   bell: boolean;
+  /** A running Claude Session's state; null for a shell and for a Stopped Session. */
+  activity: SessionActivity | null;
 }
 
 /**

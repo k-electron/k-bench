@@ -3,6 +3,8 @@ import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
 import {
+  ACTIVITY_CHANNEL,
+  ACTIVITY_OPTION,
   type ClaudeLaunch,
   CONVERSATION_CHANNEL,
   CONVERSATION_OPTION,
@@ -21,10 +23,15 @@ const BELL_CHANNEL = "kb-bell-changed";
 /** How long a channel watch waits before trying again after tmux failed it unexpectedly. */
 const WATCH_RETRY_MS = 1_000;
 
-/** A Session whose shell is alive, with its Bell. */
+/** A Session whose shell is alive, with what tmux holds about it. */
 export interface LiveSession {
   id: string;
   bell: boolean;
+  /**
+   * For a Claude Session, the state Claude Code last reported, as the activity hooks wrote it
+   * (`ACTIVITY_OPTION`): unchecked, and empty until a hook has run.
+   */
+  activity: string;
   /**
    * For a Claude Session, the conversation Claude Code last reported starting, as its hook
    * wrote it (`CONVERSATION_OPTION`): unchecked, and empty until the hook has run.
@@ -234,6 +241,15 @@ export class TmuxDriver {
     return this.watchChannel(CONVERSATION_CHANNEL, onChange);
   }
 
+  /**
+   * Calls `onChange` soon after Claude Code in any Claude Session reports a new state (and
+   * now and then when none did), until stopped; `listSessions` then has it. Like the Bells,
+   * reports are missed only while no tmux server runs.
+   */
+  watchActivity(onChange: () => void): ChannelWatch {
+    return this.watchChannel(ACTIVITY_CHANNEL, onChange);
+  }
+
   private watchChannel(channel: string, onChange: () => void): ChannelWatch {
     const watch = new ChannelWatcher(
       [...this.baseArgs(), "wait-for", channel],
@@ -257,9 +273,9 @@ export class TmuxDriver {
   }
 
   /**
-   * The Sessions whose shell is currently alive on this socket, with their Bells and
-   * conversations. The conversation is a pane option; a session's format reads it from the
-   * session's one pane.
+   * The Sessions whose shell is currently alive on this socket, with their Bells, states and
+   * conversations. The state and conversation are pane options; a session's format reads them
+   * from the session's one pane.
    */
   async listSessions(): Promise<LiveSession[]> {
     let stdout: string;
@@ -267,7 +283,8 @@ export class TmuxDriver {
       stdout = await this.run([
         "list-sessions",
         "-F",
-        `#{session_name}\t#{${BELL_OPTION}}\t#{${CONVERSATION_OPTION}}`,
+        // The conversation goes last: it is read as the rest of the line.
+        `#{session_name}\t#{${BELL_OPTION}}\t#{${ACTIVITY_OPTION}}\t#{${CONVERSATION_OPTION}}`,
       ]);
     } catch (error) {
       if (isNoServer(error)) return [];
@@ -277,10 +294,11 @@ export class TmuxDriver {
       .split("\n")
       .filter((line) => line.startsWith(PREFIX))
       .map((line) => {
-        const [name = "", bell = "", ...conversation] = line.split("\t");
+        const [name = "", bell = "", activity = "", ...conversation] = line.split("\t");
         return {
           id: name.slice(PREFIX.length),
           bell: bell !== "",
+          activity,
           conversation: conversation.join("\t"),
         };
       });

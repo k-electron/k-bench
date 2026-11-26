@@ -7,12 +7,18 @@ import {
   ROLE_LAUNCH_OPTIONS,
 } from "../shared/launch-options.ts";
 import { sessionsByRole } from "../shared/session-roles.ts";
-import type { RightPaneState, SessionRole, State } from "../shared/state-protocol.ts";
+import type {
+  RightPaneState,
+  SessionActivity,
+  SessionKind,
+  SessionRole,
+  State,
+} from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
-import type { TmuxDriver } from "./tmux.ts";
+import type { LiveSession, TmuxDriver } from "./tmux.ts";
 
 /**
  * A failure the HTTP layer maps to a status code. `details` go into the response body
@@ -51,6 +57,20 @@ function assertNoRole(session: { role: SessionRole | null }, change: string): vo
       `The ${ROLE_NAMES[session.role]} can't be ${change}`,
     );
   }
+}
+
+const ACTIVITIES: readonly SessionActivity[] = ["working", "waiting", "idle"];
+
+/**
+ * A Session's state: none for a shell or a Stopped Session. A running Claude Session is in the
+ * state its hooks last wrote, and Idle until one has run (or when what they wrote isn't one).
+ */
+function activityOf(
+  session: { kind: SessionKind },
+  live: LiveSession | undefined,
+): SessionActivity | null {
+  if (session.kind !== "claude" || !live) return null;
+  return ACTIVITIES.find((activity) => activity === live.activity) ?? "idle";
 }
 
 function isDirectory(path: string): boolean {
@@ -478,6 +498,7 @@ export class Service {
           role: session.role,
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
+          activity: activityOf(session, live.get(session.id)),
         })),
         rightPane: this.rightPane(workspace.id),
       })),

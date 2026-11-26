@@ -47,6 +47,7 @@ export async function startServer(
   });
   const events = new EventSockets(feed);
   const bells = tmux.watchBells(() => feed.notify());
+  const activity = tmux.watchActivity(() => feed.notify());
   // A Claude Session's new conversation is stored at once, whether or not anyone is viewing
   // it. One reconcile at a time; stopping waits for the last before the database closes.
   let following = Promise.resolve();
@@ -103,6 +104,7 @@ export async function startServer(
   const stop = () => {
     stopping ??= (async () => {
       await bells.stop();
+      await activity.stop();
       await conversations.stop();
       await following;
       events.closeAll();

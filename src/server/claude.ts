@@ -1,8 +1,8 @@
 /**
  * Launching Claude Code for a Claude Session (ADR-0005). k-bench starts it through its
- * documented command-line flags and learns which conversation it is on through a silent
- * `SessionStart` hook, so everything k-bench knows about Claude Code is in this file: the
- * flags it passes, the hook, and the launcher script that runs it.
+ * documented command-line flags and learns which conversation it is on, and whether it is
+ * Working or Idle, through silent hooks, so everything k-bench knows about Claude Code is in
+ * this file: the flags it passes, the hooks, and the launcher script that runs it.
  */
 
 import {
@@ -10,6 +10,7 @@ import {
   LAUNCH_CHOICES,
   type LaunchOptions,
 } from "../shared/launch-options.ts";
+import type { SessionActivity } from "../shared/state-protocol.ts";
 
 /**
  * Reads Launch options from a request. A field left out is Default; a value that is not one
@@ -86,16 +87,88 @@ const CONVERSATION_HOOK = [
 ].join(" ");
 
 /**
- * The `--settings` every launch passes: the conversation hook and, with Focus view on, its
- * keys. Focus view needs both keys: it does nothing without the fullscreen renderer, and
+ * The tmux pane user option the activity hooks write a Claude Session's state to (a
+ * `SessionActivity`), on the pane Claude Code runs in, and the tmux `wait-for` channel they
+ * signal after, so the state feed re-reads at once (see `TmuxDriver`). It is empty until a
+ * hook has run, which reads as Idle.
+ */
+export const ACTIVITY_OPTION = "@kb-activity";
+export const ACTIVITY_CHANNEL = "kb-activity-changed";
+
+/**
+ * Matches the stdin of an event fired inside a subagent (or a teammate), which carries an
+ * `agent_id` key. It can't match inside a value, such as a prompt, since JSON escapes a `"`
+ * there. Such events say nothing about the Session's own turn, so the activity hooks ignore
+ * them.
+ */
+const FROM_AN_AGENT = '"agent_id"[[:space:]]*:';
+
+/**
+ * The hook that records `activity` on its own tmux pane and signals the channel, unless its
+ * event came from a subagent or its stdin matches `ignore` (an extended regex). It is built
+ * like the conversation hook, for the same reasons: it prints nothing, exits 0 whatever
+ * happens, and is one line of plain `sh` with no `jq`. The state it writes is k-bench's own
+ * word, never taken from stdin.
+ */
+function activityHook(activity: SessionActivity, ignore?: string): string {
+  const skip = [FROM_AN_AGENT, ...(ignore ? [ignore] : [])].join("|");
+  return [
+    "{",
+    "input=$(tr -d '\\n');",
+    `if printf '%s' "$input" | grep -Eq '${skip}'; then :;`,
+    'elif [ -n "$TMUX_PANE" ]; then',
+    `tmux set-option -p -t "$TMUX_PANE" ${ACTIVITY_OPTION} ${activity} &&`,
+    `tmux wait-for -S ${ACTIVITY_CHANNEL};`,
+    "fi;",
+    "} >/dev/null 2>&1; exit 0",
+  ].join(" ");
+}
+
+/**
+ * Which Claude Code hook events set which state (see Working, Waiting and Idle in the
+ * glossary):
+ * - `SessionStart`: a new or restarted Claude Session, or a new conversation in one, starts
+ *   Idle. Not on compaction, which can happen mid-turn and keeps the turn going.
+ * - `UserPromptSubmit`: a turn starts, so Working.
+ * - `Stop`, and `StopFailure` (fired instead when an API error ends the turn): the turn is
+ *   over, so Idle. Neither fires for a subagent.
+ */
+const ACTIVITY_EVENTS: { event: string; activity: SessionActivity; ignore?: string }[] = [
+  {
+    event: "SessionStart",
+    activity: "idle",
+    ignore: '"source"[[:space:]]*:[[:space:]]*"compact"',
+  },
+  { event: "UserPromptSubmit", activity: "working" },
+  { event: "Stop", activity: "idle" },
+  { event: "StopFailure", activity: "idle" },
+];
+
+type HookGroups = { hooks: { type: "command"; command: string }[] }[];
+
+/** Every hook k-bench passes, by Claude Code hook event: the conversation's, then the states'. */
+function launchHooks(): Record<string, HookGroups> {
+  const hooks: Record<string, HookGroups> = {
+    SessionStart: [{ hooks: [{ type: "command", command: CONVERSATION_HOOK }] }],
+  };
+  for (const { event, activity, ignore } of ACTIVITY_EVENTS) {
+    hooks[event] = [
+      ...(hooks[event] ?? []),
+      { hooks: [{ type: "command", command: activityHook(activity, ignore) }] },
+    ];
+  }
+  return hooks;
+}
+
+/**
+ * The `--settings` every launch passes: k-bench's hooks and, with Focus view on, its keys.
+ * Focus view needs both keys: it does nothing without the fullscreen renderer, and
  * fullscreen is not the default on every machine. `--settings` applies to that launch only
  * and adds to the owner's own settings and hooks, leaving their files unchanged.
  */
 function launchSettings(focusView: boolean): string {
   return JSON.stringify({
-    hooks: {
-      SessionStart: [{ hooks: [{ type: "command", command: CONVERSATION_HOOK }] }],
-    },
+    hooks: launchHooks(),
     ...(focusView ? { viewMode: "focus", tui: "fullscreen" } : {}),
   });
 }
@@ -104,7 +177,7 @@ function launchSettings(focusView: boolean): string {
  * The flags that follow the one naming the conversation. This is where Launch options become
  * flags: a Default option adds nothing. Advisor Off is not a flag (there is none): the
  * launcher sets `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` for it. `--settings` is always passed,
- * for the conversation hook.
+ * for k-bench's hooks.
  */
 function launchOptionArguments(options: LaunchOptions): string[] {
   const { model, effort, advisor, focusView } = options;
