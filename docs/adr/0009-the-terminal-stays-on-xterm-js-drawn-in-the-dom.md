@@ -4,7 +4,7 @@ The browser terminal is xterm.js with its default DOM renderer, plus its graphem
 
 ## Considered Options
 
-- **wterm with its libghostty core.** It draws emoji and block characters correctly, and it types through a real input field at the cursor. After one fix in k-bench's touch scrolling, a prototype showed no difference from xterm.js in typing or scrolling on the owner's iPhone. wterm was weeks old at version 0.6, and it replaces the text under the finger as the screen changes, which had cut drags short. The prototype and the fix are on the `prototype/wterm` branch.
+- **wterm with its libghostty core.** It draws emoji and block characters correctly, and it types through a real input field at the cursor. After one fix in k-bench's touch scrolling, a prototype showed no difference from xterm.js in typing or scrolling on the owner's iPhone. wterm was weeks old at version 0.6, and it replaces the text under the finger as the screen changes, which had cut drags short. [PR #197](https://github.com/k-electron/k-bench/pull/197) holds the prototype's measurements.
 - **xterm.js's WebGL renderer.** It draws block characters solid and gains one column on a phone. But it takes the screen's text out of the page, which the browser tests read. It also needs a fallback for when iOS takes the graphics context away. JetBrains Mono's own block characters already draw Claude Code's mascot almost solid without it.
 
 ## Consequences
