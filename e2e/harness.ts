@@ -29,7 +29,7 @@ export class AppPage {
     return this.page.getByRole("navigation", { name: "Workspaces" });
   }
 
-  /** On the phone: the sidebar's slide-out drawer (hidden until the menu button opens it). */
+  /** On the phone: the sidebar's drawer, a sheet from the left (absent until the menu button opens it). */
   get drawer(): Locator {
     return this.sidebar;
   }
@@ -37,7 +37,8 @@ export class AppPage {
   /** On the phone: opens the drawer from the menu button. */
   async openDrawer(): Promise<void> {
     await this.page.getByRole("button", { name: "Menu", exact: true }).tap();
-    await expect(this.drawer).toBeVisible();
+    // Done once it has slid in from the left edge, so its rows are where they will stay.
+    await expect.poll(async () => (await this.drawer.boundingBox())?.x).toBe(0);
   }
 
   /** On the phone: a button in the extra-keys row (Esc, Tab, Shift Tab, Ctrl, Up, ...). */
@@ -274,15 +275,20 @@ export class AppPage {
     }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
     // Done once the dialog has animated out (until then it hides the rest of the page from
-    // the accessibility tree), or once it shows why it refused.
+    // the accessibility tree), or once it shows why it refused. On the phone the drawer it
+    // was opened from is a dialog too, and stays open.
     await expect(
-      this.page.getByRole("dialog").filter({ hasNot: this.page.getByRole("alert") }),
+      this.page
+        .getByRole("dialog")
+        .filter({ hasNot: this.page.getByRole("alert") })
+        .filter({ hasNot: this.sidebar }),
     ).toHaveCount(0);
   }
 
   /** The open dialog's folder picker: Places, breadcrumbs, filter and the folder list. */
   get folderPicker(): Locator {
-    return this.page.getByRole("dialog");
+    // Not the phone's drawer, a dialog too, which stays open under it.
+    return this.page.getByRole("dialog").filter({ hasNot: this.sidebar });
   }
 
   /** The Places in the folder picker (Home, folders holding Workspaces, Computer). */
@@ -407,7 +413,7 @@ export class AppPage {
 
   /** The Workspaces' names in sidebar order. */
   async workspaceNames(): Promise<string[]> {
-    return this.sidebar.getByRole("heading").allTextContents();
+    return accessibleNames(this.sidebar.getByRole("heading").getByRole("button"));
   }
 
   /** Opens a Workspace's row menu and picks `item` (Rename, Change folder, Delete). */
@@ -431,9 +437,9 @@ export class AppPage {
    * Sessions with the default "session N" names.
    */
   async sessionNames(): Promise<string[]> {
-    return this.sidebar
-      .getByRole("button", { name: /^(Prime|Worker|session \d+)$/ })
-      .allTextContents();
+    return accessibleNames(
+      this.sidebar.getByRole("button", { name: /^(Prime|Worker|session \d+)$/ }),
+    );
   }
 
   /**
@@ -626,6 +632,18 @@ export class AppPage {
     await this.page.keyboard.press("Enter");
     await expect(terminal).toContainText(expectedOutput);
   }
+}
+
+/**
+ * The names of the buttons `buttons` finds, in order. A sidebar row's button is named
+ * explicitly (`aria-label`), since its text also holds a tile's letters or a badge.
+ */
+async function accessibleNames(buttons: Locator): Promise<string[]> {
+  return Promise.all(
+    (await buttons.all()).map(
+      async (button) => (await button.getAttribute("aria-label")) ?? "",
+    ),
+  );
 }
 
 /** A port nothing is listening on, so a stopped server can come back at the same address. */

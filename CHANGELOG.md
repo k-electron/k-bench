@@ -8,7 +8,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Changed
 
-- A new look outside the terminal: the frame's greys now match the terminal's background, so no seam shows around the Panes, with one blue accent for the main buttons and focus rings, and dialogs and menus that animate in and out. Icon-only buttons show their name in a tooltip on a desktop, every dialog field has its label above it, Focus view is a switch, and the arrow keys and Enter work in the folder picker's Places and folders; the terminal looks exactly as before.
+- A new look outside the terminal: the frame's greys now match the terminal's background, so no seam shows around the Panes, with one blue accent for the main buttons, focus rings and the Sessions on screen in the sidebar, and dialogs, menus and the sidebar that animate. Icon-only buttons and the collapsed sidebar's tiles and Session icons show their name in a tooltip on a desktop, a Stopped Session's row is dimmed with a "stopped" badge, every dialog field has its label above it, Focus view is a switch, and the arrow keys and Enter work in the folder picker's Places and folders; the terminal looks exactly as before.
 
 ### Fixed
 

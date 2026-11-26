@@ -20,15 +20,26 @@ import type { WorkspaceEdit } from "./EditWorkspaceDialog";
 import { IconButton } from "./IconButton";
 import { LIFTED, Reorderable, type SortableRow, useSortableRow } from "./Reorderable";
 import { SessionIcon } from "./SessionIcon";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Badge } from "./ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { Separator } from "./ui/separator";
+import {
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "./ui/sidebar";
 import { WorkspaceTile } from "./WorkspaceTile";
 
 // The expanded sidebar's tree: a Workspace's row, and the Open Workspace's Session rows.
+// A row's button is named explicitly, so what else sits inside it never joins its name.
 
 /**
  * Where the tree is shown: beside the Panes on a desktop or tablet, where it can collapse
@@ -38,14 +49,6 @@ import { WorkspaceTile } from "./WorkspaceTile";
 export type SidebarMode = "sidebar" | "drawer";
 
 export type SessionAction = "rename" | "delete";
-
-/**
- * The classes that stretch a row's main button over the whole row (which must be
- * `relative`), so a click anywhere on it opens the row. Other controls in the row sit
- * above it with `relative z-10`.
- */
-const STRETCHED =
-  "outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50";
 
 /**
  * One Workspace: its tile and name, which opens it and is what a drag picks up, and, for
@@ -74,104 +77,87 @@ export function WorkspaceItem({
   const { row, handle, isDragging } = useSortableRow(workspace.id);
 
   return (
-    <li
-      {...row}
-      className={cn("rounded-lg", isOpen && "bg-accent/30 pb-1", isDragging && LIFTED)}
-    >
-      <div
-        className={cn(
-          "relative flex items-center gap-2 rounded-md px-1",
-          mode === "drawer" ? "h-10" : "h-8",
-          !isOpen && "hover:bg-accent/60",
-        )}
-      >
-        {/* A folded Workspace's tile carries its Sessions' Bells. */}
-        <WorkspaceTile workspace={workspace} bell={!isOpen && hasBell(workspace)} />
-        <h2
-          className={cn("min-w-0 flex-1 text-sm", isOpen && "font-semibold")}
-          title={workspace.folder}
+    <SidebarMenuItem {...row} className={cn("rounded-md", isDragging && LIFTED)}>
+      <h2 className="text-sm font-normal" title={workspace.folder}>
+        {/* Opening it starts its Prime and Worker; opening the Open one brings back Prime with Worker. */}
+        <SidebarMenuButton
+          {...handle}
+          aria-label={workspace.name}
+          onClick={onOpen}
+          className={cn(mode === "drawer" && "h-10", isOpen && "pr-16 font-semibold")}
         >
-          {/* Opening it starts its Prime and Worker; opening the Open one brings back Prime with Worker. */}
-          <button
-            type="button"
-            {...handle}
-            onClick={onOpen}
-            className={cn("block w-full truncate text-left", STRETCHED)}
-          >
-            {workspace.name}
-          </button>
-        </h2>
-        {isOpen && (
-          <div className="relative z-10 flex items-center">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <IconButton label={`New session in ${workspace.name}`}>
-                  <PlusIcon className="size-4" />
-                </IconButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={onNewShell}>
-                  <TerminalIcon />
-                  New shell
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={onNewClaude}>
-                  <SparklesIcon />
-                  New Claude…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <IconButton label={`Actions for ${workspace.name}`}>
-                  <MoreHorizontalIcon className="size-4" />
-                </IconButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => onAction("rename")}>
-                  <PencilIcon />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onAction("folder")}>
-                  <FolderInputIcon />
-                  Change folder
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() => onAction("delete")}
-                >
-                  <Trash2Icon />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
-      </div>
+          {/* A folded Workspace's tile carries its Sessions' Bells. */}
+          <WorkspaceTile workspace={workspace} bell={!isOpen && hasBell(workspace)} />
+          <span>{workspace.name}</span>
+        </SidebarMenuButton>
+      </h2>
       {isOpen && (
-        <div className="ml-6 pr-0.5">
-          {workspace.missing && (
-            <div
-              role="note"
-              className="mx-1 mb-1 flex items-start gap-1.5 rounded bg-destructive/10 px-2 py-1 text-xs text-destructive"
-            >
-              <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-              <p>
-                Missing: its folder is gone, so Sessions can't start. Running ones carry
-                on.{" "}
-                <button
-                  type="button"
-                  onClick={() => onAction("folder")}
-                  className="font-medium underline underline-offset-2"
-                >
-                  Change folder
-                </button>
-              </p>
-            </div>
+        <div
+          className={cn(
+            "absolute right-1 flex items-center",
+            mode === "drawer" ? "top-2" : "top-0.5",
           )}
-          {children}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <IconButton label={`New session in ${workspace.name}`}>
+                <PlusIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onNewShell}>
+                <TerminalIcon />
+                New shell
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onNewClaude}>
+                <SparklesIcon />
+                New Claude…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <IconButton label={`Actions for ${workspace.name}`}>
+                <MoreHorizontalIcon />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onAction("rename")}>
+                <PencilIcon />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction("folder")}>
+                <FolderInputIcon />
+                Change folder
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => onAction("delete")}>
+                <Trash2Icon />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
-    </li>
+      {isOpen && workspace.missing && (
+        // A note, not an alert: it describes the Workspace rather than announcing a change.
+        <Alert variant="destructive" role="note" className="mx-1 mt-1 w-auto px-3 py-2">
+          <TriangleAlertIcon />
+          <AlertDescription className="text-xs">
+            <p>
+              Missing: its folder is gone, so Sessions can't start. Running ones carry on.{" "}
+              <button
+                type="button"
+                onClick={() => onAction("folder")}
+                className="font-medium underline underline-offset-2"
+              >
+                Change folder
+              </button>
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+      {isOpen && children}
+    </SidebarMenuItem>
   );
 }
 
@@ -202,16 +188,20 @@ export function SessionList({
   });
   // Only the Other Sessions reorder; the Prime and Worker sit above them, out of reach.
   return (
-    <ul className="grid gap-0.5">
+    <SidebarMenuSub className="mr-0 pr-0">
       {prime && <SessionItem key={prime.id} {...props(prime)} />}
       {worker && <SessionItem key={worker.id} {...props(worker)} />}
-      {others.length > 0 && <li aria-hidden="true" className="mx-2 my-1 border-t" />}
+      {others.length > 0 && (
+        <li aria-hidden="true" className="py-1">
+          <Separator className="bg-sidebar-border" />
+        </li>
+      )}
       <Reorderable ids={others.map((s) => s.id)} onReorder={onReorder}>
         {others.map((session) => (
           <SortableSessionItem key={session.id} {...props(session)} />
         ))}
       </Reorderable>
-    </ul>
+    </SidebarMenuSub>
   );
 }
 
@@ -221,8 +211,9 @@ function SortableSessionItem(props: Omit<ComponentProps<typeof SessionItem>, "dr
 }
 
 /**
- * One Session: its icon and name, "stopped" when it is, its Bell, and a ⋯ menu. The Prime
- * and Worker can't be renamed or deleted, so theirs appears only when Stopped, to restart.
+ * One Session: its icon and name, a "stopped" badge when it is, its Bell, and a ⋯ menu.
+ * The Prime and Worker can't be renamed or deleted, so theirs appears only when Stopped, to
+ * restart.
  */
 function SessionItem({
   session,
@@ -244,54 +235,66 @@ function SessionItem({
   const actions = useActions();
   const stopped = session.status === "stopped";
   const fixed = session.role !== null;
+  const hasMenu = !fixed || stopped;
   return (
-    <li
+    <SidebarMenuSubItem
       {...drag?.row}
-      className={cn(
-        "relative flex items-center gap-2 rounded-md px-2 text-sm",
-        mode === "drawer" ? "h-8" : "h-7",
-        isShown ? "bg-accent text-foreground" : "hover:bg-accent/60",
-        stopped && "text-muted-foreground",
-        drag?.isDragging && LIFTED,
-      )}
+      className={cn("rounded-md", drag?.isDragging && LIFTED)}
     >
-      <span
-        role="img"
-        aria-label={
-          session.kind === "claude"
-            ? `${session.name} is a Claude Session`
-            : `${session.name} is a shell`
-        }
-        className={cn("flex", stopped && "opacity-50")}
+      <SidebarMenuSubButton
+        asChild
+        isActive={isShown}
+        className={cn(
+          "w-full",
+          mode === "drawer" ? "h-9" : "h-7",
+          hasMenu ? "pr-12" : "pr-7",
+          stopped && "text-muted-foreground",
+          "data-[active=true]:shadow-[inset_2px_0_0_var(--primary)]",
+        )}
       >
-        <SessionIcon session={session} className="size-4" />
-      </span>
-      <button
-        type="button"
-        {...drag?.handle}
-        aria-current={isShown ? "true" : undefined}
-        onClick={onOpen}
-        className={cn("min-w-0 truncate text-left", STRETCHED)}
-      >
-        {session.name}
-      </button>
-      {stopped && (
-        <span className="shrink-0 text-[10px] uppercase tracking-wide">stopped</span>
-      )}
-      <span className="ml-auto flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          {...drag?.handle}
+          aria-label={session.name}
+          aria-current={isShown ? "true" : undefined}
+          onClick={onOpen}
+        >
+          <span
+            role="img"
+            aria-label={
+              session.kind === "claude"
+                ? `${session.name} is a Claude Session`
+                : `${session.name} is a shell`
+            }
+            className={cn("flex", stopped && "opacity-50")}
+          >
+            <SessionIcon session={session} className="size-4" />
+          </span>
+          <span className="truncate">{session.name}</span>
+          {stopped && (
+            <Badge
+              variant="outline"
+              className="h-4 px-1.5 text-[10px] font-normal tracking-wide text-muted-foreground uppercase"
+            >
+              stopped
+            </Badge>
+          )}
+        </button>
+      </SidebarMenuSubButton>
+      <span className="pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
         {session.bell && (
           <span role="img" aria-label={`${session.name} rang the bell`} className="flex">
-            <BellIcon className="size-3.5 fill-current text-amber-400" />
+            <BellIcon className="size-3.5 fill-current text-status-bell" />
           </span>
         )}
-        {(!fixed || stopped) && (
+        {hasMenu && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <IconButton
                 label={`Actions for ${session.name}`}
-                className="relative z-10 -mr-1.5 size-6"
+                className="pointer-events-auto size-6"
               >
-                <MoreHorizontalIcon className="size-4" />
+                <MoreHorizontalIcon />
               </IconButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -322,6 +325,6 @@ function SessionItem({
           </DropdownMenu>
         )}
       </span>
-    </li>
+    </SidebarMenuSubItem>
   );
 }
