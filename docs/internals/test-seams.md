@@ -27,10 +27,18 @@ No test runs the real Claude Code. The stand-in is `test/harness/fake-claude.sh`
 The flags that reach the stub are the contract with Claude Code, so asserting on them checks a boundary. The stub:
 
 - On start prints `claude-stub cwd: <folder>`, `claude-stub advisor tool disabled: <value or unset>` and one `claude-stub arg: <argument>` line per argument, then `claude-stub ready`. `fakeClaudeArgs(terminal)` waits for it and returns the arguments of the attempt that started; a restart that finds nothing to resume shows the failed `--resume` attempt too.
-- Prints `--settings` without its hooks as one `claude-stub settings: <JSON>` line (`fakeClaudeSettings(terminal)`), instead of as arguments. It runs their hook commands as Claude Code does, with the event's JSON on stdin. `SessionStart` runs at start (source `startup`, or `resume` for `--resume`) and on `clear`. Then it prints `claude-stub conversation: <id>` (`fakeClaudeConversation(terminal)`), so a test that sees it knows the hooks have run. `ignoreClaudeSettings(program)` makes it ignore `--settings`, as Claude Code does when hooks can't run.
+- Prints `--settings` without its hooks as one `claude-stub settings: <JSON>` line (`fakeClaudeSettings(terminal)`), instead of as arguments. It runs their hook commands as Claude Code does, with the event's JSON on stdin, and runs a tool event's hooks only when their group's `matcher` matches the tool's name, by Claude Code's rules (exact names, or else a regular expression). `SessionStart` runs at start (source `startup`, or `resume` for `--resume`) and on `clear`. Then it prints `claude-stub conversation: <id>` (`fakeClaudeConversation(terminal)`), so a test that sees it knows the hooks have run. `ignoreClaudeSettings(program)` makes it ignore `--settings`, as Claude Code does when hooks can't run.
 - Prints what a `SessionStart` or `UserPromptSubmit` hook prints as `claude-stub context: <output>`, since Claude Code adds that to the conversation. A test asserts the line never shows.
 - Treats any line but the commands below as a message, one whole turn: it runs the `UserPromptSubmit` hooks, saves the conversation (as Claude Code does only once a message is sent), answers `claude-stub heard: <message>`, then runs the `Stop` hooks. Saved conversations are files in `conversations/` beside it (`fakeClaudeSavedConversations(program)`). `--resume` of an ID it never saved, and `--session-id` of one it saved, each fail with exit 1.
-- Takes four commands: `exit N` quits with status N, `bell` rings the terminal bell, `clear` switches to a new conversation ID, as `/clear` does, and `think` starts a turn and holds it until the next message, so a test can see the Session Working.
+- Takes these commands:
+  - `exit N` quits with status N.
+  - `bell` rings the terminal bell.
+  - `clear` switches to a new conversation ID, as `/clear` does.
+  - `think` starts a turn, running a Bash tool, and holds it until the next message, so a test can see the Session Working.
+  - `ask-permission` (`PermissionRequest`) and `ask-question` (`PreToolUse` for `AskUserQuestion`) make it Waiting, and `answer` (`PostToolUse` for that tool) answers.
+  - `subagent-stop` runs a subagent's tool events, carrying its `agent_id`, then `SubagentStop`.
+
+  Each command runs its hooks before it prints its line, so a test that sees the line knows they have run. To put a Session into Waiting, type the command with `typeIntoSession` rather than through a terminal: a terminal's keys are the owner's, which end Waiting.
 
 In Seam 2, `kbench.tellClaude(sessionName, line)` types a line into a Claude Session's stub with no browser involved, as `kbench.ringBell()` rings a Bell.
 

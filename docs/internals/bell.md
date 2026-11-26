@@ -1,6 +1,6 @@
 # The Bell
 
-A Session raises a Bell when its program rings the terminal bell while no terminal is attached to it. Viewing the Session clears it, and viewing means a terminal attached to it: opening the Session in a Pane, or a Pane's terminal reconnecting. How the Bell shows is in the [guide](../guide/using-k-bench.md). The front end decides only which of a Session's markers shows: a Bell takes the place of Working or Idle ([Claude Session states](session-states.md)).
+A Session raises a Bell when its program rings the terminal bell while no terminal is attached to it. Viewing the Session clears it, and viewing means a terminal attached to it: opening the Session in a Pane, or a Pane's terminal reconnecting. How the Bell shows is in the [guide](../guide/using-k-bench.md). The front end decides only which of a Session's markers shows: a Bell takes the place of Working or Idle, and Waiting takes the place of a Bell ([Claude Session states](session-states.md)).
 
 ## Mechanism
 

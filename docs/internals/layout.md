@@ -25,7 +25,7 @@ What each module owns, and any rule that lives only there. The code says how.
 - `tmux.ts`: the only module that runs tmux. It keeps no state about Sessions, owns the Bell rule ([The Bell](bell.md)), and binds the wheel to scroll History one line per report.
 - `claude.ts`: everything k-bench knows about Claude Code ([ADR 0005](../adr/0005-k-bench-launches-claude-code.md)): the flags the Launch options map to, the hooks that report the conversation and the [Claude Session states](session-states.md), and the launcher script.
 - `reconciler.ts`: squares the store with tmux. It kills tmux sessions with no store row, and stores the conversation each Claude Session reports.
-- `attachments.ts`: a browser terminal's whole life on a Session. `terminal.ts` is the terminal WebSocket, a thin adapter onto it.
+- `attachments.ts`: a browser terminal's whole life on a Session, including telling tmux when the owner's key ends Waiting. `terminal.ts` is the terminal WebSocket, a thin adapter onto it.
 - `state-feed.ts`: change detection and revisions for the events WebSocket, `events.ts`.
 - `directories.ts`: a folder's subfolders, for the folder picker.
 - `naming.ts`: the "(2)"-style suffix for a name already taken.
@@ -53,7 +53,7 @@ Views:
 
 - `workspaceView.ts`: works out the desktop's Panes from the state (what each shows, the Tabs, which is shut, which has the keyboard), and components render what it says. It also owns what runs once per page load at any size: opening the Open Workspace, the browser tab's title, and forgetting stale stored choices.
 - `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device.
-- `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, whether a Workspace has a Bell, and which one marker a Session shows, the most urgent first (Waiting, its Bell, Working, Idle).
+- `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, whether a Workspace has a Bell, which one marker a Session shows, the most urgent first (Waiting, its Bell, Working, Idle), and which a folded Workspace's tile carries (Waiting, then a Bell).
 - `folders.ts`: the folder picker's pure path work: Places, breadcrumbs, typed paths and new folder names.
 - `useIsPhone.ts`: the one breakpoint for the Phone layout. `useKeyboardUp.ts`: whether the on-screen keyboard is up, and the area the app fits into then. `useSidebarCollapsed.ts`: whether the sidebar is collapsed on this Device, which `App.tsx` hands the `SidebarProvider`.
 
