@@ -44,6 +44,19 @@ test("a Bell in a folded Workspace's Session shows as a dot on its tile", async 
   await expect(app.workspaceBellHint("alpha")).toHaveCount(0);
 });
 
+test("an icon-only button shows its name in a tooltip on hover", async ({
+  app,
+  page,
+}) => {
+  await page.getByRole("button", { name: "Collapse sidebar" }).hover();
+  await expect(page.getByRole("tooltip", { name: "Collapse sidebar" })).toBeVisible();
+
+  await app.collapseSidebar();
+  await page.getByRole("button", { name: "New Workspace" }).hover();
+
+  await expect(page.getByRole("tooltip", { name: "New Workspace" })).toBeVisible();
+});
+
 test("the collapsed sidebar shows tiles and the Open Workspace's Session icons, and is remembered across a reload", async ({
   app,
   kbench,

@@ -1,29 +1,46 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "@xterm/xterm/css/xterm.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn/ui theme tokens. The app is dark only. */
+/*
+ * shadcn/ui theme tokens. The app is dark only. The greys are untinted and matched to the
+ * terminal's background (#161616 is oklch 0.2), so the frame and the Panes read as one
+ * surface; the sidebar is one step darker. Blue A is the one accent.
+ */
 :root {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: oklch(0.2 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.225 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.24 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.62 0.19 258);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.26 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent: oklch(0.27 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.68 0.2 22);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: var(--primary);
   --radius: 0.625rem;
+  --sidebar: oklch(0.175 0 0);
+  --sidebar-foreground: oklch(0.93 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.25 0 0);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 7%);
+  --sidebar-ring: var(--primary);
+  /* The Claude Session markers: Waiting pulses, the Bell is solid, Idle is a quiet grey. */
+  --status-waiting: oklch(0.8 0.16 75);
+  --status-bell: oklch(0.8 0.16 75);
+  --status-idle: oklch(0.6 0 0);
 }
 
 @theme inline {
@@ -48,6 +65,17 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-status-waiting: var(--status-waiting);
+  --color-status-bell: var(--status-bell);
+  --color-status-idle: var(--status-idle);
 }
 
 @layer base {
@@ -62,5 +90,9 @@
   body {
     @apply bg-background text-foreground antialiased;
     overflow: hidden;
+  }
+  /* A tooltip only names something: a click lands on what it covers, never on the tooltip. */
+  [data-radix-popper-content-wrapper]:has(> [data-slot="tooltip-content"]) {
+    pointer-events: none;
   }
 }

@@ -54,7 +54,7 @@ export function ExtraKeys({ sessionId }: { sessionId: string }) {
     <div
       role="group"
       aria-label="Extra keys"
-      className="flex shrink-0 gap-1 border-t bg-card p-1"
+      className="flex shrink-0 gap-1 border-t bg-sidebar p-1"
     >
       <Key name="Esc" data={KEYS.esc}>
         ⎋

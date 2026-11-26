@@ -628,17 +628,33 @@ test("the folder picker is a full-screen sheet with Places as a row of chips abo
 
   await expect(app.place("Home")).toBeVisible();
   const viewport = app.page.viewportSize();
-  const sheet = await app.folderPicker.boundingBox();
+  if (!viewport) throw new Error("no viewport");
+  // The sheet animates in, so its box settles at the whole screen.
+  await expect
+    .poll(() => app.folderPicker.boundingBox())
+    .toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
   const home = await app.place("Home").boundingBox();
   const computer = await app.place("Computer").boundingBox();
   const breadcrumbs = await app.folderPicker
     .getByRole("navigation", { name: "Breadcrumbs" })
     .boundingBox();
-  if (!viewport || !sheet || !home || !computer || !breadcrumbs) {
-    throw new Error("the sheet, its Places and its breadcrumbs should show");
+  if (!home || !computer || !breadcrumbs) {
+    throw new Error("the sheet's Places and its breadcrumbs should show");
   }
-  expect(sheet).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
   expect(computer.y).toBe(home.y);
   expect(computer.x).toBeGreaterThan(home.x);
   expect(home.y + home.height).toBeLessThanOrEqual(breadcrumbs.y);
+});
+
+test("an icon-only button shows no tooltip on the phone", async ({ app }) => {
+  await app.openDrawer();
+  // Keyboard focus is what opens a tooltip on its own, without a hover.
+  await app.page.getByRole("button", { name: "New Workspace" }).focus();
+  await app.page.keyboard.press("Shift+Tab");
+  await app.page.keyboard.press("Tab");
+  await expect(app.page.getByRole("button", { name: "New Workspace" })).toBeFocused();
+
+  // biome-ignore lint/plugin: proving a tooltip does not appear needs a fixed wait
+  await app.page.waitForTimeout(500);
+  await expect(app.page.getByRole("tooltip")).toHaveCount(0);
 });

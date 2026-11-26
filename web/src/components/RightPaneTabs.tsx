@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { SessionState } from "../../../src/shared/state-protocol.ts";
+import { IconButton } from "./IconButton";
 import { SessionIcon } from "./SessionIcon";
 
 /** The amber dot on a tab whose Session rang the bell while it was hidden. */
@@ -88,15 +89,13 @@ export function RightPaneTabs({
           shown={shownId === session.id}
           onShow={() => onShowTab(session.id)}
           close={
-            <button
-              type="button"
-              aria-label={`Close tab ${session.name}`}
-              title="Close tab (the Session keeps running)"
-              className="px-1 hover:text-foreground"
+            <IconButton
+              label={`Close tab ${session.name}`}
+              className="size-5"
               onClick={() => onCloseTab(session.id)}
             >
               <XIcon className="size-3" />
-            </button>
+            </IconButton>
           }
         />
       ))}

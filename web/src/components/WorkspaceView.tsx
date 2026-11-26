@@ -29,7 +29,7 @@ function Rail({ session, onOpen }: { session: SessionState; onOpen: () => void }
         aria-label={`Show ${session.name}`}
         title={`Show ${session.name}`}
         onClick={onOpen}
-        className="flex h-full w-full flex-col items-center gap-2 bg-card py-3 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="flex h-full w-full flex-col items-center gap-2 bg-sidebar py-3 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <SessionIcon session={session} className="size-4" />
         <span className="min-h-0 truncate" style={{ writingMode: "vertical-rl" }}>
@@ -80,7 +80,7 @@ export function SessionBody({
 /** The slim bar naming what a Pane shows. */
 function LabelBar({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-6 shrink-0 items-center gap-2 border-b bg-card px-2 text-xs">
+    <div className="flex h-6 shrink-0 items-center gap-2 border-b px-2 text-xs">
       {children}
     </div>
   );

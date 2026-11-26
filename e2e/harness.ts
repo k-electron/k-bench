@@ -273,6 +273,11 @@ export class AppPage {
       await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
     }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
+    // Done once the dialog has animated out (until then it hides the rest of the page from
+    // the accessibility tree), or once it shows why it refused.
+    await expect(
+      this.page.getByRole("dialog").filter({ hasNot: this.page.getByRole("alert") }),
+    ).toHaveCount(0);
   }
 
   /** The open dialog's folder picker: Places, breadcrumbs, filter and the folder list. */
@@ -499,6 +504,8 @@ export class AppPage {
   async createSession(workspaceName: string): Promise<void> {
     await this.openNewSessionMenu(workspaceName);
     await this.page.getByRole("menuitem", { name: "New shell", exact: true }).click();
+    // Until the menu has animated out, it hides the rest of the page from the accessibility tree.
+    await expect(this.page.getByRole("menu")).toHaveCount(0);
   }
 
   /** The New Claude dialog, once **New Claude…** was picked. */

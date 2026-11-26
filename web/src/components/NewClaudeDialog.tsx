@@ -6,6 +6,7 @@ import {
 } from "../../../src/shared/launch-options.ts";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { ApiError, api } from "../api";
+import { NativeSelect } from "./NativeSelect";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -16,7 +17,6 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Select } from "./ui/select";
 
 const FIELDS = [
   { field: "model", label: "Model" },
@@ -129,7 +129,7 @@ export function NewClaudeDialog({
                 <label htmlFor={`${idPrefix}-${field}`} className="text-sm font-medium">
                   {label}
                 </label>
-                <Select
+                <NativeSelect
                   id={`${idPrefix}-${field}`}
                   value={options?.[field] ?? "default"}
                   onChange={(event) =>
@@ -141,7 +141,7 @@ export function NewClaudeDialog({
                       {choiceLabel(choice)}
                     </option>
                   ))}
-                </Select>
+                </NativeSelect>
               </div>
             ))}
             <div className="flex items-center gap-2">

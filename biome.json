@@ -63,6 +63,41 @@
           }
         }
       }
+    },
+    {
+      "includes": ["web/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "cn": "The shadcn CLI writes this import: change it to `@/lib/utils` (CONTRIBUTING, shadcn/ui)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["web/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useFocusableInteractive": "off",
+            "useSemanticElements": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          },
+          "suspicious": {
+            "noDoubleEquals": "off",
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
     }
   ]
 }

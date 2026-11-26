@@ -90,7 +90,7 @@ export function Sidebar({
         aria-label="Workspaces"
         // Narrower than whatever width the caller gives the expanded tree.
         className={cn(
-          "flex shrink-0 flex-col items-center gap-2 border-r bg-card py-2",
+          "flex shrink-0 flex-col items-center gap-2 border-r bg-sidebar py-2",
           className,
           "w-14",
         )}
@@ -108,14 +108,12 @@ export function Sidebar({
           onOpenSession={onOpenSession}
         />
         {newWorkspace(
-          <button
-            type="button"
-            aria-label="New Workspace"
-            title="New Workspace"
-            className="grid size-9 shrink-0 place-items-center rounded-lg border border-dashed text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          <IconButton
+            label="New Workspace"
+            className="size-9 rounded-lg border border-dashed"
           >
             <PlusIcon className="size-4" />
-          </button>,
+          </IconButton>,
         )}
         {error && (
           <span role="alert" aria-label={error} title={error} className="flex">
@@ -129,7 +127,7 @@ export function Sidebar({
   return (
     <nav
       aria-label="Workspaces"
-      className={cn("flex shrink-0 flex-col gap-1 border-r bg-card p-2", className)}
+      className={cn("flex shrink-0 flex-col gap-1 border-r bg-sidebar p-2", className)}
     >
       <div className="flex items-center gap-1 px-1 pb-1">
         <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
