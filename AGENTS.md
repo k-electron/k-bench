@@ -25,3 +25,5 @@ The repo holds only product: source, config and docs. Machine-local files (runti
 Never put real hostnames, tailnet names, logins, emails or personal paths in issues, PRs, commits, docs or screenshots. Use placeholders such as `<your-host>.<tailnet>.ts.net` and `you@example.com`.
 
 When writing tests, see `docs/testing.md`.
+
+When changing any doc, follow [Writing docs](CONTRIBUTING.md#writing-docs) in CONTRIBUTING.
