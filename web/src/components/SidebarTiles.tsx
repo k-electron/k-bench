@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { hasBell } from "@/workspaces";
+import { workspaceMarker } from "@/workspaces";
 import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { LIFTED, Reorderable, useSortableRow } from "./Reorderable";
@@ -71,12 +71,12 @@ function WorkspaceTileItem({
       {...row}
       className={cn("flex flex-col items-center gap-1 rounded-lg", isDragging && LIFTED)}
     >
-      {/* The button lies over the tile, so the tile's Bell dot and Missing mark stay labelled. */}
+      {/* The button lies over the tile, so the tile's dot and Missing mark stay labelled. */}
       <div className="relative">
         <WorkspaceTile
           workspace={workspace}
           size="md"
-          bell={!isOpen && hasBell(workspace)}
+          marker={isOpen ? null : workspaceMarker(workspace)}
           className={cn(
             "rounded-lg",
             isOpen && "ring-2 ring-primary ring-offset-2 ring-offset-sidebar",

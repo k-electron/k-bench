@@ -12,7 +12,7 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useActions } from "@/useAppState";
-import { hasBell } from "@/workspaces";
+import { workspaceMarker } from "@/workspaces";
 import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import type { WorkspaceEdit } from "./EditWorkspaceDialog";
@@ -86,8 +86,11 @@ export function WorkspaceItem({
           onClick={onOpen}
           className={cn(mode === "drawer" && "h-10", isOpen && "pr-16 font-semibold")}
         >
-          {/* A folded Workspace's tile carries its Sessions' Bells. */}
-          <WorkspaceTile workspace={workspace} bell={!isOpen && hasBell(workspace)} />
+          {/* A folded Workspace's tile carries its Sessions' Waiting, then their Bells. */}
+          <WorkspaceTile
+            workspace={workspace}
+            marker={isOpen ? null : workspaceMarker(workspace)}
+          />
           <span>{workspace.name}</span>
         </SidebarMenuButton>
       </h2>

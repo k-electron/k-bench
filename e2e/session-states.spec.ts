@@ -27,6 +27,34 @@ test("a Claude Session shows Working in a turn and Idle after it, live on every 
   await expect(app.marker("sidebar", "Worker", "working")).toHaveCount(0);
 });
 
+test("a Claude Session shows Waiting until it is answered, ahead of a Bell on its folded Workspace's tile", async ({
+  app,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
+  // Opening a Workspace launches its Prime and Worker.
+  await app.openWorkspace("alpha");
+  await expect(app.marker("sidebar", "Prime", "idle")).toBeVisible();
+
+  kbench.tellClaude("Prime", "think", "alpha");
+  kbench.tellClaude("Prime", "ask-permission", "alpha");
+
+  // The Prime is on screen, and viewing it doesn't clear Waiting.
+  await expect(app.marker("sidebar", "Prime", "waiting")).toBeVisible();
+
+  await app.openWorkspace("beta");
+  await kbench.ringBell("Worker", "alpha");
+
+  await expect(app.workspaceWaitingHint("alpha")).toBeVisible();
+  await expect(app.workspaceBellHint("alpha")).toHaveCount(0);
+
+  kbench.tellClaude("Prime", "answer", "alpha");
+
+  await expect(app.workspaceBellHint("alpha")).toBeVisible();
+  await expect(app.workspaceWaitingHint("alpha")).toHaveCount(0);
+});
+
 test("a Claude Session's Bell takes its marker's place until it is seen", async ({
   app,
   kbench,

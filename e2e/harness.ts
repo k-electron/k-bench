@@ -438,6 +438,17 @@ export class AppPage {
     });
   }
 
+  /**
+   * The pulsing dot on a folded Workspace's tile: some Session in it is Waiting. It takes
+   * the place of the Bell dot.
+   */
+  workspaceWaitingHint(workspaceName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${workspaceName} has a session waiting for you`,
+      exact: true,
+    });
+  }
+
   /** The warning mark on a Missing Workspace's tile. */
   missingMark(workspaceName: string): Locator {
     return this.sidebar.getByRole("img", {

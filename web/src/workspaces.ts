@@ -30,3 +30,14 @@ export function findOpenWorkspace(state: State | undefined): WorkspaceState | un
 export function hasBell(workspace: WorkspaceState): boolean {
   return workspace.sessions.some((session) => session.bell);
 }
+
+/**
+ * The marker a folded Workspace's tile carries for its Sessions: Waiting when any of them is,
+ * then a Bell. Working and Idle never roll up to the tile.
+ */
+export function workspaceMarker(workspace: WorkspaceState): "waiting" | "bell" | null {
+  if (workspace.sessions.some((session) => sessionMarker(session) === "waiting")) {
+    return "waiting";
+  }
+  return hasBell(workspace) ? "bell" : null;
+}
