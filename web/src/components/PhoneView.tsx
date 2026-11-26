@@ -1,5 +1,5 @@
 import { ChevronDownIcon, MenuIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -16,10 +16,14 @@ import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import type { PhoneView as View } from "../phoneView";
 import { SessionIcon } from "./SessionIcon";
+import { SessionMarker } from "./SessionMarker";
 import { WorkspaceTile } from "./WorkspaceTile";
 import { SessionBody } from "./WorkspaceView";
 
-/** An amber Bell dot, labelled for screen readers and tests. */
+/**
+ * An amber dot hinting at a Bell in other Sessions, labelled for screen readers and tests.
+ * A Session's own marker is `SessionMarker`.
+ */
 function BellDot({ label, className }: { label: string; className?: string }) {
   return (
     <span
@@ -28,14 +32,6 @@ function BellDot({ label, className }: { label: string; className?: string }) {
       className={cn("size-2 shrink-0 rounded-full bg-status-bell", className)}
     />
   );
-}
-
-/**
- * A Session's marker slot: where its one marker shows. Its button carries an explicit name,
- * so the marker's label stays out of it.
- */
-function MarkerSlot({ children }: { children?: ReactNode }) {
-  return <span className="flex shrink-0 items-center empty:hidden">{children}</span>;
 }
 
 /** The phone's Menu button, which opens the drawer, with a dot for a Bell in another Workspace. */
@@ -60,7 +56,7 @@ export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => vo
  * The phone's title beside the Menu button, a breadcrumb `Workspace › Session ⌄`. When space
  * runs short the Workspace's name is cut off first, and the Session's name keeps its width. A
  * dot on the Workspace's name says another of its Sessions has a Bell. Tapping it opens the
- * Sessions sheet.
+ * Sessions sheet. The Session's marker follows it, outside the button.
  *
  * The breadcrumb is hand-built from spans styled like shadcn's `Breadcrumb`: that one is a
  * `nav` of list items with a `role="link"` page, none of which may sit inside a button.
@@ -71,7 +67,7 @@ export function PhoneTitle({ view }: { view: View }) {
   if (!workspace) return null;
   return (
     <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-      <h1 className="flex min-w-0 text-sm">
+      <h1 className="flex min-w-0 items-center gap-1 text-sm">
         <SheetTrigger asChild>
           <button
             type="button"
@@ -97,10 +93,7 @@ export function PhoneTitle({ view }: { view: View }) {
                 <span aria-hidden="true" className="shrink-0 text-muted-foreground">
                   {" › "}
                 </span>
-                <span className="flex shrink-0 items-center gap-1.5 text-foreground">
-                  {session.name}
-                  <MarkerSlot />
-                </span>
+                <span className="shrink-0 text-foreground">{session.name}</span>
               </>
             )}
             <ChevronDownIcon
@@ -109,6 +102,7 @@ export function PhoneTitle({ view }: { view: View }) {
             />
           </button>
         </SheetTrigger>
+        {session && <SessionMarker session={session} />}
       </h1>
       <SheetContent
         side="bottom"
@@ -191,13 +185,13 @@ function SheetRow({
 }) {
   const stopped = session.status === "stopped";
   return (
-    <li>
+    <li className="relative">
       <Button
         variant="ghost"
         aria-label={session.name}
         aria-current={current ? "true" : undefined}
         className={cn(
-          "h-12 w-full justify-start gap-3 px-3 font-normal",
+          "h-12 w-full justify-start gap-3 pr-9 pl-3 font-normal",
           current && "bg-accent shadow-[inset_3px_0_0_var(--primary)]",
           stopped && !current && "text-muted-foreground",
         )}
@@ -216,10 +210,11 @@ function SheetRow({
             stopped
           </Badge>
         )}
-        <MarkerSlot>
-          {session.bell && <BellDot label={`${session.name} rang the bell`} />}
-        </MarkerSlot>
       </Button>
+      <SessionMarker
+        session={session}
+        className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+      />
     </li>
   );
 }

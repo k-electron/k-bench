@@ -10,6 +10,14 @@ import { attachedClientCount, typeIntoSession } from "../test/harness/tmux.ts";
 const WEB_DIR = resolve("dist/web");
 const LOGIN = "owner@example.com";
 
+/** What a Session's marker says after its name, for each marker. */
+const MARKER_LABELS = {
+  waiting: "is waiting for you",
+  bell: "rang the bell",
+  working: "is working",
+  idle: "is idle",
+};
+
 /**
  * The app as the owner sees it, found by role and accessible name. Later tickets add
  * helpers here as they add UI.
@@ -392,6 +400,28 @@ export class AppPage {
     }).toPass({ timeout: 10_000 });
   }
 
+  /**
+   * A Session's marker showing `marker`, by its label: on its sidebar row, its right Pane
+   * Tab, or, on a phone, the title or its row in the Sessions sheet. Present only while the
+   * Session shows that marker there.
+   */
+  marker(
+    where: "sidebar" | "tab" | "title" | "sheet",
+    sessionName: string,
+    marker: keyof typeof MARKER_LABELS,
+  ): Locator {
+    const scope = {
+      sidebar: this.sidebar,
+      tab: this.pane("right"),
+      title: this.phoneTitle,
+      sheet: this.sessionsSheet,
+    }[where];
+    return scope.getByRole("img", {
+      name: `${sessionName} ${MARKER_LABELS[marker]}`,
+      exact: true,
+    });
+  }
+
   /** The Bell badge on a Session's row; present only while its Bell is raised. */
   bellBadge(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {
@@ -711,6 +741,12 @@ export interface Kbench {
    * Session can take a moment to let go). Works while the server is stopped too.
    */
   ringBell(sessionName: string, workspaceName?: string): Promise<void>;
+  /**
+   * Types a line into the fake Claude Code of the named Claude Session (of the named
+   * Workspace, when given), with no browser involved: `think` starts a turn and holds it,
+   * and any message is a whole turn.
+   */
+  tellClaude(sessionName: string, line: string, workspaceName?: string): void;
 }
 
 interface Fixtures {
@@ -744,6 +780,10 @@ export const test = base.extend<Fixtures>({
             session.id,
             session.kind === "claude" ? "bell" : "printf '\\a'",
           );
+        },
+        tellClaude: (sessionName, line, workspaceName) => {
+          const session = sessionNamed(instance, sessionName, workspaceName);
+          typeIntoSession(instance.config.tmuxSocket, session.id, line);
         },
         stopServer: () => server.stop(),
         startServer: async () => {

@@ -1,5 +1,4 @@
 import {
-  BellIcon,
   FolderInputIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -20,6 +19,7 @@ import type { WorkspaceEdit } from "./EditWorkspaceDialog";
 import { IconButton } from "./IconButton";
 import { LIFTED, Reorderable, type SortableRow, useSortableRow } from "./Reorderable";
 import { SessionIcon } from "./SessionIcon";
+import { SessionMarker } from "./SessionMarker";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import {
@@ -211,7 +211,7 @@ function SortableSessionItem(props: Omit<ComponentProps<typeof SessionItem>, "dr
 }
 
 /**
- * One Session: its icon and name, a "stopped" badge when it is, its Bell, and a ⋯ menu.
+ * One Session: its icon and name, a "stopped" badge when it is, its marker, and a ⋯ menu.
  * The Prime and Worker can't be renamed or deleted, so theirs appears only when Stopped, to
  * restart.
  */
@@ -282,11 +282,7 @@ function SessionItem({
         </button>
       </SidebarMenuSubButton>
       <span className="pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
-        {session.bell && (
-          <span role="img" aria-label={`${session.name} rang the bell`} className="flex">
-            <BellIcon className="size-3.5 fill-current text-status-bell" />
-          </span>
-        )}
+        <SessionMarker session={session} />
         {hasMenu && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

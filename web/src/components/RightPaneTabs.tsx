@@ -39,7 +39,7 @@ function Tab({
         <span className="truncate">{session.name}</span>
       </TabsTrigger>
       <span className="absolute right-1 flex items-center gap-1">
-        <span className="pointer-events-none flex w-2 justify-center">
+        <span className="pointer-events-none flex w-3.5 justify-center">
           <SessionMarker session={session} />
         </span>
         {close}

@@ -4,6 +4,7 @@ import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { LIFTED, Reorderable, useSortableRow } from "./Reorderable";
 import { SessionIcon } from "./SessionIcon";
+import { SessionMarker } from "./SessionMarker";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { WorkspaceTile } from "./WorkspaceTile";
 
@@ -114,7 +115,7 @@ function WorkspaceTileItem({
   );
 }
 
-/** One Session in the collapsed sidebar: its icon, dimmed when Stopped, and its Bell dot. */
+/** One Session in the collapsed sidebar: its icon, dimmed when Stopped, and its marker. */
 function SessionIconItem({
   session,
   isShown,
@@ -151,13 +152,10 @@ function SessionIconItem({
         </TooltipContent>
       </Tooltip>
       {stopped && <span className="sr-only">stopped</span>}
-      {session.bell && (
-        <span
-          role="img"
-          aria-label={`${session.name} rang the bell`}
-          className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-status-bell"
-        />
-      )}
+      <SessionMarker
+        session={session}
+        className="pointer-events-none absolute -top-0.5 -right-0.5 scale-75"
+      />
     </li>
   );
 }

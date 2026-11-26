@@ -131,6 +131,29 @@ test("tapping the title lists the Workspace's Sessions, and tapping one shows it
   await expect(app.phoneTitle).toHaveText("alpha › Worker");
 });
 
+test("the title and the Sessions sheet show whether each Claude Session is Working or Idle", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"), { name: "alpha" });
+  // Loading k-bench opens the Open Workspace, starting its Prime and Worker.
+  await page.reload();
+  await expect(app.marker("title", "Prime", "idle")).toBeVisible();
+
+  kbench.tellClaude("Prime", "think");
+
+  await expect(app.marker("title", "Prime", "working")).toBeVisible();
+  await app.openSessionsSheet();
+  await expect(app.marker("sheet", "Prime", "working")).toBeVisible();
+  await expect(app.marker("sheet", "Worker", "idle")).toBeVisible();
+
+  kbench.tellClaude("Prime", "a message");
+
+  await expect(app.marker("sheet", "Prime", "idle")).toBeVisible();
+});
+
 test("a Bell elsewhere in the Open Workspace dots its name in the title, and one in another Workspace dots the menu button", async ({
   app,
   kbench,
