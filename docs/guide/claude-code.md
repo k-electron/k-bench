@@ -1,87 +1,91 @@
 # Using k-bench with Claude Code
 
-k-bench launches Claude Code for you and resumes it when you restart. A **Claude Session** is a Session that runs Claude Code itself, in a Workspace's folder, with the model, effort and advisor you pick in a dialog. Restarting it brings back the Claude conversation you were last in. This page covers that, and the few things worth setting up so k-bench and Claude Code work well together.
+k-bench launches Claude Code for you and resumes it when you restart. Every Workspace comes with two Claude Sessions, the Prime and the Worker, and you can launch more from the New Claude dialog.
 
-k-bench starts and resumes Claude Code using its documented command-line flags, and adds one silent hook so it knows which conversation you are in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)). It changes nothing else about what Claude sees or does. What you see in a Claude Session is the real Claude Code in a real terminal, so its slash commands, skills and hooks all work as they do on your Mac.
+k-bench starts and resumes Claude Code with its documented command-line flags, and adds one silent hook so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
+
+## The Prime plans and the Worker builds
+
+Each Workspace's [Prime and Worker](using-k-bench.md#the-prime-and-the-worker) are launched and resumed by k-bench with fixed Launch options:
+
+- **The Prime**, in the left Pane, runs Opus at high effort with the advisor off. Use it to think through the work and plan it.
+- **The Worker**, in the right Pane, runs Sonnet at high effort with an Opus advisor. Hand it the plan to carry out.
+
+Both run in [Focus view](#focus-view). You don't choose their Launch options, and k-bench passes them again on every launch. When they start and stop is in [The Prime and the Worker](using-k-bench.md#the-prime-and-the-worker).
+
+## Other Sessions
+
+Use [Other Sessions](using-k-bench.md#other-sessions) for whatever runs beside the Prime and Worker. They open in the right Pane, each with its own Tab, so you can switch between the Worker and them.
+
+- **A dev server, a test watcher or a log tail**: choose **+**, then **New shell**, and start it there. Choose the Worker's Tab to go back to it, and the shell's Tab to see Claude's changes take effect.
+- **A side conversation**: choose **+**, then **New Claude…**, to ask something without disturbing the Prime or the Worker.
+
+A Claude Session runs one Claude conversation at a time. You can move it to another with `/clear` or `/resume`, but a separate Claude Session per piece of work keeps each one's Bell and resume apart.
 
 ## Start a Claude Session
 
-1. Create a [Workspace](using-k-bench.md#workspaces-and-sessions) for your project folder.
-2. Choose the **+** next to the Workspace's name, then **New Claude…**.
-3. Fill in the dialog (below) and choose **Launch**.
+Choose the **+** next to the Open Workspace's name, then **New Claude…**, fill in the dialog and choose **Launch**. The new Session opens in the right Pane.
 
 ![The New Claude dialog, with a name, model, effort, advisor and the Focus view checkbox](../images/new-claude.png)
 
-The new Session opens in the right Pane, so you can start typing to Claude at once. Claude Code starts in the Workspace's folder, through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings and the account you are signed in to are the same as in a terminal window on that Mac.
+| Field          | Choices                                                                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**       | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused, and your other choices stay. |
+| **Model**      | Default, Fable, Opus, Sonnet, Haiku                                                                                                      |
+| **Effort**     | Default, Low, Medium, High, XHigh, Max                                                                                                   |
+| **Advisor**    | Default, Off, Fable, Opus, Sonnet                                                                                                        |
+| **Focus view** | A checkbox                                                                                                                               |
 
-The first time Claude Code runs in a folder it asks whether you trust it, and **"No, exit" is selected by default**. Answer in the terminal as you would anywhere. If you exit there, the Session stops, and you can restart it from its **...** menu.
+The Model, Effort, Advisor and Focus view are the Session's **Launch options**.
 
-### The dialog
+- **Default** passes nothing, so your own Claude Code settings decide.
+- **Off**, for the advisor, turns the advisor off for this Claude conversation even when your settings turn it on.
+- k-bench doesn't check which model can advise which. Claude Code does when it starts, and if it refuses a pairing you see why (see [When Claude Code exits](#when-claude-code-exits)).
 
-| Field          | Choices                                                                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Name**       | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused in the dialog, and your other choices stay. |
-| **Model**      | Default, Fable, Opus, Sonnet, Haiku                                                                                                                    |
-| **Effort**     | Default, Low, Medium, High, XHigh, Max                                                                                                                 |
-| **Advisor**    | Default, Off, Fable, Opus, Sonnet                                                                                                                      |
-| **Focus view** | A checkbox                                                                                                                                             |
+The dialog opens with the Launch options you last used, on any Device, because your Mac remembers them. The name is never remembered.
 
-The dialog's Model, Effort, Advisor and Focus view are the Session's **Launch options**.
-
-- **Default** leaves that setting to your own Claude Code configuration, so your `~/.claude` settings still apply unless you choose something else.
-- **Off** (for the advisor) turns the advisor off for this conversation, even when your settings turn it on.
-- k-bench does not check which model can advise which. Claude Code does, when it starts: if it refuses a pairing, you see why (see [When Claude Code exits](#when-claude-code-exits)).
-
-The dialog opens with the Launch options you used last time, on whichever device, because your Mac remembers them. The name is never remembered. Before your first Claude Session every option is Default and Focus view is off.
-
-The Launch options are fixed for the Session's life. To change the model or the view in the middle of a conversation, use Claude Code's own `/model` and `/focus`. A restart passes the original Launch options again.
+Launch options are fixed for the Session's life, and a restart passes them again. To change the model or the view mid-conversation, use Claude Code's own `/model` and `/focus`.
 
 ### Focus view
 
-Focus view is for small screens, where Claude Code's output is hard to follow. Claude Code starts in its condensed view: you see your prompt, a one-line summary of the work (such as "Edited 3 files +6 -3") and Claude's final response. The diffs and the narration between tool calls stay out of the way. Press **Ctrl-o** (on a phone, **Ctrl**, then `o`) to see everything.
+Focus view suits small screens. Claude Code starts in its condensed view: your prompt, a one-line summary of the work (such as "Edited 3 files +6 -3") and Claude's final response. Press **Ctrl-o** (in the Phone layout, **Ctrl**, then `o`) to see everything.
 
-Focus view applies to that launch only. k-bench does not change your Claude Code settings, so terminals outside k-bench are not affected. Claude Code runs full-screen in a Focus view Session and keeps its own scrollback, so k-bench's [History](using-k-bench.md#scrolling-selecting-and-copying) stays empty while it runs.
-
-## The Claude icon
-
-![A sidebar with two Claude Sessions, each marked with a small orange glyph, next to a shell Session](../images/claude-sidebar.png)
-
-In the sidebar a Claude Session shows a sparkle before its name where a shell shows `>_`, and the icon's accessible name is "_name_ is a Claude Session". The Prime and Worker, also Claude Sessions, show a crown and a hammer.
+It applies to that launch only, and doesn't change your Claude Code settings. Claude Code then draws its own full screen, so k-bench's [History](using-k-bench.md#history-scrolling-and-copying) stays empty while it runs.
 
 ## Quitting, errors and restarting
 
 ### When Claude Code exits
 
-When you quit Claude Code (for example with `/exit`), the Session becomes [Stopped](using-k-bench.md#stopped-sessions-logging-out-and-restarting) straight away. There is no shell underneath a Claude Session, so there is no prompt to fall back to.
+When you quit Claude Code (with `/exit`, say), the Session is [Stopped](using-k-bench.md#stopped-sessions) at once. There is no shell underneath a Claude Session to fall back to.
 
-If Claude Code exits with an error, such as a model and advisor it won't pair, or a `claude` that isn't installed, the Session keeps the error on screen. It shows "Claude Code exited with an error. Press any key to close." and stays running until you press a key, then it is Stopped. That way a bad choice never looks like nothing happened.
+If Claude Code exits with an error, such as a model and advisor it won't pair, or a `claude` that isn't installed, the Session keeps the error on screen: "Claude Code exited with an error. Press any key to close." It is Stopped once you press a key, so a bad choice never looks like nothing happened.
+
+For when a Prime or Worker that exits starts again, see [The Prime and the Worker](using-k-bench.md#the-prime-and-the-worker).
 
 ### Restarting resumes the conversation
 
-A Stopped Claude Session is restarted like any other: open its **...** menu and choose **Restart**, or press **Restart** in its Pane. There is no dialog. Claude Code resumes the conversation last running in the Session, with the same Launch options. This works after you log out of your Mac or restart it too, so you do not need Claude Code's `/resume`. k-bench knows the conversation by its ID, so there is no list to pick from and you cannot pick the wrong conversation when several share a folder.
+Restart a Stopped Claude Session from its **...** menu or its Pane's **Restart** button, or, for the Prime and Worker, by opening the Workspace. There is no dialog. Claude Code resumes the Claude conversation last running in the Session, with the same Launch options, even after a logout or a Mac restart, so you don't need `/resume`. k-bench knows the conversation by its ID, so it can't pick the wrong one when several share a folder.
 
-A Claude Session follows its conversation. When you move to another one inside Claude Code, with `/clear`, `/resume`, `/branch` or `/fork`, k-bench notices and saves it straight away, whether or not a browser is open, and a later restart resumes that one. Compacting a conversation keeps it. To do this, k-bench adds a `SessionStart` hook to each Claude Code it launches, for that launch only. The hook prints nothing, so nothing reaches your conversation, and your own settings and hooks are left alone.
+A Claude Session follows its conversation. When you move to another one inside Claude Code, with `/clear`, `/resume`, `/branch` or `/fork`, k-bench saves it at once, whether or not a browser is open, and a later restart resumes that one. Compacting keeps the same conversation. k-bench does this with a `SessionStart` hook it adds to each Claude Code it launches, for that launch only. The hook prints nothing, and your own settings and hooks are left alone.
 
-It can't follow the conversation when Claude Code doesn't run hooks: in a folder you haven't trusted, or when your settings have `disableAllHooks`. Then a restart resumes the last conversation k-bench knew, which is the one it launched unless it followed a move before.
+It can't follow a move when Claude Code doesn't run hooks: in a folder you haven't trusted, or when your settings have `disableAllHooks`. A restart then resumes the last conversation k-bench knew.
 
-Claude Code saves a conversation only after you send your first message. If you quit before sending one, there is nothing to resume, so the restart starts a fresh conversation with that same ID and the same Launch options. That includes a conversation you started with `/clear` and never typed into.
+Claude Code saves a conversation only after your first message. If you quit before sending one, including after a `/clear`, the restart starts a fresh conversation with the same ID and Launch options.
 
-Deleting a Claude Session ends it but leaves its conversation alone, so you can still find it with `claude --resume` in a terminal.
+Deleting a Claude Session leaves its conversation alone, so `claude --resume` in a terminal still finds it.
 
 ## Typing `claude` in an ordinary Session
 
-An ordinary Session, from **New shell**, is a shell. If you type `claude` in it, that is still just a program in a shell: k-bench does not notice it, so the Session gets no sparkle and no resume. After a logout or a restart you get a fresh shell and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
+A **New shell** Session is a shell. If you type `claude` in it, k-bench doesn't notice: the Session gets no sparkle and no resume. After a logout or a restart you get a fresh shell, and bring the conversation back with Claude Code's own `/resume`. Use **New Claude…** when you want k-bench to launch and resume Claude Code for you.
 
 ## Two things that can surprise you
 
-- **`CLAUDE_CODE_EFFORT_LEVEL`.** If you export it in your shell setup, Claude Code uses it instead of the Effort you choose in the dialog. That is Claude Code's own rule, and k-bench does not work around it. Choose Default, or unset the variable, if you want the dialog to decide.
-- **The trust prompt.** As above, its default is "No, exit", so pressing Enter on it ends the Session.
+- **`CLAUDE_CODE_EFFORT_LEVEL`.** If your shell setup exports it, Claude Code uses it instead of the Effort in the Launch options, the Prime's and Worker's included. That is Claude Code's own rule. Unset it if you want the Launch options to decide.
+- **The trust prompt.** The first time Claude Code runs in a folder it asks whether you trust it, and **"No, exit" is selected by default**, so pressing Enter ends the Session. Restart it and answer the other way.
 
 ## Make Claude Code ring the Bell when it is waiting
 
-k-bench raises a [Bell](using-k-bench.md#bells) when the program in a Session rings the terminal bell, and that works in a Claude Session as in any Session. Claude Code can ring the terminal bell when a task finishes or it is waiting for you on a permission prompt. Turn that on, and a Bell shows on that Session in the sidebar.
-
-Add this to `~/.claude/settings.json` on the Host (merging it with any settings already in the file):
+Claude Code can ring the terminal bell when it finishes a task or waits on a permission prompt, and k-bench shows that as a [Bell](using-k-bench.md#bells) on the Session. Add this to `~/.claude/settings.json` on the Host, merging it with what is there:
 
 ```json
 {
@@ -89,40 +93,20 @@ Add this to `~/.claude/settings.json` on the Host (merging it with any settings 
 }
 ```
 
-The setting is called `preferredNotifChannel`, and `"terminal_bell"` makes Claude Code ring the bell character in any terminal. You can also set it from inside Claude Code: run `/config` and change **Local notifications**. With the default (`"auto"`), Claude Code sends a desktop notification in a few terminals and does nothing in most others, so set it explicitly for k-bench.
+You can also set it from inside Claude Code: run `/config` and change **Local notifications**. With the default, `"auto"`, Claude Code rings nothing in most terminals, so set it explicitly. Claude Code's documentation covers [the setting](https://code.claude.com/docs/en/settings-reference#preferrednotifchannel) and [when it notifies](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification).
 
-Sources, from Claude Code's current documentation:
-
-- [`preferredNotifChannel` in the settings reference](https://code.claude.com/docs/en/settings-reference#preferrednotifchannel), which lists its values and where it applies.
-- [Get a terminal bell or notification](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification), which says when Claude Code sends the notification: when it finishes a task or pauses for a permission prompt, and you appear to be away from the terminal.
-
-To check it, start a short task in a Session, then open a different Session. When Claude Code finishes, the first Session shows a Bell. Remember that a Session only raises a Bell while nothing is viewing it, so a tab left open on that Session elsewhere hides it. See [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
-
-## One Session per Claude conversation
-
-A Claude Session runs one conversation at a time. You can move it to another with `/clear` or `/resume`, but it is simplest to give each piece of work its own Claude Session, and name it after the task (in the dialog, or later with **...** then **Rename**). Then:
-
-- you can run several conversations at once and switch between them from the sidebar;
-- a Bell tells you which one is waiting, instead of you checking each in turn;
-- a conversation carries on in its Session when you close the tab or lose your connection;
-- a restart brings back the right conversation, even when several share a folder.
-
-Several Sessions can share one Workspace, but a folder has at most one Workspace. If two conversations will edit the same project at once, they can step on each other's files. A common remedy is a separate git worktree for each, with a Workspace per worktree.
-
-## The right Pane for a dev server
-
-On a wide screen the Prime is always in the left [Pane](using-k-bench.md#panes). Put a dev server, a test watcher or a log tail in the right one: create a shell Session in the Workspace for it (**+**, then **New shell**), and it opens there. Click the Worker in the sidebar to bring the Worker back, and the shell again to return to it. You see Claude's changes take effect as they happen.
+To check it, start a short task in the Worker, then open an Other Session in the right Pane. When Claude Code finishes, the Worker's Tab shows a Bell. If it doesn't, see [Troubleshooting](troubleshooting.md#a-session-never-shows-a-bell).
 
 ## Driving Claude Code from your phone
 
-The dialog works in the phone layout, so you can launch Claude Code from anywhere. Once it is running, the [extra keys](using-k-bench.md#the-phone-layout) cover the keys Claude Code uses that a phone keyboard lacks. [Claude Code's keyboard shortcuts](https://code.claude.com/docs/en/interactive-mode) list them all. The ones you will reach for (on the phone's extra keys, ⎋ is Esc, ⇥ is Tab and ⇤ is Shift-Tab):
+The New Claude dialog works in the Phone layout, and the [Extra keys](using-k-bench.md#the-phone-layout) cover the keys Claude Code uses that a phone keyboard lacks. [Claude Code's keyboard shortcuts](https://code.claude.com/docs/en/interactive-mode) list them all. The ones you will reach for:
 
 | Key                        | What it does in Claude Code                                                                                                                                                                          |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Esc**                    | Interrupts Claude mid-response so you can redirect it, closes a dialog, and declines a permission prompt. Tap it twice, quickly, to clear your draft or, with an empty prompt, open the rewind menu. |
-| **Shift-Tab**              | Cycles Claude Code's permission modes.                                                                                                                                                               |
-| **Ctrl**, then `c`         | Interrupts a running operation (Ctrl is one-shot: tap it, then press `c`). With nothing running, the first press clears your prompt and a second one exits Claude Code, so don't repeat it by habit. |
-| **Ctrl**, then `o`         | In a Focus view Session, shows everything Claude Code is hiding.                                                                                                                                     |
-| **Tab** and the arrow keys | Tab accepts an autocomplete suggestion. The arrow keys move through menus and your prompt history.                                                                                                   |
+| **⎋** (Esc)                | Interrupts Claude mid-response so you can redirect it, closes a dialog, and declines a permission prompt. Tap it twice, quickly, to clear your draft or, with an empty prompt, open the rewind menu. |
+| **⇤** (Shift-Tab)          | Cycles Claude Code's permission modes.                                                                                                                                                               |
+| **Ctrl**, then `c`         | Interrupts a running operation. With nothing running, the first press clears your prompt and a second one exits Claude Code, so don't repeat it by habit.                                            |
+| **Ctrl**, then `o`         | In Focus view, shows everything Claude Code is hiding.                                                                                                                                               |
+| **⇥** (Tab) and the arrows | Tab accepts an autocomplete suggestion. The arrows move through menus and your prompt history.                                                                                                       |
 
 Next: [Troubleshooting](troubleshooting.md).
