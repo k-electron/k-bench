@@ -12,6 +12,10 @@ _Avoid_: user, admin, account
 The owner's Mac that runs k-bench and every Session.
 _Avoid_: server, box, machine
 
+**Device**:
+One browser on one of the owner's machines, through which they use k-bench. Two browsers on one Mac are two Devices. Most of what the owner chooses is kept on the **Host** and shared by every Device; a few layout choices are kept per Device.
+_Avoid_: client, browser
+
 **Workspace**:
 A named entry pointing at a project folder on the Host. A folder has at most one Workspace. Every Workspace has a Prime and a Worker. A Workspace lasts until the owner deletes it, through Host reboots and whether or not its Sessions are running.
 _Avoid_: project, repo, folder
@@ -21,7 +25,7 @@ The folder picker's shortcuts to where a Workspace is likely to be made: Home, t
 _Avoid_: favourites, bookmarks
 
 **Open Workspace**:
-The one Workspace the main view shows. No Pane ever shows a Session from another Workspace. It follows the owner between devices: a device opens on whichever Workspace the owner last opened, on any device.
+The one Workspace the main view shows. No Pane ever shows a Session from another Workspace. It follows the owner between **Devices**: a Device opens on whichever Workspace the owner last opened, on any Device.
 _Avoid_: current workspace, active workspace
 
 **Missing**:
@@ -69,23 +73,27 @@ A Claude Code conversation. A Claude Session runs one at a time and knows it by 
 _Avoid_: session, Claude session id (use conversation ID)
 
 **Pane**:
-One of two side-by-side slots in the main view on a desktop or tablet. The left Pane always shows the Prime. The right Pane shows the Worker, or another of the Workspace's Sessions that the owner opened there. On a phone there is a single Pane.
+One of two side-by-side slots in the main view, outside the **Phone layout**. The left Pane always shows the Prime. The right Pane shows the Worker, or another of the Workspace's Sessions that the owner opened there. In the **Phone layout** there is a single Pane.
 _Avoid_: split, window
 
 **Tab**:
-An entry in the right Pane's tab bar that shows its Session there: the Worker's, which always comes first, then one for each Other Session the owner opened there. Removing a Tab leaves its Session running; it is not a browser tab.
-_Avoid_: page, slot
+An entry in the right Pane's tab bar that shows its Session there: the Worker's, which always comes first, then one for each Other Session the owner opened there. Removing a Tab leaves its Session running. It is never a browser's own tab, which is always called a browser tab.
+_Avoid_: page, slot, tab (for a browser tab)
 
 **Rail**:
 The thin strip a shut Pane leaves, naming its Session and showing its Bell. Choosing it opens the Pane again.
 _Avoid_: collapsed pane, gutter
 
+**Phone layout**:
+The layout k-bench uses on a narrow screen, such as a phone's: one Session of the **Open Workspace** at a time, a drawer for the sidebar, and the **Extra keys**.
+_Avoid_: mobile view, phone mode
+
 **Extra keys**:
-On a phone, the keys a terminal needs that the on-screen keyboard lacks, such as Esc, Tab and Ctrl. They type into the Session on screen. While the on-screen keyboard is up, only a few of them show, as a small overlay on the terminal.
+In the **Phone layout**, the keys a terminal needs that the on-screen keyboard lacks, such as Esc, Tab and Ctrl. They type into the Session on screen. While the on-screen keyboard is up, only a few of them show, as a small overlay on the terminal.
 _Avoid_: shortcut bar, toolbar, key row, typing keys
 
 **Smart typing**:
-On an iPhone, letting the on-screen keyboard's own typing aids (autocorrect, suggestions, double-space for a period, hold to delete words) work while typing into a Session. It is on or off per Session, on for a new Session, and switched from the Extra keys.
+On an iPhone in the **Phone layout**, letting the on-screen keyboard's own typing aids (autocorrect, suggestions, double-space for a period, hold to delete words) work while typing into a Session. It is on or off per Session on each **Device**, on for a new Session, and switched from the **Extra keys**.
 _Avoid_: autocorrect mode, IME mode, keyboard mode
 
 ## Running k-bench
