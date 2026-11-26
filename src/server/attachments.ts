@@ -77,20 +77,30 @@ export class Attachments {
   constructor(tmux: TmuxDriver, sessions: Sessions) {
     /** Per Session, the terminal the window was last sized for (see `writeSizedToTyper`). */
     const lastTyper = new Map<string, Terminal>();
-    /** Sessions with an `endWaiting` under way, so a run of keys asks tmux once at a time. */
-    const endingWaiting = new Set<string>();
+    /**
+     * Per Session with an `endWaiting` under way, whether another key came meanwhile. A run
+     * of keys asks tmux one at a time, and once more after the last, so no key is dropped.
+     */
+    const endingWaiting = new Map<string, boolean>();
+    const endWaiting = (sessionId: string) => {
+      endingWaiting.set(sessionId, false);
+      // A Session that went away has no state to end; its tmux client's exit reports it.
+      void tmux
+        .endWaiting(sessionId)
+        .catch(() => {})
+        .finally(() => {
+          const again = endingWaiting.get(sessionId);
+          endingWaiting.delete(sessionId);
+          if (again) endWaiting(sessionId);
+        });
+    };
     this.context = {
       tmux,
       sessions,
       lastTyper,
       ownerTyped: (sessionId) => {
-        if (endingWaiting.has(sessionId)) return;
-        endingWaiting.add(sessionId);
-        // A Session that went away has no state to end; its tmux client's exit reports it.
-        void tmux
-          .endWaiting(sessionId)
-          .catch(() => {})
-          .finally(() => endingWaiting.delete(sessionId));
+        if (endingWaiting.has(sessionId)) endingWaiting.set(sessionId, true);
+        else endWaiting(sessionId);
       },
       forget: (terminal) => {
         this.terminals.delete(terminal);

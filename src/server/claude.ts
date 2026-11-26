@@ -131,10 +131,12 @@ function activityHook(activity: SessionActivity, ignore?: string): string {
  * - `SessionStart`: a new or restarted Claude Session, or a new conversation in one, starts
  *   Idle. Not on compaction, which can happen mid-turn and keeps the turn going.
  * - `UserPromptSubmit`: a turn starts, so Working.
- * - `PermissionRequest` (a permission prompt or a plan to approve), `PreToolUse` for
- *   `AskUserQuestion` (a question), and `Elicitation` (an MCP server's question): Claude Code
- *   stops mid-turn for the owner, so Waiting. `PermissionRequest` fires as the prompt shows;
- *   the `Notification` for it waits about six seconds, so it isn't used.
+ * - `PermissionRequest` (a permission prompt), `PreToolUse` for `AskUserQuestion` (a
+ *   question) and `ExitPlanMode` (a plan to approve), and `Elicitation` (an MCP server's
+ *   question): Claude Code stops mid-turn for the owner, so Waiting. `PermissionRequest` fires
+ *   as the prompt shows; the `Notification` for it waits about six seconds, so it isn't used.
+ *   The hooks reference doesn't say whether approving a plan is a permission prompt, so
+ *   `ExitPlanMode` is matched as well; if it is, the two agree.
  * - `PostToolUse`, `PostToolUseFailure` and `ElicitationResult`: the owner answered, or a
  *   tool finished, so Working. No hook fires when the owner denies a tool, so the owner's
  *   own key ends Waiting too (see `TmuxDriver.endWaiting`).
@@ -155,7 +157,7 @@ const ACTIVITY_EVENTS: {
   },
   { event: "UserPromptSubmit", activity: "working" },
   { event: "PermissionRequest", activity: "waiting" },
-  { event: "PreToolUse", activity: "waiting", matcher: "AskUserQuestion" },
+  { event: "PreToolUse", activity: "waiting", matcher: "AskUserQuestion|ExitPlanMode" },
   { event: "Elicitation", activity: "waiting" },
   { event: "PostToolUse", activity: "working" },
   { event: "PostToolUseFailure", activity: "working" },

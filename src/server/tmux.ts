@@ -308,17 +308,18 @@ export class TmuxDriver {
   /**
    * Makes a Waiting Claude Session Working, for a key the owner sent it, which is how they
    * answer or deny what it asked (see Waiting in the glossary). Any other state is left
-   * alone, even when a hook changes it in between: the change is one tmux command that keeps
-   * a state that is no longer Waiting. Signals the activity channel when it was Waiting.
+   * alone. It is one tmux call, sent as the key arrives, so it reads the state the key
+   * answered: a Waiting that a hook writes after it, for the next prompt, stays. It signals
+   * the activity channel only when the Session was Waiting.
    */
   async endWaiting(id: string): Promise<void> {
     const pane = `=${PREFIX}${id}:`;
     const option = `#{${ACTIVITY_OPTION}}`;
     const waiting: SessionActivity = "waiting";
     const working: SessionActivity = "working";
-    const activity = await this.run(["display-message", "-p", "-t", pane, option]);
-    if (activity.trim() !== waiting) return;
+    const isWaiting = `#{==:${option},${waiting}}`;
     await this.run(
+      ["if-shell", "-F", "-t", pane, isWaiting, `wait-for -S ${ACTIVITY_CHANNEL}`],
       [
         "set-option",
         "-p",
@@ -326,9 +327,8 @@ export class TmuxDriver {
         "-t",
         pane,
         ACTIVITY_OPTION,
-        `#{?#{==:${option},${waiting}},${working},${option}}`,
+        `#{?${isWaiting},${working},${option}}`,
       ],
-      ["wait-for", "-S", ACTIVITY_CHANNEL],
     );
   }
 
