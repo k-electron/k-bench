@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 
 /** Asks for a new name for a Session; shows the server's refusal (for example a taken name). */
@@ -24,6 +25,7 @@ export function RenameSessionDialog({
 }) {
   const [name, setName] = useState(currentName);
   const [error, setError] = useState<string>();
+  const nameId = useId();
 
   const submit = async () => {
     try {
@@ -59,18 +61,17 @@ export function RenameSessionDialog({
               Names are unique within their Workspace.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            aria-label="Session name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onFocus={(event) => event.target.select()}
-            autoFocus
-          />
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          <Field>
+            <FieldLabel htmlFor={nameId}>Session name</FieldLabel>
+            <Input
+              id={nameId}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              onFocus={(event) => event.target.select()}
+              autoFocus
+            />
+          </Field>
+          {error && <FieldError>{error}</FieldError>}
           <DialogFooter>
             <Button type="submit" disabled={name.trim() === ""}>
               Rename

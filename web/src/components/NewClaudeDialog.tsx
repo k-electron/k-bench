@@ -6,7 +6,6 @@ import {
 } from "../../../src/shared/launch-options.ts";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { ApiError, api } from "../api";
-import { NativeSelect } from "./NativeSelect";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -16,7 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { Field, FieldError, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { Switch } from "./ui/switch";
 
 const FIELDS = [
   { field: "model", label: "Model" },
@@ -52,6 +61,7 @@ export function NewClaudeDialog({
   const [error, setError] = useState<{ message: string; nameTaken: boolean }>();
   const [launching, setLaunching] = useState(false);
   const idPrefix = useId();
+  const nameId = `${idPrefix}-name`;
   const focusViewId = `${idPrefix}-focusView`;
   const nameErrorId = `${idPrefix}-nameError`;
 
@@ -100,12 +110,13 @@ export function NewClaudeDialog({
               to your own Claude Code configuration.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-1.5">
+          <Field data-invalid={error?.nameTaken || undefined}>
+            <FieldLabel htmlFor={nameId}>Session name</FieldLabel>
             <Input
-              aria-label="Session name"
+              id={nameId}
               aria-invalid={error?.nameTaken || undefined}
               aria-describedby={error?.nameTaken ? nameErrorId : undefined}
-              placeholder="Name (optional)"
+              placeholder="Optional"
               value={name}
               onChange={(event) => {
                 setName(event.target.value);
@@ -114,56 +125,48 @@ export function NewClaudeDialog({
               autoFocus
             />
             {error?.nameTaken && (
-              <p id={nameErrorId} role="alert" className="text-sm text-destructive">
-                {error.message}
-              </p>
+              <FieldError id={nameErrorId}>{error.message}</FieldError>
             )}
-          </div>
+          </Field>
           <fieldset
             disabled={!options}
             aria-busy={!options}
             className={`grid min-w-0 gap-4 ${options ? "" : "invisible"}`}
           >
             {FIELDS.map(({ field, label }) => (
-              <div key={field} className="grid gap-1.5">
-                <label htmlFor={`${idPrefix}-${field}`} className="text-sm font-medium">
-                  {label}
-                </label>
-                <NativeSelect
-                  id={`${idPrefix}-${field}`}
+              <Field key={field}>
+                <FieldLabel htmlFor={`${idPrefix}-${field}`}>{label}</FieldLabel>
+                <Select
                   value={options?.[field] ?? "default"}
-                  onChange={(event) =>
-                    options && setOptions({ ...options, [field]: event.target.value })
+                  onValueChange={(value) =>
+                    options && setOptions({ ...options, [field]: value })
                   }
                 >
-                  {LAUNCH_CHOICES[field].map((choice) => (
-                    <option key={choice} value={choice}>
-                      {choiceLabel(choice)}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
+                  <SelectTrigger id={`${idPrefix}-${field}`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LAUNCH_CHOICES[field].map((choice) => (
+                      <SelectItem key={choice} value={choice}>
+                        {choiceLabel(choice)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
             ))}
-            <div className="flex items-center gap-2">
-              <input
+            <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5">
+              <Label htmlFor={focusViewId}>Focus view</Label>
+              <Switch
                 id={focusViewId}
-                type="checkbox"
-                className="size-4 accent-primary"
                 checked={options?.focusView ?? false}
-                onChange={(event) =>
-                  options && setOptions({ ...options, focusView: event.target.checked })
+                onCheckedChange={(checked) =>
+                  options && setOptions({ ...options, focusView: checked })
                 }
               />
-              <label htmlFor={focusViewId} className="text-sm font-medium">
-                Focus view
-              </label>
             </div>
           </fieldset>
-          {error && !error.nameTaken && (
-            <p role="alert" className="text-sm text-destructive">
-              {error.message}
-            </p>
-          )}
+          {error && !error.nameTaken && <FieldError>{error.message}</FieldError>}
           <DialogFooter>
             <Button type="submit" disabled={launching || !options}>
               Launch
