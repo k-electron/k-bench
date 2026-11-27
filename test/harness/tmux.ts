@@ -1,9 +1,15 @@
 import { execFileSync } from "node:child_process";
+import {
+  ACTIVITY_AT_OPTION,
+  ACTIVITY_CHANNEL,
+  ACTIVITY_OPTION,
+} from "../../src/server/claude.ts";
+import type { SessionActivity } from "../../src/shared/state-protocol.ts";
 
 /**
  * Direct access to a test instance's tmux server, for what the API cannot do: simulating a
- * Host reboot, planting or looking for tmux sessions the store knows nothing about, and
- * waiting until no terminal is viewing a Session.
+ * Host reboot, planting or looking for tmux sessions the store knows nothing about, waiting
+ * until no terminal is viewing a Session, and setting a Claude Session's state.
  * Every function refuses a socket that is not a throwaway test socket, so none of them can
  * reach the Installed or Dev instance.
  */
@@ -42,6 +48,25 @@ export function plantTmuxSession(socket: string, name: string): void {
 export function typeIntoSession(socket: string, sessionId: string, text: string): void {
   tmux(socket, "send-keys", "-t", `=kb-${sessionId}:`, "-l", text);
   tmux(socket, "send-keys", "-t", `=kb-${sessionId}:`, "Enter");
+}
+
+/**
+ * Sets a running Claude Session's state as its Claude Code hooks do: stamps the time, writes
+ * the state on its pane and signals the channel, all in one tmux call.
+ */
+export function setActivity(
+  socket: string,
+  sessionId: string,
+  activity: SessionActivity,
+): void {
+  const pane = `=kb-${sessionId}:`;
+  const now = String(Math.floor(Date.now() / 1000));
+  tmux(
+    socket,
+    ...["set-option", "-p", "-t", pane, ACTIVITY_AT_OPTION, now, ";"],
+    ...["set-option", "-p", "-t", pane, ACTIVITY_OPTION, activity, ";"],
+    ...["wait-for", "-S", ACTIVITY_CHANNEL],
+  );
 }
 
 /** How many tmux clients are attached to the Session: how many terminals are viewing it. */

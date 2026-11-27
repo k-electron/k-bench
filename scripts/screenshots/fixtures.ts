@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { type AppPage, test as base } from "../../e2e/harness.ts";
+import { type AppPage, test as base, sessionNamed } from "../../e2e/harness.ts";
+import type { SessionActivity } from "../../src/shared/state-protocol.ts";
+import { setActivity } from "../../test/harness/tmux.ts";
 import { demoShellEnv, HOME_ENV } from "./demo-home.ts";
 import { IMAGES_DIR, type ImageName } from "./images.ts";
 import { describeFindings, findPrivate } from "./privacy.ts";
@@ -17,11 +19,28 @@ interface Demo {
   /** The fake home folder. */
   home: string;
   /**
-   * Creates a Workspace on `~/code/<name>` with these shell Sessions; the sidebar updates
-   * itself. Its Prime and Worker come with it, Stopped until the Workspace is opened, and
-   * then run a demo shell rather than the test stub (see the `kbench` fixture).
+   * Creates a Workspace on `~/code/<name>` with these shell Sessions, then the `claude` ones;
+   * the sidebar updates itself. Its Prime and Worker come with it, Stopped until the
+   * Workspace is opened. Every Claude Session runs a demo shell rather than the test stub
+   * (see the `kbench` fixture).
    */
-  workspace(name: string, sessions: string[]): Promise<void>;
+  workspace(name: string, sessions: string[], claude?: string[]): Promise<void>;
+  /**
+   * Shows a running Claude Session as Working, Waiting or Idle, written where its Claude
+   * Code hooks would write it, since the demo shell it runs has none. Any key typed into a
+   * Waiting Session makes it Working, so set Waiting after the last keystroke. A Session
+   * shows as running a moment before its tmux session exists, so this retries until it does.
+   */
+  setState(
+    sessionName: string,
+    state: SessionActivity,
+    workspaceName: string,
+  ): Promise<void>;
+  /**
+   * Opens the Workspace so its Prime launches, and sets that Prime Waiting. Open another
+   * Workspace after, and this one's tile pulses.
+   */
+  waitingElsewhere(app: AppPage, workspaceName: string): Promise<void>;
   /**
    * Makes a command on the fake PATH that plays `recording` back in the terminal it runs
    * in, so what is typed into the Session is short and names no real path.
@@ -89,7 +108,7 @@ export const test = base.extend<{ demo: Demo }>({
 
     const demo: Demo = {
       home,
-      workspace: async (name, sessions) => {
+      workspace: async (name, sessions, claude = []) => {
         const created = await post("/api/workspaces", {
           folder: join(home, "code", name),
         });
@@ -97,6 +116,21 @@ export const test = base.extend<{ demo: Demo }>({
         for (const session of sessions) {
           await post(`/api/workspaces/${id}/sessions`, { name: session });
         }
+        for (const session of claude) {
+          await post(`/api/workspaces/${id}/sessions`, { name: session, claude: {} });
+        }
+      },
+      setState: async (sessionName, state, workspaceName) => {
+        const session = sessionNamed(kbench.instance, sessionName, workspaceName);
+        await expect(() =>
+          setActivity(kbench.instance.config.tmuxSocket, session.id, state),
+        ).toPass();
+      },
+      waitingElsewhere: async (app, workspaceName) => {
+        await app.openWorkspace(workspaceName);
+        await expect(app.marker("sidebar", "Prime", "idle")).toBeVisible();
+        await demo.setState("Prime", "waiting", workspaceName);
+        await expect(app.marker("sidebar", "Prime", "waiting")).toBeVisible();
       },
       playerCommand: (recording) => {
         const command = `play-${++players}`;
@@ -132,6 +166,12 @@ export const test = base.extend<{ demo: Demo }>({
       },
       shoot: async (name, area) => {
         await demo.assertNothingPrivate();
+        // A still can't pulse, and a pulse caught at the end of its cycle leaves Waiting
+        // looking like a Bell, so every pulse is held part-way out, its halo showing.
+        await page.addStyleTag({
+          content:
+            ".animate-ping { animation: none !important; transform: scale(1.6); opacity: 0.45; }",
+        });
         mkdirSync(IMAGES_DIR, { recursive: true });
         const path = join(IMAGES_DIR, name);
         if (area && "screenshot" in area) await area.screenshot({ path });
