@@ -6,6 +6,7 @@ import {
   SpellCheckIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import {
   setSmartTyping,
   useSmartTypingChoice,
@@ -13,9 +14,18 @@ import {
 } from "../smartTyping";
 import { KEYS, sendKey, toggleCtrl, useCtrlArmed } from "../terminalInput";
 import { Button } from "./ui/button";
+import { ButtonGroup } from "./ui/button-group";
+import { Toggle } from "./ui/toggle";
 
 // Pressing a key must not take focus from the terminal, or the on-screen keyboard closes.
 const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault();
+
+const KEY = "h-10 min-w-0 px-0";
+// Ctrl and Smart typing fill with the accent while on.
+const TOGGLE = cn(
+  KEY,
+  "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground",
+);
 
 function Key({
   name,
@@ -28,9 +38,9 @@ function Key({
 }) {
   return (
     <Button
-      variant="secondary"
+      variant="outline"
       aria-label={name}
-      className="h-10 min-w-0 flex-1 px-0"
+      className={KEY}
       onMouseDown={keepFocus}
       onClick={() => sendKey(data)}
     >
@@ -50,11 +60,10 @@ export function ExtraKeys({ sessionId }: { sessionId: string }) {
   const smartTyping = useSmartTypingChoice(sessionId);
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings form styling; this only names the row
-    <div
-      role="group"
+    <ButtonGroup
       aria-label="Extra keys"
-      className="flex shrink-0 gap-1 border-t bg-card p-1"
+      // Equal columns: in a flex row the icon keys' padding made them wider than the others.
+      className="grid w-full shrink-0 auto-cols-fr grid-flow-col border-t bg-sidebar p-1"
     >
       <Key name="Esc" data={KEYS.esc}>
         ⎋
@@ -65,15 +74,15 @@ export function ExtraKeys({ sessionId }: { sessionId: string }) {
       <Key name="Shift Tab" data={KEYS.shiftTab}>
         ⇤
       </Key>
-      <Button
-        variant={ctrl ? "default" : "secondary"}
-        aria-pressed={ctrl}
-        className="h-10 min-w-0 flex-1 px-0"
+      <Toggle
+        variant="outline"
+        pressed={ctrl}
+        className={TOGGLE}
         onMouseDown={keepFocus}
-        onClick={toggleCtrl}
+        onPressedChange={toggleCtrl}
       >
         Ctrl
-      </Button>
+      </Toggle>
       <Key name="Left" data={KEYS.left}>
         <ArrowLeftIcon />
       </Key>
@@ -90,17 +99,17 @@ export function ExtraKeys({ sessionId }: { sessionId: string }) {
         ⏎
       </Key>
       {smartTypingOffered && (
-        <Button
-          variant={smartTyping ? "default" : "secondary"}
+        <Toggle
+          variant="outline"
           aria-label="Smart typing"
-          aria-pressed={smartTyping}
-          className="h-10 min-w-0 flex-1 px-0"
+          pressed={smartTyping}
+          className={TOGGLE}
           onMouseDown={keepFocus}
-          onClick={() => setSmartTyping(sessionId, !smartTyping)}
+          onPressedChange={(on) => setSmartTyping(sessionId, on)}
         >
           <SpellCheckIcon />
-        </Button>
+        </Toggle>
       )}
-    </div>
+    </ButtonGroup>
   );
 }

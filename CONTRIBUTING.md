@@ -115,6 +115,15 @@ pnpm install-app
 
 The npm package ships compiled JavaScript and the built front end, and only the release workflow publishes it: never run `npm publish` yourself. [Packaging and the install](docs/internals/packaging.md) has the details, and [Install verification](docs/internals/install-verification.md) covers trying the packed package by hand.
 
+## The UI: shadcn/ui first
+
+Outside the terminal, use a [shadcn/ui](https://ui.shadcn.com) component wherever one fits. Hand-build only what shadcn can't do, and say why in that component's comment. The terminal's look is fixed ([ADR 0009](docs/adr/0009-the-terminal-stays-on-xterm-js-drawn-in-the-dom.md)): the frame is matched to it, never the other way round.
+
+- Add or update a component with the CLI, for example `pnpm dlx shadcn@latest add tooltip`. It writes into `web/src/components/ui/`. Keep k-bench's own changes to those files few, each with a `k-bench:` comment, so a later run's diff is easy to merge.
+- The CLI imports `cn` from the `cn` package. Change that import to `@/lib/utils` (`pnpm lint` flags any you miss), and don't add the package.
+- The CLI adds its packages to `dependencies`. Move them to `devDependencies` ([Packaging and the install](docs/internals/packaging.md) says why).
+- Theme tokens live in `web/src/index.css`, and the app is dark only.
+
 ## Changelog
 
 User-visible changes get an entry under Unreleased in [CHANGELOG.md](CHANGELOG.md), in the style of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (Added, Changed, Deprecated, Removed, Fixed, Security). Leave the released sections and the version number alone: `pnpm release` handles them.

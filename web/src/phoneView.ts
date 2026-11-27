@@ -5,7 +5,7 @@ import type {
   State,
   WorkspaceState,
 } from "../../src/shared/state-protocol.ts";
-import { findOpenWorkspace, hasBell } from "./workspaces";
+import { findOpenWorkspace, type HintMarker, hintMarker } from "./workspaces";
 import type { WorkspaceView } from "./workspaceView";
 
 export interface PhoneView {
@@ -17,8 +17,8 @@ export interface PhoneView {
   starting: boolean;
   /** Some Session of the Open Workspace other than the one on screen has a Bell. */
   bellHere: boolean;
-  /** Some Session of another Workspace has a Bell. */
-  bellElsewhere: boolean;
+  /** The hint for the Sessions of every other Workspace, as a folded Workspace's tile has. */
+  hintElsewhere: HintMarker | null;
   /** Shows a Session of the Open Workspace (`workspaceId`), remembering it on this device. */
   show(workspaceId: string, sessionId: string): void;
   /** Opens a Workspace (choosing it by name), which shows its Prime. */
@@ -89,7 +89,9 @@ export function usePhoneView(
     session,
     starting,
     bellHere: sessions.some((s) => s.bell && s.id !== session?.id),
-    bellElsewhere: (state?.workspaces ?? []).some((w) => w !== workspace && hasBell(w)),
+    hintElsewhere: hintMarker(
+      (state?.workspaces ?? []).filter((w) => w !== workspace).flatMap((w) => w.sessions),
+    ),
     show: (workspaceId, sessionId) =>
       setShown((current) => ({ ...current, [workspaceId]: sessionId })),
     openWorkspace: (id) => {

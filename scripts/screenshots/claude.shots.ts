@@ -6,11 +6,12 @@ test("the New Claude dialog", async ({ app, demo }) => {
   await app.openWorkspace("acme-api");
 
   await app.openClaudeDialog("acme-api");
-  const dialog = app.claudeDialog;
-  await dialog.getByRole("textbox", { name: "Session name" }).fill("api tests");
-  await dialog.getByLabel("Model", { exact: true }).selectOption("Sonnet");
-  await dialog.getByLabel("Effort", { exact: true }).selectOption("High");
-  await dialog.getByLabel("Advisor", { exact: true }).selectOption("Opus");
-  await dialog.getByRole("checkbox", { name: "Focus view" }).check();
+  await app.fillClaudeDialog({
+    name: "api tests",
+    model: "Sonnet",
+    effort: "High",
+    advisor: "Opus",
+    focusView: true,
+  });
   await demo.shoot("new-claude.png", app.claudeDialog);
 });

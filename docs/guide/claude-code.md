@@ -2,7 +2,7 @@
 
 k-bench launches Claude Code for you and resumes it when you restart. Every Workspace comes with two Claude Sessions, the Prime and the Worker, and you can launch more from the New Claude dialog.
 
-k-bench starts and resumes Claude Code with its documented command-line flags, and adds one silent hook so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
+k-bench starts and resumes Claude Code with its documented command-line flags, and adds silent hooks so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)) and [what it is doing](#see-what-a-claude-session-is-doing). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
 
 ## The Prime plans and the Worker builds
 
@@ -26,15 +26,15 @@ A Claude Session runs one Claude conversation at a time. You can move it to anot
 
 Choose the **+** next to the Open Workspace's name, then **New Claude…**, fill in the dialog and choose **Launch**. The new Session opens in the right Pane.
 
-![The New Claude dialog, with a name, model, effort, advisor and the Focus view checkbox](../images/new-claude.png)
+![The New Claude dialog, with a name, model, effort, advisor and the Focus view switch](../images/new-claude.png)
 
-| Field          | Choices                                                                                                                                  |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Name**       | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused, and your other choices stay. |
-| **Model**      | Default, Fable, Opus, Sonnet, Haiku                                                                                                      |
-| **Effort**     | Default, Low, Medium, High, XHigh, Max                                                                                                   |
-| **Advisor**    | Default, Off, Fable, Opus, Sonnet                                                                                                        |
-| **Focus view** | A checkbox                                                                                                                               |
+| Field            | Choices                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session name** | Optional. Blank gives "session 1", "session 2" and so on. A name already used in that Workspace is refused, and your other choices stay. |
+| **Model**        | Default, Fable, Opus, Sonnet, Haiku                                                                                                      |
+| **Effort**       | Default, Low, Medium, High, XHigh, Max                                                                                                   |
+| **Advisor**      | Default, Off, Fable, Opus, Sonnet                                                                                                        |
+| **Focus view**   | A switch                                                                                                                                 |
 
 The Model, Effort, Advisor and Focus view are the Session's **Launch options**.
 
@@ -73,6 +73,12 @@ It can't follow a move when Claude Code doesn't run hooks: in a folder you haven
 Claude Code saves a conversation only after your first message. If you quit before sending one, including after a `/clear`, the restart starts a fresh conversation with the same ID and Launch options.
 
 Deleting a Claude Session leaves its conversation alone, so `claude --resume` in a terminal still finds it.
+
+## See what a Claude Session is doing
+
+Each Claude Session shows whether it is **Working**, in a turn, **Waiting**, stopped to ask you something (a permission prompt, a question or a plan to approve), or **Idle**, its turn over and nothing asked of you. The state is kept on your Mac, so every Device shows the same, and it changes live. A Session shows one marker, the most urgent: Waiting, then its [Bell](using-k-bench.md#bells), then Working or Idle. Viewing the Session clears the Bell but not Waiting, which lasts until you answer: any key you send that Session counts as an answer, but scrolling it doesn't. While a Workspace isn't open, its tile pulses if any of its Sessions is Waiting, ahead of a Bell's dot, and so does the dot on the phone's menu button for the other Workspaces. Shells and Stopped Sessions have no state, and Working and Idle never show on a Workspace's tile.
+
+k-bench learns the state from hooks it adds to each Claude Code it launches, alongside the conversation hook, and like it they print nothing. Where Claude Code doesn't run hooks (an untrusted folder, or `disableAllHooks`), the Session always shows Idle, and so does one started by an older k-bench until you restart it. Claude Code reports nothing when you press Esc to interrupt a turn, so the Session shows Working until it has printed nothing for about 15 seconds, then Idle. A background subagent that asks for a permission Claude Code can't show you may leave its Session Waiting until you send it a key or the turn moves on.
 
 ## Typing `claude` in an ordinary Session
 

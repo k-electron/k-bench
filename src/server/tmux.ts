@@ -2,7 +2,11 @@ import { execFile, spawn } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
+import type { SessionActivity } from "../shared/state-protocol.ts";
 import {
+  ACTIVITY_AT_OPTION,
+  ACTIVITY_CHANNEL,
+  ACTIVITY_OPTION,
   type ClaudeLaunch,
   CONVERSATION_CHANNEL,
   CONVERSATION_OPTION,
@@ -21,15 +25,68 @@ const BELL_CHANNEL = "kb-bell-changed";
 /** How long a channel watch waits before trying again after tmux failed it unexpectedly. */
 const WATCH_RETRY_MS = 1_000;
 
-/** A Session whose shell is alive, with its Bell. */
+/** A Session whose shell is alive, with what tmux holds about it. */
 export interface LiveSession {
   id: string;
   bell: boolean;
+  /**
+   * For a Claude Session, the state Claude Code last reported, as the activity hooks wrote it
+   * (`ACTIVITY_OPTION`): Idle until a hook has run (`activityOf`). Meaningless for a shell.
+   */
+  activity: SessionActivity;
+  /**
+   * When, in epoch seconds, the Session last printed anything or had its state written,
+   * whichever is later (to tmux's one-second clock).
+   */
+  lastChange: number;
   /**
    * For a Claude Session, the conversation Claude Code last reported starting, as its hook
    * wrote it (`CONVERSATION_OPTION`): unchecked, and empty until the hook has run.
    */
   conversation: string;
+}
+
+const ACTIVITIES: readonly SessionActivity[] = ["working", "waiting", "idle"];
+
+/**
+ * A Session's state from what the activity hooks wrote: Idle while it is empty, before any
+ * hook has run, or when it isn't a state at all.
+ */
+function activityOf(written: string): SessionActivity {
+  return ACTIVITIES.find((activity) => activity === written) ?? "idle";
+}
+
+/** The tmux format for a Session's state, as the activity hooks wrote it. */
+const ACTIVITY_NOW = `#{${ACTIVITY_OPTION}}`;
+
+/** A tmux format that is true while a Session's state is `activity`. */
+function activityIs(activity: SessionActivity): string {
+  return `#{==:${ACTIVITY_NOW},${activity}}`;
+}
+
+/**
+ * The tmux target for the Session's one pane. The trailing colon names the Session's current
+ * window: without it tmux 3.8 finds no window for a format and prints an empty value, without
+ * failing.
+ */
+function paneOf(id: string): string {
+  return `=${PREFIX}${id}:`;
+}
+
+/**
+ * The `set-option` arguments that set the pane option `option` on `pane` to the tmux format
+ * `format`, expanded as it is set.
+ */
+function setPaneOption(pane: string, option: string, format: string): string[] {
+  return ["set-option", "-p", "-F", "-t", pane, option, format];
+}
+
+/**
+ * The `set-option` arguments that make the state on `pane` `activity` while the tmux format
+ * `test` is true, and leave it alone otherwise.
+ */
+function setActivityIf(pane: string, test: string, activity: SessionActivity): string[] {
+  return setPaneOption(pane, ACTIVITY_OPTION, `#{?${test},${activity},${ACTIVITY_NOW}}`);
 }
 
 /** The owner's login shell. */
@@ -234,6 +291,15 @@ export class TmuxDriver {
     return this.watchChannel(CONVERSATION_CHANNEL, onChange);
   }
 
+  /**
+   * Calls `onChange` soon after Claude Code in any Claude Session reports a new state (and
+   * now and then when none did), until stopped; `listSessions` then has it. Like the Bells,
+   * reports are missed only while no tmux server runs.
+   */
+  watchActivity(onChange: () => void): ChannelWatch {
+    return this.watchChannel(ACTIVITY_CHANNEL, onChange);
+  }
+
   private watchChannel(channel: string, onChange: () => void): ChannelWatch {
     const watch = new ChannelWatcher(
       [...this.baseArgs(), "wait-for", channel],
@@ -257,9 +323,9 @@ export class TmuxDriver {
   }
 
   /**
-   * The Sessions whose shell is currently alive on this socket, with their Bells and
-   * conversations. The conversation is a pane option; a session's format reads it from the
-   * session's one pane.
+   * The Sessions whose shell is currently alive on this socket, with their Bells, states and
+   * conversations. The state and conversation are pane options; a session's format reads them,
+   * and its last output, from the session's one window and pane.
    */
   async listSessions(): Promise<LiveSession[]> {
     let stdout: string;
@@ -267,7 +333,8 @@ export class TmuxDriver {
       stdout = await this.run([
         "list-sessions",
         "-F",
-        `#{session_name}\t#{${BELL_OPTION}}\t#{${CONVERSATION_OPTION}}`,
+        // The conversation goes last: it is read as the rest of the line.
+        `#{session_name}\t#{${BELL_OPTION}}\t#{${ACTIVITY_OPTION}}\t#{${ACTIVITY_AT_OPTION}}\t#{window_activity}\t#{${CONVERSATION_OPTION}}`,
       ]);
     } catch (error) {
       if (isNoServer(error)) return [];
@@ -277,13 +344,75 @@ export class TmuxDriver {
       .split("\n")
       .filter((line) => line.startsWith(PREFIX))
       .map((line) => {
-        const [name = "", bell = "", ...conversation] = line.split("\t");
+        const [
+          name = "",
+          bell = "",
+          activity = "",
+          at = "",
+          output = "",
+          ...conversation
+        ] = line.split("\t");
         return {
           id: name.slice(PREFIX.length),
           bell: bell !== "",
+          activity: activityOf(activity),
+          lastChange: Math.max(Number(at) || 0, Number(output) || 0),
           conversation: conversation.join("\t"),
         };
       });
+  }
+
+  /**
+   * Makes a Waiting Claude Session Working, for a key the owner sent it, which is how they
+   * answer or deny what it asked (see Waiting in the glossary). Any other state is left
+   * alone. It is one tmux call, sent as the key arrives, so it reads the state the key
+   * answered: a Waiting that a hook writes after it, for the next prompt, stays. It signals
+   * the activity channel only when the Session was Waiting.
+   */
+  async endWaiting(id: string): Promise<void> {
+    const pane = paneOf(id);
+    const isWaiting = activityIs("waiting");
+    await this.run(
+      ["if-shell", "-F", "-t", pane, isWaiting, `wait-for -S ${ACTIVITY_CHANNEL}`],
+      // Stamped before the state is written, while it still says Waiting.
+      setPaneOption(
+        pane,
+        ACTIVITY_AT_OPTION,
+        `#{?${isWaiting},${nowInSeconds()},#{${ACTIVITY_AT_OPTION}}}`,
+      ),
+      setActivityIf(pane, isWaiting, "working"),
+    );
+  }
+
+  /**
+   * Makes a Working Claude Session Idle if it has printed nothing, and had no state written,
+   * since `quietSince` (epoch seconds), and returns the state it is in after. Any other state
+   * is left alone. It is one tmux call, so a hook or the owner's key that writes the state
+   * after it was last read is never overwritten. Returns undefined when the Session has gone.
+   */
+  async decayWorking(
+    id: string,
+    quietSince: number,
+  ): Promise<SessionActivity | undefined> {
+    const pane = paneOf(id);
+    const quiet = [
+      activityIs("working"),
+      `#{e|<=:#{window_activity},${quietSince}}`,
+      `#{e|<=:#{${ACTIVITY_AT_OPTION}},${quietSince}}`,
+    ].reduce((all, test) => `#{&&:${all},${test}}`);
+    try {
+      const stdout = await this.run(setActivityIf(pane, quiet, "idle"), [
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        ACTIVITY_NOW,
+      ]);
+      return activityOf(stdout.trim());
+    } catch (error) {
+      if (isNoSuchSession(error)) return undefined;
+      throw error;
+    }
   }
 
   /**
@@ -293,15 +422,7 @@ export class TmuxDriver {
    */
   async shellSize(id: string): Promise<Size> {
     const tmuxPaneTty = (
-      await this.run([
-        "display-message",
-        "-p",
-        "-t",
-        // The trailing colon names the Session's current window. Without it tmux 3.8
-        // finds no window and prints an empty value, without failing.
-        `=${PREFIX}${id}:`,
-        "#{pane_tty}",
-      ])
+      await this.run(["display-message", "-p", "-t", paneOf(id), "#{pane_tty}"])
     ).trim();
     // `-f` is the macOS spelling (the Host is a Mac); it prints "<rows> <cols>".
     const { stdout } = await execFileAsync("stty", ["-f", tmuxPaneTty, "size"]);
@@ -427,6 +548,11 @@ class ChannelWatcher implements ChannelWatch {
     })();
     return this.stopping;
   }
+}
+
+/** The time now in epoch seconds, as tmux keeps it. */
+export function nowInSeconds(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 function stderrOf(error: unknown): string {

@@ -4,7 +4,6 @@ import {
   FolderPlusIcon,
   HomeIcon,
   MonitorIcon,
-  SearchIcon,
   TextCursorInputIcon,
 } from "lucide-react";
 import { Fragment, type RefObject, useEffect, useId, useRef, useState } from "react";
@@ -25,7 +24,21 @@ import {
 } from "@/folders";
 import { cn } from "@/lib/utils";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "./ui/breadcrumb";
 import { Button } from "./ui/button";
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./ui/command";
 import { Input } from "./ui/input";
 
 /**
@@ -103,9 +116,9 @@ function useEscapeIn(input: RefObject<HTMLInputElement | null>, onEscape: () => 
 
 /**
  * Picks a folder on the Host: Places to jump to, breadcrumbs for the folder shown (which turn
- * into a path field to type or paste a path), a filter, that folder's subfolders, and New
+ * into a path field to type or paste a path), that folder's subfolders with a filter, and New
  * folder to name folders that don't exist yet (nothing is made here; the dialog's request
- * makes them). The choice is reported through `onChange`,
+ * makes them). Places and the subfolders are shadcn `Command`s. The choice is reported through `onChange`,
  * with whether the owner has moved since it opened. It opens at `start`, or the nearest
  * folder above it that exists, or else where the server says (beside the newest Workspace,
  * or Home).
@@ -175,60 +188,59 @@ export function FolderPicker({
     );
   }
   if (!here || !root) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  const inNewFolder = newFolders.length > 0;
+  // The innermost new folder, when the folder shown doesn't exist yet.
+  const newFolder = newFolders.at(-1);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 md:grid md:grid-cols-[10rem_1fr]">
       <Places
         places={places(workspaces, root)}
         root={root}
-        here={inNewFolder ? undefined : here}
+        here={newFolder === undefined ? here : undefined}
         onGo={go}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-        <PathBar choice={{ base: here, newFolders }} root={root} onChoose={choose} />
         <div className="flex gap-2">
-          {!inNewFolder && (
-            <div className="relative flex-1">
-              <SearchIcon className="pointer-events-none absolute top-2 left-2 size-4 text-muted-foreground" />
-              <Input
-                aria-label="Filter folders"
-                placeholder="Filter"
-                className="h-8 pl-8 text-sm"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                // Enter here must not submit the dialog's form.
-                onKeyDown={(event) => event.key === "Enter" && event.preventDefault()}
-              />
-            </div>
-          )}
+          <div className="min-w-0 flex-1">
+            <PathBar choice={{ base: here, newFolders }} root={root} onChoose={choose} />
+          </div>
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             size="sm"
-            className="ml-auto"
             onClick={() => setAdding(true)}
           >
             <FolderPlusIcon />
             New folder
           </Button>
         </div>
-        <FolderList
-          listing={listing}
-          error={error}
-          filter={filter}
-          workspaces={workspaces}
-          newFolder={newFolders.at(-1)}
-          adding={adding}
-          onAdd={addFolder}
-          onCancelAdd={() => setAdding(false)}
-          onGo={go}
-        />
+        {/* Outside the list's Command, which would take its arrow, Home, End and Enter keys. */}
+        {adding && <NewFolderInput onAdd={addFolder} onCancel={() => setAdding(false)} />}
+        {newFolder !== undefined ? (
+          <NewFolderNote name={newFolder} />
+        ) : (
+          <FolderList
+            listing={listing}
+            error={error}
+            filter={filter}
+            onFilter={setFilter}
+            workspaces={workspaces}
+            onGo={go}
+          />
+        )}
         <PathLine choice={{ base: here, newFolders }} root={root} />
       </div>
     </div>
   );
 }
+
+/**
+ * Classes for a `Command` here. cmdk always keeps one item selected, so the selection shows
+ * only while the Command has the keyboard or the pointer; otherwise its first item would look
+ * chosen. A Place marked as the one shown keeps its own highlight.
+ */
+const QUIET_SELECTION =
+  "bg-transparent [&:not(:focus-within):not(:hover)_[data-selected=true]:not([aria-current])]:bg-transparent";
 
 const PLACE_ICONS: Record<Place["kind"], typeof FolderIcon> = {
   home: HomeIcon,
@@ -236,7 +248,11 @@ const PLACE_ICONS: Record<Place["kind"], typeof FolderIcon> = {
   computer: MonitorIcon,
 };
 
-/** Home, the folders that hold Workspaces, and Computer. A row of chips on a phone. */
+/**
+ * Home, the folders that hold Workspaces, and Computer, as a Command group: a column on a
+ * desktop, a row of chips on a phone. The Command has no input, so it takes the focus itself
+ * for the arrow keys and Enter.
+ */
 function Places({
   places,
   root,
@@ -250,33 +266,42 @@ function Places({
   onGo: (folder: string) => void;
 }) {
   return (
-    <nav
-      aria-label="Places"
-      className="flex shrink-0 gap-1 overflow-x-auto md:flex-col md:overflow-visible md:border-r md:pr-2"
+    <Command
+      tabIndex={0}
+      vimBindings={false}
+      className={cn(
+        QUIET_SELECTION,
+        // Like a Command's input, the root shows the keyboard by its selected item, not a ring.
+        "h-auto shrink-0 outline-none md:rounded-none md:border-r md:pr-2",
+      )}
     >
-      <p className="hidden px-2 text-[10px] uppercase tracking-wide text-muted-foreground md:block">
-        Places
-      </p>
-      {places.map((place) => {
-        const Icon = PLACE_ICONS[place.kind];
-        return (
-          <button
-            key={place.path}
-            type="button"
-            title={tildePath(place.path, root)}
-            aria-current={here === place.path ? "location" : undefined}
-            onClick={() => onGo(place.path)}
-            className={cn(
-              "flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-left text-sm md:rounded-sm md:border-transparent md:px-2",
-              here === place.path ? "bg-accent" : "hover:bg-accent",
-            )}
-          >
-            <Icon className="size-4 shrink-0" />
-            <span className="truncate">{place.label}</span>
-          </button>
-        );
-      })}
-    </nav>
+      <CommandList
+        label="Places"
+        className="max-h-none overflow-x-auto overflow-y-hidden"
+      >
+        <CommandGroup
+          heading="Places"
+          className="overflow-visible p-0 max-md:[&_[cmdk-group-heading]]:hidden [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:gap-1 md:[&_[cmdk-group-items]]:flex-col"
+        >
+          {places.map((place) => {
+            const Icon = PLACE_ICONS[place.kind];
+            return (
+              <CommandItem
+                key={place.path}
+                value={place.path}
+                title={tildePath(place.path, root)}
+                aria-current={here === place.path ? "location" : undefined}
+                onSelect={() => onGo(place.path)}
+                className="shrink-0 rounded-full border px-3 py-1 aria-[current=location]:bg-accent aria-[current=location]:font-medium md:rounded-sm md:border-transparent md:px-2"
+              >
+                <Icon />
+                <span className="truncate">{place.label}</span>
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
+      </CommandList>
+    </Command>
   );
 }
 
@@ -330,7 +355,9 @@ function PathBar({
           onChoose({ base: choice.base, newFolders: choice.newFolders.slice(0, count) })
         }
       />
-      {/* The rest of the bar: clicking or tapping it turns the bar into the path field. */}
+      {/* The rest of the bar: clicking or tapping it turns the bar into the path field. A
+          plain button, since it stretches over whatever room the breadcrumbs leave, which
+          shadcn's Button with its fixed sizes doesn't. */}
       <button
         ref={typeButton}
         type="button"
@@ -352,6 +379,9 @@ function PathBar({
  * arrow keys, and never makes anything: a part of the path that doesn't exist becomes new
  * folders. Tab never leaves the field: pressed while the suggestions load, it completes once
  * they arrive. Escape, or leaving the field, goes back to the breadcrumbs unchanged.
+ *
+ * Hand-built rather than a `Command`: cmdk always selects a suggestion, so Enter would go
+ * there instead of to the typed path, and it takes Home, End and Enter from the field.
  */
 function PathField({
   choice,
@@ -539,28 +569,31 @@ function Breadcrumbs({
     })),
   ];
   return (
-    <nav
-      aria-label="Breadcrumbs"
-      className="flex min-h-7 min-w-0 flex-wrap items-center gap-0.5 text-sm"
-    >
-      {all.map((crumb, index) => (
-        <span key={crumb.path} className="flex items-center gap-0.5">
-          {index > 0 && <ChevronRightIcon className="size-3 opacity-50" />}
-          <button
-            type="button"
-            title={crumb.isNew ? `${crumb.path} (doesn't exist yet)` : crumb.path}
-            aria-current={index === all.length - 1 ? "location" : undefined}
-            onClick={crumb.go}
-            className={cn(
-              "rounded-sm px-1 hover:bg-accent aria-[current]:font-medium",
-              crumb.isNew && "italic",
-            )}
-          >
-            {crumb.label}
-          </button>
-        </span>
-      ))}
-    </nav>
+    <Breadcrumb aria-label="Breadcrumbs" className="min-w-0">
+      <BreadcrumbList className="min-h-7 gap-0.5 sm:gap-0.5">
+        {all.map((crumb, index) => (
+          <Fragment key={crumb.path}>
+            {index > 0 && <BreadcrumbSeparator className="[&>svg]:size-3" />}
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <button
+                  type="button"
+                  title={crumb.isNew ? `${crumb.path} (doesn't exist yet)` : crumb.path}
+                  aria-current={index === all.length - 1 ? "location" : undefined}
+                  onClick={crumb.go}
+                  className={cn(
+                    "rounded-sm px-1 hover:bg-accent aria-[current]:font-medium aria-[current]:text-foreground",
+                    crumb.isNew && "italic",
+                  )}
+                >
+                  {crumb.label}
+                </button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </Fragment>
+        ))}
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }
 
@@ -583,30 +616,37 @@ function PathLine({ choice, root }: { choice: FolderChoice; root: string }) {
   );
 }
 
+/** Inside a new folder there is nothing to list: it says the folder doesn't exist yet. */
+function NewFolderNote({ name }: { name: string }) {
+  return (
+    <div className="grid min-h-40 flex-1 place-items-center content-center gap-1 rounded-md border p-6 text-center text-sm text-muted-foreground md:h-72 md:flex-none">
+      <FolderPlusIcon className="size-6" />
+      <span>
+        <em className="text-foreground">{name}</em> doesn't exist yet. It'll be made along
+        with the Workspace.
+      </span>
+      <span className="text-xs">Add another New folder to go deeper.</span>
+    </div>
+  );
+}
+
 /**
- * The shown folder's subfolders, narrowed by the filter; one with a Workspace says which.
- * Inside a new folder there is nothing to list: it says the folder doesn't exist yet.
+ * The shown folder's subfolders as a Command: its input narrows them, the arrow keys move
+ * through them and Enter opens one. One with a Workspace says which.
  */
 function FolderList({
   listing,
   error,
   filter,
+  onFilter,
   workspaces,
-  newFolder,
-  adding,
-  onAdd,
-  onCancelAdd,
   onGo,
 }: {
   listing: DirectoryListing | undefined;
   error: string | undefined;
   filter: string;
+  onFilter: (filter: string) => void;
   workspaces: WorkspaceState[];
-  /** The new folder shown, when the folder shown doesn't exist yet. */
-  newFolder: string | undefined;
-  adding: boolean;
-  onAdd: (name: string) => void;
-  onCancelAdd: () => void;
   onGo: (folder: string) => void;
 }) {
   const id = useId();
@@ -615,71 +655,58 @@ function FolderList({
     d.name.toLowerCase().includes(filter.trim().toLowerCase()),
   );
   return (
-    <ul
-      aria-label="Folders"
-      className="min-h-40 flex-1 overflow-y-auto rounded-md border p-1 md:h-72 md:flex-none"
+    // cmdk's own filter is fuzzy and reorders the list; this one keeps names that contain
+    // what's typed, in name order.
+    <Command
+      label="Filter folders"
+      shouldFilter={false}
+      vimBindings={false}
+      className={cn(QUIET_SELECTION, "min-h-40 flex-1 border md:h-72 md:flex-none")}
     >
-      {adding && (
-        <li>
-          <NewFolderInput onAdd={onAdd} onCancel={onCancelAdd} />
-        </li>
-      )}
-      {newFolder !== undefined ? (
-        <li className="grid place-items-center gap-1 p-6 text-center text-sm text-muted-foreground">
-          <FolderPlusIcon className="size-6" />
-          <span>
-            <em className="text-foreground">{newFolder}</em> doesn't exist yet. It'll be
-            made along with the Workspace.
-          </span>
-          <span className="text-xs">Add another New folder to go deeper.</span>
-        </li>
-      ) : (
-        <>
-          {error && (
-            <li role="alert" className="p-1 text-sm text-destructive">
-              {error}
-            </li>
-          )}
-          {!listing && !error && (
-            <li className="p-1 text-sm text-muted-foreground">Loading…</li>
-          )}
-          {shown.map((directory, index) => {
-            const workspace = workspaceIn.get(directory.path);
-            const markId = `${id}-${index}`;
-            return (
-              <li key={directory.path}>
-                <button
-                  type="button"
-                  onClick={() => onGo(directory.path)}
-                  aria-describedby={workspace === undefined ? undefined : markId}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+      <CommandInput placeholder="Filter" value={filter} onValueChange={onFilter} />
+      <CommandList label="Folders" className="max-h-none flex-1 p-1">
+        {error && (
+          <p role="alert" className="p-1 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {!listing && !error && (
+          <p className="p-1 text-sm text-muted-foreground">Loading…</p>
+        )}
+        {shown.map((directory, index) => {
+          const workspace = workspaceIn.get(directory.path);
+          const markId = `${id}-${index}`;
+          return (
+            <CommandItem
+              key={directory.path}
+              value={directory.path}
+              onSelect={() => onGo(directory.path)}
+              aria-describedby={workspace === undefined ? undefined : markId}
+            >
+              <FolderIcon />
+              <span className="min-w-0 flex-1 truncate">{directory.name}</span>
+              {workspace !== undefined && (
+                // Hidden from the item's name, which stays the folder's; it is the description.
+                <span
+                  id={markId}
+                  aria-hidden
+                  className="max-w-[40%] shrink-0 truncate rounded-sm bg-secondary px-1.5 text-xs text-muted-foreground"
                 >
-                  <FolderIcon className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{directory.name}</span>
-                  {workspace !== undefined && (
-                    // Hidden from the button's name, which stays the folder's; it is the description.
-                    <span
-                      id={markId}
-                      aria-hidden
-                      className="max-w-[40%] shrink-0 truncate rounded-sm bg-secondary px-1.5 text-xs text-muted-foreground"
-                    >
-                      <span className="sr-only">Workspace </span>
-                      {workspace}
-                    </span>
-                  )}
-                  <ChevronRightIcon className="size-3 shrink-0 opacity-50" />
-                </button>
-              </li>
-            );
-          })}
-          {listing && shown.length === 0 && !adding && (
-            <li className="p-1 text-sm text-muted-foreground">
-              {filter.trim() ? "No folder matches" : "No subfolders"}
-            </li>
-          )}
-        </>
-      )}
-    </ul>
+                  <span className="sr-only">Workspace </span>
+                  {workspace}
+                </span>
+              )}
+              <ChevronRightIcon className="size-3 opacity-50" />
+            </CommandItem>
+          );
+        })}
+        {listing && shown.length === 0 && (
+          <p className="p-1 text-sm text-muted-foreground">
+            {filter.trim() ? "No folder matches" : "No subfolders"}
+          </p>
+        )}
+      </CommandList>
+    </Command>
   );
 }
 
@@ -698,8 +725,8 @@ function NewFolderInput({
   useEscapeIn(input, onCancel);
 
   return (
-    <div className="grid gap-1 px-1 py-1">
-      <div className="flex items-center gap-2 px-1">
+    <div className="grid gap-1">
+      <div className="flex items-center gap-2 px-2">
         <FolderPlusIcon className="size-4 shrink-0" />
         <Input
           ref={input}

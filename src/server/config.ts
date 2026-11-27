@@ -18,6 +18,12 @@ export interface InstanceConfig {
    * login shell, or a path. It exists so tests can point it at a stub; it is not a setting.
    */
   claudeProgram: string;
+  /**
+   * How long a Working Claude Session must print nothing before it shows Idle, for a turn
+   * that ended with no hook, such as one the owner interrupted. It exists so tests can
+   * shorten it; it is not a setting.
+   */
+  workingQuietMs: number;
 }
 
 const PRESETS = {
@@ -64,5 +70,6 @@ export function resolveConfig(
     allowedLogin: env.K_BENCH_ALLOWED_LOGIN ?? "",
     pickerRoot: resolve(env.K_BENCH_PICKER_ROOT ?? homedir()),
     claudeProgram: "claude",
+    workingQuietMs: 15_000,
   };
 }

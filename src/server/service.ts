@@ -7,12 +7,18 @@ import {
   ROLE_LAUNCH_OPTIONS,
 } from "../shared/launch-options.ts";
 import { sessionsByRole } from "../shared/session-roles.ts";
-import type { RightPaneState, SessionRole, State } from "../shared/state-protocol.ts";
+import type {
+  RightPaneState,
+  SessionActivity,
+  SessionKind,
+  SessionRole,
+  State,
+} from "../shared/state-protocol.ts";
 import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
-import type { TmuxDriver } from "./tmux.ts";
+import { type LiveSession, nowInSeconds, type TmuxDriver } from "./tmux.ts";
 
 /**
  * A failure the HTTP layer maps to a status code. `details` go into the response body
@@ -51,6 +57,17 @@ function assertNoRole(session: { role: SessionRole | null }, change: string): vo
       `The ${ROLE_NAMES[session.role]} can't be ${change}`,
     );
   }
+}
+
+/**
+ * A Session's state: none for a shell or a Stopped Session. A running Claude Session is in the
+ * state its hooks last wrote, and Idle until one has run (see `LiveSession.activity`).
+ */
+function activityOf(
+  session: { kind: SessionKind },
+  live: LiveSession | undefined,
+): SessionActivity | null {
+  return session.kind === "claude" && live ? live.activity : null;
 }
 
 function isDirectory(path: string): boolean {
@@ -108,11 +125,14 @@ export class Service {
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
+  /** How long a Working Session prints nothing before it decays to Idle. */
+  private readonly workingQuietMs: number;
 
-  constructor(store: Store, tmux: TmuxDriver) {
+  constructor(store: Store, tmux: TmuxDriver, options: { workingQuietMs: number }) {
     this.store = store;
     this.tmux = tmux;
     this.reconciler = new Reconciler(store, tmux);
+    this.workingQuietMs = options.workingQuietMs;
   }
 
   /**
@@ -464,8 +484,14 @@ export class Service {
     });
   }
 
+  /**
+   * The state, read fresh. Reading it is not free of effects: like `reconcile`, it changes
+   * tmux, writing Idle back to each quiet Working Session (`decayQuietWork`), so the decay
+   * latches.
+   */
   async getState(): Promise<State> {
     const live = await this.reconciler.reconcile();
+    await this.decayQuietWork(live);
     return {
       openWorkspaceId: this.openWorkspaceId(),
       workspaces: this.store.listWorkspaces().map((workspace) => ({
@@ -478,10 +504,32 @@ export class Service {
           role: session.role,
           status: live.has(session.id) ? "running" : "stopped",
           bell: live.get(session.id)?.bell ?? false,
+          activity: activityOf(session, live.get(session.id)),
         })),
         rightPane: this.rightPane(workspace.id),
       })),
     };
+  }
+
+  /**
+   * Makes Idle each Working Session that has printed nothing for the quiet time: Claude Code
+   * fires no hook when a turn is interrupted, and a wrong Idle is better than a wrong Working.
+   * The Idle is written back to tmux, so it latches: the redraws an idle Claude Code makes
+   * now and then don't bring Working back, and only a hook or the owner's key moves it on.
+   * Waiting never decays, since a permission prompt doesn't redraw.
+   */
+  private async decayQuietWork(live: Map<string, LiveSession>): Promise<void> {
+    const quietSince = nowInSeconds() - Math.ceil(this.workingQuietMs / 1000);
+    await Promise.all(
+      [...live.values()]
+        .filter(
+          (session) => session.activity === "working" && session.lastChange <= quietSince,
+        )
+        .map(async (session) => {
+          const activity = await this.tmux.decayWorking(session.id, quietSince);
+          if (activity !== undefined) session.activity = activity;
+        }),
+    );
   }
 
   /**

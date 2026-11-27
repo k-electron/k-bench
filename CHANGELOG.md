@@ -6,6 +6,14 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Added
+
+- Each Claude Session shows whether it is **Working**, **Waiting** for your answer or **Idle**, live on every Device, wherever the Session shows; Waiting also pulses on its folded Workspace's tile and the phone's menu button. k-bench learns the state from silent hooks it adds to each Claude Code it launches, so nothing reaches the conversation.
+
+### Changed
+
+- A new look outside the terminal: the frame's greys match the terminal's background, with one blue accent, animated dialogs, menus and sidebar, and tooltips on icon-only buttons. The top bar, Tabs, dialogs, folder picker (now with arrow keys and Enter), Sessions sheet and Extra keys are restyled to match, and the terminal looks exactly as before.
+
 ### Fixed
 
 - A Session you open in the right Pane stays there. On a slow connection, the Pane could flick back for a moment to what it showed before, then return, and what you typed in the meantime was lost or arrived cut off.

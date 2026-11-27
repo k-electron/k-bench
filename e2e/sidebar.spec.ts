@@ -44,6 +44,19 @@ test("a Bell in a folded Workspace's Session shows as a dot on its tile", async 
   await expect(app.workspaceBellHint("alpha")).toHaveCount(0);
 });
 
+test("an icon-only button shows its name in a tooltip on hover", async ({
+  app,
+  page,
+}) => {
+  await page.getByRole("button", { name: "Collapse sidebar" }).hover();
+  await expect(page.getByRole("tooltip", { name: "Collapse sidebar" })).toBeVisible();
+
+  await app.collapseSidebar();
+  await page.getByRole("button", { name: "New Workspace" }).hover();
+
+  await expect(page.getByRole("tooltip", { name: "New Workspace" })).toBeVisible();
+});
+
 test("the collapsed sidebar shows tiles and the Open Workspace's Session icons, and is remembered across a reload", async ({
   app,
   kbench,
@@ -81,4 +94,31 @@ test("the collapsed sidebar shows tiles and the Open Workspace's Session icons, 
 
   await expect(app.workspace("beta")).toBeVisible();
   expect(await app.workspaceNames()).toEqual(["alpha", "beta"]);
+});
+
+test("Ctrl+B typed into a terminal reaches the program; the sidebar has no shortcut", async ({
+  app,
+  kbench,
+}) => {
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "shellready");
+  // In raw mode `cat -vet` prints each control character it receives: Ctrl+B as ^B.
+  await app.runCommand(
+    terminal,
+    "stty raw -echo opost onlcr; echo cat-$((6*7)); cat -vet",
+    "cat-42",
+  );
+
+  // Ctrl+B is tmux's prefix, and pressed twice tmux passes one on to the program.
+  await app.page.keyboard.press("Control+b");
+  await app.page.keyboard.press("Control+b");
+  await app.page.keyboard.type("x");
+
+  await expect(terminal).toContainText("^Bx");
+  // The sidebar stayed as it was.
+  await expect(
+    app.sidebar.getByRole("button", { name: "Collapse sidebar" }),
+  ).toBeVisible();
 });

@@ -1,13 +1,16 @@
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import type { PaneContent, Side, WorkspaceView as View } from "../workspaceView";
 import { MissingPane } from "./MissingPane";
 import { Pane } from "./Pane";
 import { RightPaneTabs } from "./RightPaneTabs";
 import { SessionIcon } from "./SessionIcon";
+import { SessionMarker } from "./SessionMarker";
+import { Button } from "./ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 /** How wide a shut Pane's rail is. */
-const RAIL = "28px";
+const RAIL = "36px";
 
 /** The CSS grid columns of the two Panes, with the divider's 6px between them. */
 function columns(ratio: number, shut: Side | null): string {
@@ -17,32 +20,42 @@ function columns(ratio: number, shut: Side | null): string {
 }
 
 /**
- * What a shut Pane leaves: a thin rail with its Session's icon, its name written
- * vertically and a Bell dot. Its terminal is detached, so the Session can ring its Bell.
- * Clicking it reopens the Pane.
+ * What a shut Pane leaves: a thin rail, a ghost `Button` with its Session's icon and its
+ * name written vertically, then the Session's marker slot. Its terminal is detached, so the
+ * Session can ring its Bell. Clicking it reopens the Pane; its tooltip opens towards the
+ * other Pane.
  */
-function Rail({ session, onOpen }: { session: SessionState; onOpen: () => void }) {
+function Rail({
+  side,
+  session,
+  onOpen,
+}: {
+  side: Side;
+  session: SessionState;
+  onOpen: () => void;
+}) {
+  const label = `Show ${session.name}`;
   return (
-    <div className="relative h-full">
-      <button
-        type="button"
-        aria-label={`Show ${session.name}`}
-        title={`Show ${session.name}`}
-        onClick={onOpen}
-        className="flex h-full w-full flex-col items-center gap-2 bg-card py-3 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        <SessionIcon session={session} className="size-4" />
-        <span className="min-h-0 truncate" style={{ writingMode: "vertical-rl" }}>
-          {session.name}
-        </span>
-      </button>
-      {session.bell && (
-        <span
-          role="img"
-          aria-label={`${session.name} rang the bell`}
-          className="pointer-events-none absolute bottom-3 left-1/2 size-2 -translate-x-1/2 rounded-full bg-amber-400"
-        />
-      )}
+    <div className="relative h-full border-x bg-sidebar">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            aria-label={label}
+            onClick={onOpen}
+            className="h-full w-full flex-col justify-start gap-2 rounded-none px-0 py-3 text-xs font-normal text-muted-foreground"
+          >
+            <SessionIcon session={session} className="size-4" />
+            <span className="min-h-0 truncate" style={{ writingMode: "vertical-rl" }}>
+              {session.name}
+            </span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side={side === "left" ? "right" : "left"}>{label}</TooltipContent>
+      </Tooltip>
+      <span className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2">
+        <SessionMarker session={session} />
+      </span>
     </div>
   );
 }
@@ -77,10 +90,10 @@ export function SessionBody({
   return <Pane key={session.id} session={session} focused={focused} starting={waiting} />;
 }
 
-/** The slim bar naming what a Pane shows. */
+/** The bar naming what a Pane shows. */
 function LabelBar({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-6 shrink-0 items-center gap-2 border-b bg-card px-2 text-xs">
+    <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2 text-xs">
       {children}
     </div>
   );
@@ -101,6 +114,7 @@ export function WorkspaceView({
   const grid = useRef<HTMLDivElement>(null);
   // Where the divider was when a drag began: a drag that shuts a Pane reopens it there.
   const dragFrom = useRef(view.ratio);
+  const [dragging, setDragging] = useState(false);
 
   const { workspace } = view;
   if (!workspace) {
@@ -131,7 +145,7 @@ export function WorkspaceView({
       className="flex min-h-0 min-w-0 flex-col"
     >
       {view.shut === side && content.kind === "session" ? (
-        <Rail session={content.session} onOpen={() => view.reopen(side)} />
+        <Rail side={side} session={content.session} onOpen={() => view.reopen(side)} />
       ) : (
         <>
           <LabelBar>{label}</LabelBar>
@@ -161,10 +175,11 @@ export function WorkspaceView({
       {slot(
         "left",
         left,
-        <>
-          <SessionIcon session={{ role: "prime", kind: "claude" }} className="size-3" />
+        <span className="flex items-center gap-1.5 px-1 text-sm font-medium">
+          <SessionIcon session={{ role: "prime", kind: "claude" }} className="size-3.5" />
           Prime
-        </>,
+          {left.kind === "session" && <SessionMarker session={left.session} />}
+        </span>,
       )}
       {/* biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA pattern for a resizable divider */}
       <div
@@ -176,11 +191,16 @@ export function WorkspaceView({
         aria-valuenow={Math.round(position * 100)}
         title="Drag to resize, or to an edge to shut a Pane. Double-click for half and half."
         tabIndex={0}
-        className="cursor-col-resize touch-none bg-border hover:bg-primary focus-visible:bg-primary"
+        data-dragging={dragging || undefined}
+        // Lights up in the accent on hover and while dragging.
+        className="cursor-col-resize touch-none bg-border transition-colors hover:bg-primary focus-visible:bg-primary data-dragging:bg-primary"
         onPointerDown={(event) => {
           dragFrom.current = ratio;
           event.currentTarget.setPointerCapture(event.pointerId);
+          setDragging(true);
         }}
+        // Covers both letting go and a cancelled drag.
+        onLostPointerCapture={() => setDragging(false)}
         onPointerMove={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             moveDivider(event.clientX);

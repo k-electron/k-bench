@@ -10,6 +10,14 @@ import { attachedClientCount, typeIntoSession } from "../test/harness/tmux.ts";
 const WEB_DIR = resolve("dist/web");
 const LOGIN = "owner@example.com";
 
+/** What a Session's marker says after its name, for each marker. */
+const MARKER_LABELS = {
+  waiting: "is waiting for you",
+  bell: "rang the bell",
+  working: "is working",
+  idle: "is idle",
+};
+
 /**
  * The app as the owner sees it, found by role and accessible name. Later tickets add
  * helpers here as they add UI.
@@ -29,7 +37,7 @@ export class AppPage {
     return this.page.getByRole("navigation", { name: "Workspaces" });
   }
 
-  /** On the phone: the sidebar's slide-out drawer (hidden until the menu button opens it). */
+  /** On the phone: the sidebar's drawer, a sheet from the left (absent until the menu button opens it). */
   get drawer(): Locator {
     return this.sidebar;
   }
@@ -37,7 +45,8 @@ export class AppPage {
   /** On the phone: opens the drawer from the menu button. */
   async openDrawer(): Promise<void> {
     await this.page.getByRole("button", { name: "Menu", exact: true }).tap();
-    await expect(this.drawer).toBeVisible();
+    // Done once it has slid in from the left edge, so its rows are where they will stay.
+    await expect.poll(async () => (await this.drawer.boundingBox())?.x).toBe(0);
   }
 
   /** On the phone: a button in the extra-keys row (Esc, Tab, Shift Tab, Ctrl, Up, ...). */
@@ -88,28 +97,38 @@ export class AppPage {
     return this.page.getByRole("main").getByRole("heading", { level: 1 });
   }
 
-  /** On a phone: the sheet listing the Open Workspace's Sessions, opened from the title. */
+  /**
+   * On a phone: the sheet listing the Open Workspace's Sessions, opened from the title. It is
+   * named after the Workspace, so it is found by its list of Sessions.
+   */
   get sessionsSheet(): Locator {
-    return this.page.getByRole("dialog", { name: "Sessions", exact: true });
+    return this.page.getByRole("dialog").filter({
+      has: this.page.getByRole("list", { name: "Sessions", exact: true }),
+    });
   }
 
   /** On a phone: taps the title to open the Sessions sheet. */
   async openSessionsSheet(): Promise<void> {
     await this.phoneTitle.getByRole("button").tap();
-    await expect(this.sessionsSheet).toBeVisible();
+    // Done once it has slid up to the bottom edge, so its rows are where they will stay.
+    const height = this.page.viewportSize()?.height;
+    await expect
+      .poll(async () => {
+        const box = await this.sessionsSheet.boundingBox();
+        return box && Math.round(box.y + box.height);
+      })
+      .toBe(height);
   }
 
   /** On a phone: a Session's row in the Sessions sheet. */
   sheetRow(name: string): Locator {
-    return this.sessionsSheet.getByRole("button").filter({
-      has: this.page.getByText(name, { exact: true }),
-    });
+    return this.sessionsSheet.getByRole("button", { name, exact: true });
   }
 
   /** On a phone: the dot on the title's Workspace name, for a Bell elsewhere in it. */
   get titleBell(): Locator {
     return this.phoneTitle.getByRole("img", {
-      name: "Another session here rang the bell",
+      name: `Another session here ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -117,7 +136,18 @@ export class AppPage {
   /** On a phone: the dot on the Menu button, for a Bell in another Workspace. */
   get menuBell(): Locator {
     return this.page.getByRole("img", {
-      name: "A session in another workspace rang the bell",
+      name: `A session in another workspace ${MARKER_LABELS.bell}`,
+      exact: true,
+    });
+  }
+
+  /**
+   * On a phone: the pulsing dot on the Menu button, for a Waiting Session in another
+   * Workspace. It takes the place of the Bell dot.
+   */
+  get menuWaiting(): Locator {
+    return this.page.getByRole("img", {
+      name: `A session in another workspace ${MARKER_LABELS.waiting}`,
       exact: true,
     });
   }
@@ -138,7 +168,7 @@ export class AppPage {
 
   /** A tab in the right Pane's tab bar: "Worker", or an Other Session's name. */
   rightTab(name: string): Locator {
-    return this.pane("right").getByRole("button", { name, exact: true });
+    return this.pane("right").getByRole("tab", { name, exact: true });
   }
 
   /** The × on an Other Session's tab in the right Pane. */
@@ -152,7 +182,7 @@ export class AppPage {
   /** The Bell dot on a right Pane tab; present only while its Session's Bell is raised. */
   tabBell(name: string): Locator {
     return this.pane("right").getByRole("img", {
-      name: `${name} rang the bell`,
+      name: `${name} ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -160,6 +190,14 @@ export class AppPage {
   /** On a desktop or tablet: the Open Workspace's name in the top bar. */
   get workspaceTitle(): Locator {
     return this.page.getByRole("main").getByRole("heading", { level: 1 });
+  }
+
+  /** On a desktop or tablet: the Session with the keyboard, after the top bar's Workspace. */
+  get headerSession(): Locator {
+    return this.page
+      .getByRole("main")
+      .getByRole("navigation", { name: "breadcrumb", exact: true })
+      .getByRole("link");
   }
 
   /** Opens a Workspace by clicking its name in the sidebar. */
@@ -226,7 +264,7 @@ export class AppPage {
   /** The Bell dot on a shut Pane's rail; present only while its Session has a Bell. */
   railBell(side: "left" | "right", sessionName: string): Locator {
     return this.pane(side).getByRole("img", {
-      name: `${sessionName} rang the bell`,
+      name: `${sessionName} ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -273,25 +311,42 @@ export class AppPage {
       await this.page.getByRole("textbox", { name: "Name" }).fill(options.name);
     }
     await this.page.getByRole("button", { name: "Create Workspace" }).click();
+    // Done once the dialog has animated out (until then it hides the rest of the page from
+    // the accessibility tree), or once it shows why it refused. On the phone the drawer it
+    // was opened from is a dialog too, and stays open.
+    await expect(
+      this.page
+        .getByRole("dialog")
+        .filter({ hasNot: this.page.getByRole("alert") })
+        .filter({ hasNot: this.sidebar }),
+    ).toHaveCount(0);
   }
 
   /** The open dialog's folder picker: Places, breadcrumbs, filter and the folder list. */
   get folderPicker(): Locator {
-    return this.page.getByRole("dialog");
+    // Not the phone's drawer, a dialog too, which stays open under it.
+    return this.page.getByRole("dialog").filter({ hasNot: this.sidebar });
   }
 
   /** The Places in the folder picker (Home, folders holding Workspaces, Computer). */
   place(name: string): Locator {
     return this.folderPicker
-      .getByRole("navigation", { name: "Places" })
-      .getByRole("button", { name, exact: true });
+      .getByRole("listbox", { name: "Places" })
+      .getByRole("option", { name, exact: true });
   }
 
   /** A subfolder in the folder picker's list. */
   folderRow(name: string): Locator {
     return this.folderPicker
-      .getByRole("list", { name: "Folders" })
-      .getByRole("button", { name, exact: true });
+      .getByRole("listbox", { name: "Folders" })
+      .getByRole("option", { name, exact: true });
+  }
+
+  /** A suggestion under the folder picker's path field. */
+  pathSuggestion(name: string): Locator {
+    return this.folderPicker
+      .getByRole("listbox", { name: "Suggestions" })
+      .getByRole("option", { name, exact: true });
   }
 
   /** A crumb in the folder picker's breadcrumbs (Home is `~`). */
@@ -356,10 +411,32 @@ export class AppPage {
     }).toPass({ timeout: 10_000 });
   }
 
+  /**
+   * A Session's marker showing `marker`, by its label: on its sidebar row, its right Pane
+   * Tab, or, on a phone, the title or its row in the Sessions sheet. Present only while the
+   * Session shows that marker there.
+   */
+  marker(
+    where: "sidebar" | "tab" | "title" | "sheet",
+    sessionName: string,
+    marker: keyof typeof MARKER_LABELS,
+  ): Locator {
+    const scope = {
+      sidebar: this.sidebar,
+      tab: this.pane("right"),
+      title: this.phoneTitle,
+      sheet: this.sessionsSheet,
+    }[where];
+    return scope.getByRole("img", {
+      name: `${sessionName} ${MARKER_LABELS[marker]}`,
+      exact: true,
+    });
+  }
+
   /** The Bell badge on a Session's row; present only while its Bell is raised. */
   bellBadge(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {
-      name: `${sessionName} rang the bell`,
+      name: `${sessionName} ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -367,7 +444,18 @@ export class AppPage {
   /** The Bell dot on a folded Workspace's tile: some Session in it rang the bell. */
   workspaceBellHint(workspaceName: string): Locator {
     return this.sidebar.getByRole("img", {
-      name: `${workspaceName} has a session that rang the bell`,
+      name: `${workspaceName} has a session that ${MARKER_LABELS.bell}`,
+      exact: true,
+    });
+  }
+
+  /**
+   * The pulsing dot on a folded Workspace's tile: some Session in it is Waiting. It takes
+   * the place of the Bell dot.
+   */
+  workspaceWaitingHint(workspaceName: string): Locator {
+    return this.sidebar.getByRole("img", {
+      name: `${workspaceName} has a session that ${MARKER_LABELS.waiting}`,
       exact: true,
     });
   }
@@ -395,7 +483,7 @@ export class AppPage {
 
   /** The Workspaces' names in sidebar order. */
   async workspaceNames(): Promise<string[]> {
-    return this.sidebar.getByRole("heading").allTextContents();
+    return accessibleNames(this.sidebar.getByRole("heading").getByRole("button"));
   }
 
   /** Opens a Workspace's row menu and picks `item` (Rename, Change folder, Delete). */
@@ -419,9 +507,9 @@ export class AppPage {
    * Sessions with the default "session N" names.
    */
   async sessionNames(): Promise<string[]> {
-    return this.sidebar
-      .getByRole("button", { name: /^(Prime|Worker|session \d+)$/ })
-      .allTextContents();
+    return accessibleNames(
+      this.sidebar.getByRole("button", { name: /^(Prime|Worker|session \d+)$/ }),
+    );
   }
 
   /**
@@ -454,6 +542,22 @@ export class AppPage {
 
   /** Drags `source` with the mouse onto the middle of `target`. */
   async dragOnto(source: Locator, target: Locator): Promise<void> {
+    // Wait for both to stop moving: right after the sidebar collapses or expands, its
+    // width is still animating, and a drag measured mid-way misses its target.
+    const boxes = async () =>
+      JSON.stringify([await source.boundingBox(), await target.boundingBox()]);
+    let last = "";
+    await expect
+      .poll(
+        async () => {
+          const now = await boxes();
+          const settled = now === last;
+          last = now;
+          return settled;
+        },
+        { intervals: [100] },
+      )
+      .toBe(true);
     const from = await source.boundingBox();
     const dest = await target.boundingBox();
     if (!from || !dest) throw new Error("The rows to drag between are not visible");
@@ -499,6 +603,8 @@ export class AppPage {
   async createSession(workspaceName: string): Promise<void> {
     await this.openNewSessionMenu(workspaceName);
     await this.page.getByRole("menuitem", { name: "New shell", exact: true }).click();
+    // Until the menu has animated out, it hides the rest of the page from the accessibility tree.
+    await expect(this.page.getByRole("menu")).toHaveCount(0);
   }
 
   /** The New Claude dialog, once **New Claude…** was picked. */
@@ -514,10 +620,10 @@ export class AppPage {
   }
 
   /**
-   * Fills in the open New Claude dialog and presses Launch. Everything is optional: the name,
-   * and each Launch option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
+   * Fills in the open New Claude dialog. Everything is optional: the name, and each Launch
+   * option by the label of the choice ("XHigh", "Off") or, for Focus view, on/off.
    */
-  async launchClaude(
+  async fillClaudeDialog(
     options: {
       name?: string;
       model?: string;
@@ -534,14 +640,29 @@ export class AppPage {
     for (const field of ["Model", "Effort", "Advisor"] as const) {
       const choice = options[field.toLowerCase() as "model" | "effort" | "advisor"];
       if (choice !== undefined) {
-        await this.claudeDialog.getByLabel(field, { exact: true }).selectOption(choice);
+        const select = this.claudeDialog.getByRole("combobox", {
+          name: field,
+          exact: true,
+        });
+        await select.click();
+        await this.page.getByRole("option", { name: choice, exact: true }).click();
+        // Until the list has animated out, it hides the rest of the page from the accessibility tree.
+        await expect(this.page.getByRole("listbox")).toHaveCount(0);
+        await expect(select).toHaveText(choice);
       }
     }
     if (options.focusView !== undefined) {
       await this.claudeDialog
-        .getByRole("checkbox", { name: "Focus view" })
+        .getByRole("switch", { name: "Focus view" })
         .setChecked(options.focusView);
     }
+  }
+
+  /** Fills in the open New Claude dialog, as `fillClaudeDialog` does, and presses Launch. */
+  async launchClaude(
+    options: Parameters<AppPage["fillClaudeDialog"]>[0] = {},
+  ): Promise<void> {
+    await this.fillClaudeDialog(options);
     await this.claudeDialog.getByRole("button", { name: "Launch", exact: true }).click();
   }
 
@@ -599,6 +720,18 @@ export class AppPage {
   }
 }
 
+/**
+ * The names of the buttons `buttons` finds, in order. A sidebar row's button is named
+ * explicitly (`aria-label`), since its text also holds a tile's letters or a badge.
+ */
+async function accessibleNames(buttons: Locator): Promise<string[]> {
+  return Promise.all(
+    (await buttons.all()).map(
+      async (button) => (await button.getAttribute("aria-label")) ?? "",
+    ),
+  );
+}
+
 /** A port nothing is listening on, so a stopped server can come back at the same address. */
 async function freePort(): Promise<number> {
   const probe = createServer();
@@ -646,6 +779,12 @@ export interface Kbench {
    * Session can take a moment to let go). Works while the server is stopped too.
    */
   ringBell(sessionName: string, workspaceName?: string): Promise<void>;
+  /**
+   * Types a line into the fake Claude Code of the named Claude Session (of the named
+   * Workspace, when given), with no browser involved: `think` starts a turn and holds it,
+   * and any message is a whole turn.
+   */
+  tellClaude(sessionName: string, line: string, workspaceName?: string): void;
 }
 
 interface Fixtures {
@@ -659,7 +798,12 @@ interface Fixtures {
 
 export const test = base.extend<Fixtures>({
   kbench: async ({ context }, use) => {
-    const instance = createTestInstance({ allowedLogin: LOGIN, port: await freePort() });
+    const instance = createTestInstance({
+      allowedLogin: LOGIN,
+      port: await freePort(),
+      // A held turn stays Working however slow the run; the server tests cover the decay.
+      workingQuietMs: 600_000,
+    });
     let server = await instance.start({ webDir: WEB_DIR });
     // Stands in for `tailscale serve`, which adds this header in the real deployment.
     await context.setExtraHTTPHeaders({ "Tailscale-User-Login": LOGIN });
@@ -679,6 +823,10 @@ export const test = base.extend<Fixtures>({
             session.id,
             session.kind === "claude" ? "bell" : "printf '\\a'",
           );
+        },
+        tellClaude: (sessionName, line, workspaceName) => {
+          const session = sessionNamed(instance, sessionName, workspaceName);
+          typeIntoSession(instance.config.tmuxSocket, session.id, line);
         },
         stopServer: () => server.stop(),
         startServer: async () => {

@@ -1,14 +1,16 @@
 import { cn } from "@/lib/utils";
-import { hasBell } from "@/workspaces";
+import { workspaceMarker } from "@/workspaces";
 import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import { LIFTED, Reorderable, useSortableRow } from "./Reorderable";
 import { SessionIcon } from "./SessionIcon";
+import { SessionMarker } from "./SessionMarker";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { WorkspaceTile } from "./WorkspaceTile";
 
 /**
  * The collapsed sidebar's column: a tile per Workspace, which opens it, and under the Open
- * Workspace's tile its Sessions as small icons, which open them.
+ * Workspace's tile its Sessions as small icons, which open them. Each is named in a tooltip.
  */
 export function WorkspaceTiles({
   workspaces,
@@ -69,26 +71,38 @@ function WorkspaceTileItem({
       {...row}
       className={cn("flex flex-col items-center gap-1 rounded-lg", isDragging && LIFTED)}
     >
-      {/* The button lies over the tile, so the tile's Bell dot and Missing mark stay labelled. */}
+      {/* The button lies over the tile, so the tile's dot and Missing mark stay labelled. It
+          is a plain, see-through button: shadcn's Button brings sizes and colours of its own,
+          which an overlay doesn't want. */}
       <div className="relative">
         <WorkspaceTile
           workspace={workspace}
           size="md"
-          bell={!isOpen && hasBell(workspace)}
-          className={cn("rounded-lg", isOpen && "ring-2 ring-foreground/80")}
+          marker={isOpen ? null : workspaceMarker(workspace)}
+          className={cn(
+            "rounded-lg",
+            isOpen && "ring-2 ring-primary ring-offset-2 ring-offset-sidebar",
+          )}
         />
-        <button
-          type="button"
-          {...handle}
-          aria-label={workspace.name}
-          aria-current={isOpen ? "true" : undefined}
-          title={`${workspace.name}\n${workspace.folder}`}
-          onClick={onOpen}
-          className="absolute inset-0 rounded-lg outline-none hover:bg-foreground/10 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              {...handle}
+              aria-label={workspace.name}
+              aria-current={isOpen ? "true" : undefined}
+              onClick={onOpen}
+              className="absolute inset-0 rounded-lg outline-none hover:bg-foreground/10 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <div className="font-medium">{workspace.name}</div>
+            <div className="opacity-70">{workspace.folder}</div>
+          </TooltipContent>
+        </Tooltip>
       </div>
       {isOpen && sessions.length > 0 && (
-        <ul className="flex flex-col items-center gap-0.5 rounded-lg bg-accent/40 p-0.5">
+        <ul className="flex flex-col items-center gap-0.5 rounded-lg bg-sidebar-accent/40 p-0.5">
           {sessions.map((session) => (
             <SessionIconItem
               key={session.id}
@@ -103,7 +117,7 @@ function WorkspaceTileItem({
   );
 }
 
-/** One Session in the collapsed sidebar: its icon, dimmed when Stopped, and its Bell dot. */
+/** One Session in the collapsed sidebar: its icon, dimmed when Stopped, and its marker. */
 function SessionIconItem({
   session,
   isShown,
@@ -119,26 +133,32 @@ function SessionIconItem({
     <li
       className={cn(
         "relative grid size-7 place-items-center rounded-md",
-        isShown ? "bg-accent" : "hover:bg-accent/60",
+        isShown
+          ? "bg-sidebar-accent shadow-[inset_0_-2px_0_var(--primary)]"
+          : "hover:bg-sidebar-accent/60",
       )}
     >
       <SessionIcon session={session} className={cn("size-4", stopped && "opacity-50")} />
-      <button
-        type="button"
-        aria-label={session.name}
-        aria-current={isShown ? "true" : undefined}
-        title={stopped ? `${session.name} (stopped)` : session.name}
-        onClick={onOpen}
-        className="absolute inset-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      />
+      {/* A plain, see-through button over the icon, as on the Workspace's tile above. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={session.name}
+            aria-current={isShown ? "true" : undefined}
+            onClick={onOpen}
+            className="absolute inset-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          {stopped ? `${session.name} (stopped)` : session.name}
+        </TooltipContent>
+      </Tooltip>
       {stopped && <span className="sr-only">stopped</span>}
-      {session.bell && (
-        <span
-          role="img"
-          aria-label={`${session.name} rang the bell`}
-          className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-amber-400"
-        />
-      )}
+      <SessionMarker
+        session={session}
+        className="pointer-events-none absolute -top-0.5 -right-0.5 scale-75"
+      />
     </li>
   );
 }

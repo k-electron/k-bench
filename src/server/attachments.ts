@@ -22,7 +22,8 @@ export interface Attachment {
    * Sends input to the Session's shell, in order. Input sent before the tmux client is
    * attached waits for it. After detach or the end it does nothing.
    * `automatic` input is what the viewer's terminal sent by itself (answers to tmux's
-   * queries), not what the owner typed, so it never takes the window's size.
+   * queries), not what the owner typed, so it never takes the window's size. Anything else
+   * but mouse reports is a key from the owner, which ends Waiting (`TmuxDriver.endWaiting`).
    */
   input(data: string, options?: { automatic?: boolean }): void;
   /**
@@ -76,10 +77,31 @@ export class Attachments {
   constructor(tmux: TmuxDriver, sessions: Sessions) {
     /** Per Session, the terminal the window was last sized for (see `writeSizedToTyper`). */
     const lastTyper = new Map<string, Terminal>();
+    /**
+     * Per Session with an `endWaiting` under way, whether another key came meanwhile. A run
+     * of keys asks tmux one at a time, and once more after the last, so no key is dropped.
+     */
+    const endingWaiting = new Map<string, boolean>();
+    const endWaiting = (sessionId: string) => {
+      endingWaiting.set(sessionId, false);
+      // A Session that went away has no state to end; its tmux client's exit reports it.
+      void tmux
+        .endWaiting(sessionId)
+        .catch(() => {})
+        .finally(() => {
+          const again = endingWaiting.get(sessionId);
+          endingWaiting.delete(sessionId);
+          if (again) endWaiting(sessionId);
+        });
+    };
     this.context = {
       tmux,
       sessions,
       lastTyper,
+      ownerTyped: (sessionId) => {
+        if (endingWaiting.has(sessionId)) endingWaiting.set(sessionId, true);
+        else endWaiting(sessionId);
+      },
       forget: (terminal) => {
         this.terminals.delete(terminal);
         if (lastTyper.get(terminal.sessionId) === terminal) {
@@ -133,6 +155,8 @@ interface TerminalContext {
   tmux: TmuxDriver;
   sessions: Sessions;
   lastTyper: Map<string, Terminal>;
+  /** The owner sent the Session a key, which ends Waiting. */
+  ownerTyped(sessionId: string): void;
   /** Called once, when the terminal is gone. */
   forget(terminal: Terminal): void;
 }
@@ -204,6 +228,8 @@ class Terminal implements Attachment {
     if (data === "") return;
     if (this.phase === "looking-up") this.pendingInput.push({ data, automatic });
     else if (this.phase === "attached") {
+      if (!automatic && !isOnlyMouseReports(data))
+        this.context.ownerTyped(this.sessionId);
       const write = automatic
         ? () => this.write(data)
         : () => this.writeSizedToTyper(data);
@@ -315,6 +341,23 @@ class Terminal implements Attachment {
       this.write(data);
     }
   }
+}
+
+/**
+ * Whether `data` is nothing but mouse reports: what xterm.js sends for a click, a drag or the
+ * wheel once tmux asks for the mouse, as SGR (`ESC[<b;x;yM`) or legacy (`ESC[M` and three
+ * bytes, none of them ESC). Scrolling or clicking is not the owner answering a Session, so
+ * it doesn't end Waiting.
+ */
+function isOnlyMouseReports(data: string): boolean {
+  const [before, ...reports] = data.split("\x1b");
+  return (
+    before === "" &&
+    reports.length > 0 &&
+    reports.every(
+      (report) => /^\[<\d+;\d+;\d+[Mm]$/.test(report) || /^\[M.{3}$/su.test(report),
+    )
+  );
 }
 
 /** Whether `promise` settles within `ms`. */

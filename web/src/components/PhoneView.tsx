@@ -1,25 +1,55 @@
 import { ChevronDownIcon, MenuIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import type { PhoneView as View } from "../phoneView";
+import type { HintMarker } from "../workspaces";
 import { SessionIcon } from "./SessionIcon";
+import { SessionMarker } from "./SessionMarker";
+import { MARKER_SAYS, StatusDot } from "./StatusDot";
+import { WorkspaceTile } from "./WorkspaceTile";
 import { SessionBody } from "./WorkspaceView";
 
-/** An amber Bell dot, labelled for screen readers and tests. */
-function BellDot({ label, className }: { label: string; className?: string }) {
+/**
+ * A dot hinting at other Sessions' marker, labelled "<who> <what the marker says>" for screen
+ * readers and tests. A Session's own marker is `SessionMarker`.
+ */
+function HintDot({
+  marker,
+  who,
+  className,
+}: {
+  marker: HintMarker;
+  who: string;
+  className?: string;
+}) {
   return (
     <span
       role="img"
-      aria-label={label}
-      className={cn("size-2 shrink-0 rounded-full bg-amber-400", className)}
-    />
+      aria-label={`${who} ${MARKER_SAYS[marker]}`}
+      className={cn("grid size-2 shrink-0 rounded-full", className)}
+    >
+      <StatusDot marker={marker} className="size-full" />
+    </span>
   );
 }
 
-/** The phone's Menu button, which opens the drawer, with a dot for a Bell in another Workspace. */
+/**
+ * The phone's Menu button, which opens the drawer, with a dot for Waiting or a Bell in another
+ * Workspace, as a folded Workspace's tile shows.
+ */
 export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => void }) {
   return (
     // The dot sits beside the button rather than in it, so its label stays its own.
@@ -27,9 +57,10 @@ export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => vo
       <Button variant="ghost" size="sm" aria-label="Menu" onClick={onOpen}>
         <MenuIcon />
       </Button>
-      {view.bellElsewhere && (
-        <BellDot
-          label="A session in another workspace rang the bell"
+      {view.hintElsewhere && (
+        <HintDot
+          marker={view.hintElsewhere}
+          who="A session in another workspace"
           className="pointer-events-none absolute top-1 right-1.5 ring-2 ring-background"
         />
       )}
@@ -38,65 +69,94 @@ export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => vo
 }
 
 /**
- * The phone's title beside the Menu button: `Workspace › Session ▾`. When space runs short
- * the Workspace's name is cut off first, and the Session's name keeps its width. A dot on the
- * Workspace's name says another of its Sessions has a Bell. Tapping it opens the Sessions sheet.
+ * The phone's title beside the Menu button, a breadcrumb `Workspace › Session ⌄`. When space
+ * runs short the Workspace's name is cut off first, and the Session's name keeps its width. A
+ * dot on the Workspace's name says another of its Sessions has a Bell. Tapping it opens the
+ * Sessions sheet. The Session's marker follows it, outside the button.
+ *
+ * The breadcrumb is hand-built from spans styled like shadcn's `Breadcrumb`: that one is a
+ * `nav` of list items with a `role="link"` page, none of which may sit inside a button.
  */
 export function PhoneTitle({ view }: { view: View }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { workspace, session } = view;
   if (!workspace) return null;
   return (
-    <>
-      <h1 className="flex min-w-0 text-sm">
-        <button
-          type="button"
-          className="flex min-w-0 items-center gap-1 rounded-md px-1 py-1 hover:bg-accent"
-          onClick={() => setSheetOpen(true)}
-        >
-          <span className={cn("relative flex min-w-0", view.bellHere && "pr-2")}>
-            <span
-              className="min-w-0 truncate text-muted-foreground"
-              title={workspace.folder}
-            >
-              {workspace.name}
+    <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+      <h1 className="flex min-w-0 items-center gap-1 text-sm">
+        <SheetTrigger asChild>
+          <button
+            type="button"
+            aria-label={session ? `${workspace.name} › ${session.name}` : workspace.name}
+            className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span className={cn("relative flex min-w-0", view.bellHere && "pr-2")}>
+              <span
+                className="min-w-0 truncate text-muted-foreground"
+                title={workspace.folder}
+              >
+                {workspace.name}
+              </span>
+              {view.bellHere && (
+                <HintDot
+                  marker="bell"
+                  who="Another session here"
+                  className="absolute top-0 right-0"
+                />
+              )}
             </span>
-            {view.bellHere && (
-              <BellDot
-                label="Another session here rang the bell"
-                className="absolute top-0 right-0"
-              />
+            {session && (
+              <>
+                <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+                  {" › "}
+                </span>
+                <span className="shrink-0 text-foreground">{session.name}</span>
+              </>
             )}
-          </span>
-          {session && (
-            <>
-              <span className="shrink-0 text-muted-foreground"> › </span>
-              <span className="shrink-0">{session.name}</span>
-            </>
-          )}
-          <ChevronDownIcon
-            aria-hidden="true"
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-        </button>
+            <ChevronDownIcon
+              aria-hidden="true"
+              className="size-4 shrink-0 text-muted-foreground"
+            />
+          </button>
+        </SheetTrigger>
+        {session && <SessionMarker session={session} />}
       </h1>
-      {sheetOpen && (
-        <SessionsSheet
+      <SheetContent
+        side="bottom"
+        className="max-h-[80dvh] gap-0 rounded-t-2xl pb-[max(12px,env(safe-area-inset-bottom))]"
+      >
+        <SheetHeader className="pb-2">
+          <div
+            aria-hidden="true"
+            className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/40"
+          />
+          <SheetTitle
+            className="flex min-w-0 items-center gap-2 text-sm"
+            title={workspace.folder}
+          >
+            <WorkspaceTile workspace={workspace} />
+            <span className="truncate">{workspace.name}</span>
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Choose a Session to show it.
+          </SheetDescription>
+        </SheetHeader>
+        <SessionsList
           view={view}
           workspace={workspace}
           onClose={() => setSheetOpen(false)}
         />
-      )}
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
 
 /**
- * The Sessions sheet: the Open Workspace's Sessions from the bottom of the screen, Prime and
- * Worker, a divider, then the Other Sessions in their order. Tapping one shows it; tapping
- * outside closes the sheet. It only switches: no create or menu actions.
+ * The Sessions sheet's list: the Prime and Worker, a separator, then the Other Sessions in
+ * their order. Tapping one shows it and closes the sheet. It only switches: no create or menu
+ * actions.
  */
-function SessionsSheet({
+function SessionsList({
   view,
   workspace,
   onClose,
@@ -105,14 +165,6 @@ function SessionsSheet({
   workspace: WorkspaceState;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   const { primeAndWorker, others } = sessionsByRole(workspace.sessions);
   const row = (session: SessionState) => (
     <SheetRow
@@ -126,42 +178,19 @@ function SessionsSheet({
     />
   );
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Sessions"
-      className="fixed inset-0 z-40 flex flex-col justify-end font-normal"
-    >
-      <button
-        type="button"
-        aria-label="Close sessions"
-        className="absolute inset-0 bg-black/60"
-        onClick={onClose}
-      />
-      <div className="relative max-h-[80dvh] overflow-y-auto rounded-t-2xl border-t bg-card p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
-        <div
-          aria-hidden="true"
-          className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/40"
-        />
-        <div
-          className="truncate px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-          title={workspace.folder}
-        >
-          {workspace.name}
-        </div>
-        <ul className="grid gap-1">
-          {primeAndWorker.map(row)}
-          {primeAndWorker.length > 0 && others.length > 0 && (
-            <li aria-hidden="true" className="mx-2 my-1 border-t" />
-          )}
-          {others.map(row)}
-        </ul>
-      </div>
-    </div>
+    <ul aria-label="Sessions" className="grid gap-1 overflow-y-auto px-3">
+      {primeAndWorker.map(row)}
+      {primeAndWorker.length > 0 && others.length > 0 && (
+        <li aria-hidden="true" className="px-2 py-1">
+          <Separator />
+        </li>
+      )}
+      {others.map(row)}
+    </ul>
   );
 }
 
-/** One row of the Sessions sheet: icon, name, "stopped" when it is, and its Bell. */
+/** One row of the Sessions sheet: icon, name, a "stopped" badge when it is, and its marker. */
 function SheetRow({
   session,
   current,
@@ -173,13 +202,14 @@ function SheetRow({
 }) {
   const stopped = session.status === "stopped";
   return (
-    <li>
-      <button
-        type="button"
+    <li className="relative">
+      <Button
+        variant="ghost"
+        aria-label={session.name}
         aria-current={current ? "true" : undefined}
         className={cn(
-          "flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-sm",
-          current ? "bg-accent text-foreground" : "hover:bg-accent/60",
+          "h-12 w-full justify-start gap-3 pr-9 pl-3 font-normal",
+          current && "bg-accent shadow-[inset_3px_0_0_var(--primary)]",
           stopped && !current && "text-muted-foreground",
         )}
         onClick={onChoose}
@@ -188,14 +218,20 @@ function SheetRow({
           session={session}
           className={cn("size-4", stopped && "opacity-50")}
         />
-        <span className="min-w-0 flex-1 truncate">{session.name}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{session.name}</span>
         {stopped && (
-          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-normal tracking-wide text-muted-foreground uppercase"
+          >
             stopped
-          </span>
+          </Badge>
         )}
-        {session.bell && <BellDot label={`${session.name} rang the bell`} />}
-      </button>
+      </Button>
+      <SessionMarker
+        session={session}
+        className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+      />
     </li>
   );
 }

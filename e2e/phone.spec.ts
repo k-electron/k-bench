@@ -90,6 +90,8 @@ test("tapping a Workspace's name in the drawer opens it on its Prime and closes 
   await expect(app.page.getByRole("alert")).toContainText(
     "A Workspace for this folder already exists",
   );
+  // The drawer stays open to show why; behind it, beta is open.
+  await app.page.keyboard.press("Escape");
   await expect(app.phoneTitle).toHaveText("beta › Prime");
 });
 
@@ -104,6 +106,8 @@ test("tapping the title lists the Workspace's Sessions, and tapping one shows it
 
   await app.openSessionsSheet();
 
+  // It is headed by the Workspace's name.
+  await expect(app.sessionsSheet).toHaveAccessibleName("alpha");
   // Prime, Worker, then the Other Sessions; the one on screen is highlighted.
   await expect(app.sessionsSheet.getByRole("listitem")).toHaveText([
     /^Prime/,
@@ -120,14 +124,44 @@ test("tapping the title lists the Workspace's Sessions, and tapping one shows it
   await expect(app.phoneTitle).toHaveText("alpha › Worker");
   await expect(app.terminal("session 1")).toHaveCount(0);
 
-  // Tapping outside the sheet closes it without choosing.
+  // Tapping outside the sheet, above it, closes it without choosing.
   await app.openSessionsSheet();
-  await app.sessionsSheet.getByRole("button", { name: "Close sessions" }).tap();
+  await app.page.touchscreen.tap(10, 10);
   await expect(app.sessionsSheet).toBeHidden();
   await expect(app.phoneTitle).toHaveText("alpha › Worker");
 });
 
-test("a Bell elsewhere in the Open Workspace dots its name in the title, and one in another Workspace dots the menu button", async ({
+test("the title and the Sessions sheet show whether each Claude Session is Working, Waiting or Idle", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"), { name: "alpha" });
+  // Loading k-bench opens the Open Workspace, starting its Prime and Worker.
+  await page.reload();
+  await expect(app.marker("title", "Prime", "idle")).toBeVisible();
+
+  kbench.tellClaude("Prime", "think");
+
+  await expect(app.marker("title", "Prime", "working")).toBeVisible();
+  await app.openSessionsSheet();
+  await expect(app.marker("sheet", "Prime", "working")).toBeVisible();
+  await expect(app.marker("sheet", "Worker", "idle")).toBeVisible();
+
+  kbench.tellClaude("Prime", "ask-permission");
+
+  await expect(app.marker("sheet", "Prime", "waiting")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(app.sessionsSheet).toBeHidden();
+  await expect(app.marker("title", "Prime", "waiting")).toBeVisible();
+
+  kbench.tellClaude("Prime", "a message");
+
+  await expect(app.marker("title", "Prime", "idle")).toBeVisible();
+});
+
+test("a Bell elsewhere in the Open Workspace dots its name in the title, and a Bell or Waiting in another Workspace dots the menu button", async ({
   app,
   kbench,
 }) => {
@@ -152,6 +186,22 @@ test("a Bell elsewhere in the Open Workspace dots its name in the title, and one
 
   await expect(app.menuBell).toBeVisible();
   await expect(app.titleBell).toBeVisible();
+
+  // Opening beta leaves alpha's Worker's Bell elsewhere.
+  await app.openDrawer();
+  await app.workspace("beta").getByRole("button", { name: "beta", exact: true }).tap();
+  await expect(app.menuBell).toBeVisible();
+
+  kbench.tellClaude("Prime", "think", "alpha");
+  kbench.tellClaude("Prime", "ask-permission", "alpha");
+
+  await expect(app.menuWaiting).toBeVisible();
+  await expect(app.menuBell).toHaveCount(0);
+
+  kbench.tellClaude("Prime", "answer", "alpha");
+
+  await expect(app.menuBell).toBeVisible();
+  await expect(app.menuWaiting).toHaveCount(0);
 });
 
 test("a Stopped Session on screen shows Restart, and pressing it brings the terminal back", async ({
@@ -289,7 +339,7 @@ test("the extra keys' Enter runs the line the owner typed", async ({ app, kbench
   await expect(terminal.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
 });
 
-test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", async ({
+test("the extra keys fit in one row on a 375px-wide phone, each 40px tall and as wide as the others", async ({
   app,
   kbench,
 }) => {
@@ -323,6 +373,7 @@ test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", asyn
   const rowBox = await row.boundingBox();
   if (!rowBox) throw new Error("The Extra keys row should show");
   let top: number | undefined;
+  const widths: number[] = [];
   for (const name of names) {
     const box = await app.extraKey(name).boundingBox();
     if (!box) throw new Error(`${name} should show`);
@@ -331,7 +382,10 @@ test("the extra keys fit in one row on a 375px-wide phone, each 40px tall", asyn
     top ??= box.y;
     expect(box.y).toBe(top);
     expect(box.x + box.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+    widths.push(box.width);
   }
+  // Every key the same width, the arrow keys too.
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
 });
 
 test("Ctrl applies to the next key only, including keys typed on the keyboard", async ({
@@ -628,17 +682,33 @@ test("the folder picker is a full-screen sheet with Places as a row of chips abo
 
   await expect(app.place("Home")).toBeVisible();
   const viewport = app.page.viewportSize();
-  const sheet = await app.folderPicker.boundingBox();
+  if (!viewport) throw new Error("no viewport");
+  // The sheet animates in, so its box settles at the whole screen.
+  await expect
+    .poll(() => app.folderPicker.boundingBox())
+    .toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
   const home = await app.place("Home").boundingBox();
   const computer = await app.place("Computer").boundingBox();
   const breadcrumbs = await app.folderPicker
     .getByRole("navigation", { name: "Breadcrumbs" })
     .boundingBox();
-  if (!viewport || !sheet || !home || !computer || !breadcrumbs) {
-    throw new Error("the sheet, its Places and its breadcrumbs should show");
+  if (!home || !computer || !breadcrumbs) {
+    throw new Error("the sheet's Places and its breadcrumbs should show");
   }
-  expect(sheet).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
   expect(computer.y).toBe(home.y);
   expect(computer.x).toBeGreaterThan(home.x);
   expect(home.y + home.height).toBeLessThanOrEqual(breadcrumbs.y);
+});
+
+test("an icon-only button shows no tooltip on the phone", async ({ app }) => {
+  await app.openDrawer();
+  // Keyboard focus is what opens a tooltip on its own, without a hover.
+  await app.page.getByRole("button", { name: "New Workspace" }).focus();
+  await app.page.keyboard.press("Shift+Tab");
+  await app.page.keyboard.press("Tab");
+  await expect(app.page.getByRole("button", { name: "New Workspace" })).toBeFocused();
+
+  // biome-ignore lint/plugin: proving a tooltip does not appear needs a fixed wait
+  await app.page.waitForTimeout(500);
+  await expect(app.page.getByRole("tooltip")).toHaveCount(0);
 });

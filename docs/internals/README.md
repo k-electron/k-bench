@@ -4,6 +4,7 @@ Who owns what inside k-bench, and why. For setup, commands and the pull request 
 
 - [Source layout](layout.md): what each module in `scripts/`, `src/`, `web/src/`, `test/` and `e2e/` owns.
 - [The Bell](bell.md): the tmux-hook mechanism, why it works that way, and its known limitations.
+- [Claude Session states](session-states.md): how Claude Code's hooks report Working, Waiting and Idle, the marker that shows them, and why.
 - [The API](api.md): the HTTP and WebSocket endpoints, and the state they report.
 - [Access](access.md): how the login check and the Origin check enforce [ADR 0003](../adr/0003-tailnet-only-single-user-access.md).
 - [Packaging and the install](packaging.md): the npm package, the build, and how `k-bench install`, `uninstall` and `status` work.

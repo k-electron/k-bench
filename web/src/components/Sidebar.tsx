@@ -5,9 +5,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import { type Actions, useActions } from "@/useAppState";
-import { useSidebarCollapsed } from "@/useSidebarCollapsed";
 import type { LaunchOptions } from "../../../src/shared/launch-options.ts";
 import type { SessionState, State } from "../../../src/shared/state-protocol.ts";
 import { IconButton } from "./IconButton";
@@ -16,6 +14,19 @@ import { Reorderable } from "./Reorderable";
 import { useSidebarDialogs } from "./SidebarDialogs";
 import { WorkspaceTiles } from "./SidebarTiles";
 import { SessionList, type SidebarMode, WorkspaceItem } from "./SidebarTree";
+import { Alert, AlertDescription } from "./ui/alert";
+import {
+  Sidebar as ShadSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarSeparator,
+  useSidebar,
+} from "./ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface SidebarProps {
   state: State | undefined;
@@ -42,18 +53,16 @@ interface SidebarProps {
    * Workspace's folder already had one.
    */
   error?: string;
-  mode?: SidebarMode;
-  /** Sizing and placement, which differ between the desktop sidebar and the phone drawer. */
-  className?: string;
 }
 
 /**
- * The sidebar tree: every Workspace in the owner's order, each with its letter tile, and
- * only the Open Workspace unfolded into its Prime, Worker and Other Sessions. Only the Open
- * Workspace's row has the new-Session and Workspace menus. Beside the Panes it can collapse
- * to a column of tiles, remembered on this device. Opening a Workspace or a Session, and
- * creating one (which can open one), is up to the caller; every other action comes from
- * `useActions`.
+ * The sidebar, on shadcn's `Sidebar`: every Workspace in the owner's order, each with its
+ * letter tile, and only the Open Workspace unfolded into its Prime, Worker and Other
+ * Sessions. Only the Open Workspace's row has the new-Session and Workspace menus. Beside
+ * the Panes it collapses to a column of tiles (`collapsible="icon"`), remembered on this
+ * Device by the caller; on a phone it is the Sidebar's own drawer, always expanded. Opening
+ * a Workspace or a Session, and creating one (which can open one), is up to the caller;
+ * every other action comes from `useActions`.
  */
 export function Sidebar({
   state,
@@ -64,8 +73,6 @@ export function Sidebar({
   onCreateSession,
   onCreateClaudeSession,
   error,
-  mode = "sidebar",
-  className,
 }: SidebarProps) {
   const actions = useActions();
   const workspaces = state?.workspaces ?? [];
@@ -73,9 +80,9 @@ export function Sidebar({
     workspaces,
     onCreateClaudeSession,
   });
-  const [collapsedHere, setCollapsed] = useSidebarCollapsed();
-  // The phone's drawer is always the full tree.
-  const collapsed = mode === "sidebar" && collapsedHere;
+  const sidebar = useSidebar();
+  const mode: SidebarMode = sidebar.isMobile ? "drawer" : "sidebar";
+  const collapsed = !sidebar.isMobile && sidebar.state === "collapsed";
   const newWorkspace = (trigger: ReactNode) => (
     <NewWorkspaceDialog
       workspaces={workspaces}
@@ -84,21 +91,15 @@ export function Sidebar({
     />
   );
 
-  if (collapsed) {
-    return (
-      <nav
-        aria-label="Workspaces"
-        // Narrower than whatever width the caller gives the expanded tree.
-        className={cn(
-          "flex shrink-0 flex-col items-center gap-2 border-r bg-card py-2",
-          className,
-          "w-14",
-        )}
-      >
-        <IconButton label="Expand sidebar" onClick={() => setCollapsed(false)}>
-          <PanelLeftOpenIcon className="size-4" />
+  const collapsedColumn = (
+    <>
+      <SidebarHeader className="items-center">
+        <IconButton label="Expand sidebar" onClick={() => sidebar.setOpen(true)}>
+          <PanelLeftOpenIcon />
         </IconButton>
-        <div aria-hidden="true" className="w-8 border-t" />
+      </SidebarHeader>
+      <SidebarSeparator className="mx-auto w-8" />
+      <SidebarContent>
         <WorkspaceTiles
           workspaces={workspaces}
           onReorder={actions.reorderWorkspaces}
@@ -107,82 +108,100 @@ export function Sidebar({
           onOpenWorkspace={onOpenWorkspace}
           onOpenSession={onOpenSession}
         />
+      </SidebarContent>
+      <SidebarFooter className="items-center">
         {newWorkspace(
-          <button
-            type="button"
-            aria-label="New Workspace"
-            title="New Workspace"
-            className="grid size-9 shrink-0 place-items-center rounded-lg border border-dashed text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          <IconButton
+            label="New Workspace"
+            className="size-8 rounded-lg border border-dashed border-sidebar-border"
           >
-            <PlusIcon className="size-4" />
-          </button>,
-        )}
-        {error && (
-          <span role="alert" aria-label={error} title={error} className="flex">
-            <TriangleAlertIcon className="size-4 text-destructive" />
-          </span>
-        )}
-      </nav>
-    );
-  }
-
-  return (
-    <nav
-      aria-label="Workspaces"
-      className={cn("flex shrink-0 flex-col gap-1 border-r bg-card p-2", className)}
-    >
-      <div className="flex items-center gap-1 px-1 pb-1">
-        <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Workspaces
-        </span>
-        {newWorkspace(
-          <IconButton label="New Workspace">
-            <PlusIcon className="size-4" />
+            <PlusIcon />
           </IconButton>,
         )}
-        {mode === "sidebar" && (
-          <IconButton label="Collapse sidebar" onClick={() => setCollapsed(true)}>
-            <PanelLeftCloseIcon className="size-4" />
-          </IconButton>
+        {error && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span role="alert" aria-label={error} className="flex p-1">
+                <TriangleAlertIcon className="size-4 text-destructive" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="right">{error}</TooltipContent>
+          </Tooltip>
         )}
-      </div>
-      <Reorderable
-        ids={workspaces.map((w) => w.id)}
-        onReorder={actions.reorderWorkspaces}
-      >
-        <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-          {workspaces.map((workspace) => {
-            const isOpen = workspace.id === state?.openWorkspaceId;
-            return (
-              <WorkspaceItem
-                key={workspace.id}
-                workspace={workspace}
-                isOpen={isOpen}
-                mode={mode}
-                onOpen={() => onOpenWorkspace(workspace.id)}
-                onNewShell={() => void onCreateSession(workspace.id)}
-                onNewClaude={() => newClaude(workspace)}
-                onAction={(action) => editWorkspace(workspace, action)}
-              >
-                <SessionList
-                  workspace={workspace}
-                  shown={shown}
-                  mode={mode}
-                  onOpen={(session) => onOpenSession(workspace.id, session)}
-                  onAction={editSession}
-                  onReorder={(ids) => actions.reorderSessions(workspace.id, ids)}
-                />
-              </WorkspaceItem>
-            );
-          })}
-        </ul>
-      </Reorderable>
-      {dialogs}
+      </SidebarFooter>
+    </>
+  );
+
+  const tree = (
+    <>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel className="gap-0.5 pr-0">
+            <span className="flex-1">Workspaces</span>
+            {newWorkspace(
+              <IconButton label="New Workspace">
+                <PlusIcon />
+              </IconButton>,
+            )}
+            {mode === "sidebar" && (
+              <IconButton label="Collapse sidebar" onClick={() => sidebar.setOpen(false)}>
+                <PanelLeftCloseIcon />
+              </IconButton>
+            )}
+          </SidebarGroupLabel>
+          <Reorderable
+            ids={workspaces.map((w) => w.id)}
+            onReorder={actions.reorderWorkspaces}
+          >
+            <SidebarMenu>
+              {workspaces.map((workspace) => {
+                const isOpen = workspace.id === state?.openWorkspaceId;
+                return (
+                  <WorkspaceItem
+                    key={workspace.id}
+                    workspace={workspace}
+                    isOpen={isOpen}
+                    mode={mode}
+                    onOpen={() => onOpenWorkspace(workspace.id)}
+                    onNewShell={() => void onCreateSession(workspace.id)}
+                    onNewClaude={() => newClaude(workspace)}
+                    onAction={(action) => editWorkspace(workspace, action)}
+                  >
+                    <SessionList
+                      workspace={workspace}
+                      shown={shown}
+                      mode={mode}
+                      onOpen={(session) => onOpenSession(workspace.id, session)}
+                      onAction={editSession}
+                      onReorder={(ids) => actions.reorderSessions(workspace.id, ids)}
+                    />
+                  </WorkspaceItem>
+                );
+              })}
+            </SidebarMenu>
+          </Reorderable>
+        </SidebarGroup>
+      </SidebarContent>
       {error && (
-        <p role="alert" className="px-2 text-sm text-destructive">
-          {error}
-        </p>
+        <SidebarFooter>
+          <Alert variant="destructive" className="px-3 py-2">
+            <TriangleAlertIcon />
+            <AlertDescription className="text-xs">{error}</AlertDescription>
+          </Alert>
+        </SidebarFooter>
       )}
-    </nav>
+    </>
+  );
+
+  return (
+    <>
+      <ShadSidebar collapsible="icon">
+        <nav aria-label="Workspaces" className="flex min-h-0 flex-1 flex-col">
+          {collapsed ? collapsedColumn : tree}
+        </nav>
+      </ShadSidebar>
+      {/* Outside the Sidebar, so closing the phone's drawer doesn't close them. */}
+      {dialogs}
+    </>
   );
 }

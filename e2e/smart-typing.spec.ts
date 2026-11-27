@@ -540,7 +540,7 @@ test("the choice survives a page reload", async ({ app, kbench }) => {
   await expect(app.extraKey("Smart typing")).toHaveAttribute("aria-pressed", "true");
 });
 
-test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40px tall", async ({
+test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40px tall and as wide as the others", async ({
   app,
   kbench,
 }) => {
@@ -573,6 +573,7 @@ test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40p
   if (!rowBox) throw new Error("The Extra keys row should show");
   let top: number | undefined;
   let previousRight = 0;
+  const widths: number[] = [];
   for (const name of names) {
     const box = await app.extraKey(name).boundingBox();
     if (!box) throw new Error(`${name} should show`);
@@ -583,5 +584,8 @@ test("the ten Extra keys, the Smart typing switch last, fit in one row, each 40p
     expect(box.x).toBeGreaterThanOrEqual(previousRight);
     previousRight = box.x + box.width;
     expect(previousRight).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+    widths.push(box.width);
   }
+  // Every key the same width, the arrow keys and the switch too.
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
 });
