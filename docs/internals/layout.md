@@ -52,7 +52,7 @@ State and connections:
 Views:
 
 - `workspaceView.ts`: works out the desktop's Panes from the state (what each shows, the Tabs, which is shut, which has the keyboard), and components render what it says. It keeps each Workspace's divider, shut Pane and Pane with the keyboard on this Device. Opening a Workspace, by its name or on load, changes none of them, nor the right Pane's shown Tab. It also owns what runs once per page load at any size: opening the Open Workspace, the browser tab's title, and forgetting stale stored choices.
-- `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device.
+- `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device. Opening a Workspace, on load or by choosing its name, never changes it, so the Workspace comes back on that Session, or on its Prime when none is kept or it no longer exists.
 - `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, and which marker a Session shows and which hint other Sessions give ([The marker](session-states.md#the-marker)).
 - `folders.ts`: the folder picker's pure path work: Places, breadcrumbs, typed paths and new folder names.
 - `useIsPhone.ts`: the one breakpoint for the Phone layout. `useKeyboardUp.ts`: whether the on-screen keyboard is up, and the area the app fits into then. `useSidebarCollapsed.ts`: whether the sidebar is collapsed on this Device, which `App.tsx` hands the `SidebarProvider`.

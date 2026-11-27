@@ -49,7 +49,14 @@ test("a long Workspace name is cut off in the title before the Session's name", 
   expect(await workspace.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
 });
 
-test("tapping a Workspace's name in the drawer opens it on its Prime and closes the drawer", async ({
+/** On a phone: taps a Workspace's name in the drawer, which closes it. */
+async function openByName(app: AppPage, name: string): Promise<void> {
+  await app.openDrawer();
+  await app.workspace(name).getByRole("button", { name, exact: true }).tap();
+  await expect(app.drawer).toBeHidden();
+}
+
+test("tapping a Workspace's name in the drawer returns to the Session last on screen there and closes the drawer", async ({
   app,
   kbench,
   page,
@@ -60,31 +67,34 @@ test("tapping a Workspace's name in the drawer opens it on its Prime and closes 
   await app.createWorkspace(two, { name: "beta" });
   await page.reload();
   await expect(app.phoneTitle).toHaveText("alpha › Prime");
-  const openByName = async (name: string) => {
-    await app.openDrawer();
-    await app.workspace(name).getByRole("button", { name, exact: true }).tap();
-    await expect(app.drawer).toBeHidden();
-  };
+  await app.openDrawer();
+  await app.createSession("alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › session 1");
 
-  await openByName("beta");
-
+  // Nothing is remembered for beta on this Device, so it shows its Prime, which it starts.
+  await openByName(app, "beta");
   await expect(app.phoneTitle).toHaveText("beta › Prime");
   await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${two}`);
-  // Even after showing its Worker, the Workspace's name brings back its Prime.
+  await expect(app.terminal("Prime")).toContainText("claude-stub ready");
   await app.openDrawer();
   await app.session("Worker").tap();
   await expect(app.phoneTitle).toHaveText("beta › Worker");
-  await openByName("alpha");
-  await expect(app.phoneTitle).toHaveText("alpha › Prime");
-  await openByName("beta");
-  await expect(app.phoneTitle).toHaveText("beta › Prime");
-  await expect(app.terminal("Prime")).toContainText(`claude-stub cwd: ${two}`);
+
+  // Back and forth, each Workspace comes back on the Session last on screen in it.
+  await openByName(app, "alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › session 1");
+  await expect(app.terminal("session 1")).toBeVisible();
+  await openByName(app, "beta");
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
+  await expect(app.terminal("Worker")).toBeVisible();
+
+  // Choosing the Workspace that's already open leaves the Session on screen alone.
+  await openByName(app, "beta");
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
 
   // Create on a folder that already has a Workspace opens it the same way.
-  await app.openDrawer();
-  await app.session("Worker").tap();
-  await expect(app.phoneTitle).toHaveText("beta › Worker");
-  await openByName("alpha");
+  await openByName(app, "alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › session 1");
   await app.openDrawer();
   await app.createWorkspace(two);
   await expect(app.page.getByRole("alert")).toContainText(
@@ -92,7 +102,49 @@ test("tapping a Workspace's name in the drawer opens it on its Prime and closes 
   );
   // The drawer stays open to show why; behind it, beta is open.
   await app.page.keyboard.press("Escape");
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
+});
+
+test("a Workspace returns to its remembered Session Stopped with Restart, or to its Prime once that Session is deleted", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
+  await app.workspace("alpha").getByRole("button", { name: "alpha", exact: true }).tap();
+  await expect(app.drawer).toBeHidden();
+  await app.openDrawer();
+  await app.createSession("alpha");
+  const terminal = app.terminal("session 1");
+  await app.runMarker(terminal, "kb-before-exit-3333");
+  await terminal.getByRole("textbox", { name: "Terminal input" }).tap();
+  await app.page.keyboard.type("exit");
+  await app.page.keyboard.press("Enter");
+  const restart = app.page.getByRole("button", { name: "Restart", exact: true });
+  await expect(restart).toBeVisible();
+
+  await openByName(app, "beta");
   await expect(app.phoneTitle).toHaveText("beta › Prime");
+  await openByName(app, "alpha");
+
+  // The Stopped Session is where the owner left alpha, so it shows there, Stopped.
+  await expect(app.phoneTitle).toHaveText("alpha › session 1");
+  await expect(restart).toBeVisible();
+
+  await app.openDrawer();
+  await app.sessionMenu("session 1", "Delete");
+  await app.page
+    .getByRole("alertdialog", { name: "Delete session 1?" })
+    .getByRole("button", { name: "Delete session" })
+    .tap();
+  await expect(app.session("session 1")).toHaveCount(0);
+  await app.page.keyboard.press("Escape");
+  await expect(app.drawer).toBeHidden();
+  await openByName(app, "beta");
+  await openByName(app, "alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › Prime");
+  await expect(app.terminal("Prime")).toContainText("claude-stub ready");
 });
 
 test("tapping the title lists the Workspace's Sessions, and tapping one shows it and closes the sheet", async ({

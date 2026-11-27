@@ -25,7 +25,7 @@ The folder picker's shortcuts to where a Workspace is likely to be made: Home, t
 _Avoid_: favourites, bookmarks
 
 **Open Workspace**:
-The one Workspace the main view shows. No Pane ever shows a Session from another Workspace. It follows the owner between **Devices**: a Device opens on whichever Workspace the owner last opened, on any Device.
+The one Workspace the main view shows. No Pane ever shows a Session from another Workspace. It follows the owner between **Devices**: a Device opens on whichever Workspace the owner last opened, on any Device. Opening a Workspace, on load or by choosing it, shows it as the owner last left it on that Device.
 _Avoid_: current workspace, active workspace
 
 **Missing**:
@@ -97,7 +97,7 @@ The thin strip a shut Pane leaves, naming its Session and showing its Bell. Choo
 _Avoid_: collapsed pane, gutter
 
 **Phone layout**:
-The layout k-bench uses on a narrow screen, such as a phone's: one Session of the **Open Workspace** at a time, a drawer for the sidebar, and the **Extra keys**.
+The layout k-bench uses on a narrow screen, such as a phone's: one Session of the **Open Workspace** at a time, the Session on screen, a drawer for the sidebar, and the **Extra keys**.
 _Avoid_: mobile view, phone mode
 
 **Extra keys**:
