@@ -542,6 +542,22 @@ export class AppPage {
 
   /** Drags `source` with the mouse onto the middle of `target`. */
   async dragOnto(source: Locator, target: Locator): Promise<void> {
+    // Wait for both to stop moving: right after the sidebar collapses or expands, its
+    // width is still animating, and a drag measured mid-way misses its target.
+    const boxes = async () =>
+      JSON.stringify([await source.boundingBox(), await target.boundingBox()]);
+    let last = "";
+    await expect
+      .poll(
+        async () => {
+          const now = await boxes();
+          const settled = now === last;
+          last = now;
+          return settled;
+        },
+        { intervals: [100] },
+      )
+      .toBe(true);
     const from = await source.boundingBox();
     const dest = await target.boundingBox();
     if (!from || !dest) throw new Error("The rows to drag between are not visible");
