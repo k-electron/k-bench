@@ -771,7 +771,12 @@ interface Fixtures {
 
 export const test = base.extend<Fixtures>({
   kbench: async ({ context }, use) => {
-    const instance = createTestInstance({ allowedLogin: LOGIN, port: await freePort() });
+    const instance = createTestInstance({
+      allowedLogin: LOGIN,
+      port: await freePort(),
+      // A held turn stays Working however slow the run; the server tests cover the decay.
+      workingQuietMs: 600_000,
+    });
     let server = await instance.start({ webDir: WEB_DIR });
     // Stands in for `tailscale serve`, which adds this header in the real deployment.
     await context.setExtraHTTPHeaders({ "Tailscale-User-Login": LOGIN });

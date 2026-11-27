@@ -123,8 +123,9 @@ function activityHook(activity: SessionActivity, ignore?: string): string {
     "input=$(tr -d '\\n');",
     `if printf '%s' "$input" | grep -Eq '${skip}'; then :;`,
     'elif [ -n "$TMUX_PANE" ]; then',
-    `tmux set-option -p -t "$TMUX_PANE" ${ACTIVITY_OPTION} ${activity}`,
-    `\\; set-option -p -t "$TMUX_PANE" ${ACTIVITY_AT_OPTION} "$(date +%s)" &&`,
+    // Stamped first, so a decay never sees the new state with the old time.
+    `tmux set-option -p -t "$TMUX_PANE" ${ACTIVITY_AT_OPTION} "$(date +%s)"`,
+    `\\; set-option -p -t "$TMUX_PANE" ${ACTIVITY_OPTION} ${activity} &&`,
     `tmux wait-for -S ${ACTIVITY_CHANNEL};`,
     "fi;",
     "} >/dev/null 2>&1; exit 0",
