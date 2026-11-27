@@ -103,25 +103,30 @@ export const ACTIVITY_AT_OPTION = "@kb-activity-at";
 /**
  * Matches the stdin of an event fired inside a subagent (or a teammate), which carries an
  * `agent_id` key. It can't match inside a value, such as a prompt, since JSON escapes a `"`
- * there. Such events say nothing about the Session's own turn, so the activity hooks ignore
- * them. The hooks reference documents `agent_id` as the subagent's or teammate's ID; the
- * main agent started with `--agent` carries only `agent_type`, so that is never tested.
+ * there. A subagent's turn, its tools and its finish say nothing about the Session's own
+ * turn, so most activity hooks ignore such events (see `ACTIVITY_EVENTS`). The hooks
+ * reference documents `agent_id` as the subagent's or teammate's ID; the main agent started
+ * with `--agent` carries only `agent_type`, so that is never tested.
  */
 const FROM_AN_AGENT = '"agent_id"[[:space:]]*:';
 
 /**
  * The hook that records `activity`, and the time, on its own tmux pane in one tmux call, and
- * signals the channel, unless its event came from a subagent or its stdin matches `ignore`
- * (an extended regex). It is built like the conversation hook, for the same reasons: it
- * prints nothing, exits 0 whatever happens, and is one line of plain `sh` with no `jq`. The
- * state it writes is k-bench's own word, never taken from stdin.
+ * signals the channel, unless its stdin matches one of `ignore` (extended regexes). It is
+ * built like the conversation hook, for the same reasons: it prints nothing, exits 0
+ * whatever happens, and is one line of plain `sh` with no `jq`. The state it writes is
+ * k-bench's own word, never taken from stdin.
  */
-function activityHook(activity: SessionActivity, ignore?: string): string {
-  const skip = [FROM_AN_AGENT, ...(ignore ? [ignore] : [])].join("|");
+function activityHook(activity: SessionActivity, ignore: string[]): string {
+  // With nothing to ignore there is no test at all: an empty pattern would match anything.
+  const skip = ignore.length
+    ? `printf '%s' "$input" | grep -Eq '${ignore.join("|")}'`
+    : "false";
   return [
     "{",
+    // Read whole either way, so Claude Code never writes to a hook that has gone.
     "input=$(tr -d '\\n');",
-    `if printf '%s' "$input" | grep -Eq '${skip}'; then :;`,
+    `if ${skip}; then :;`,
     'elif [ -n "$TMUX_PANE" ]; then',
     // Stamped first, so a decay never sees the new state with the old time.
     `tmux set-option -p -t "$TMUX_PANE" ${ACTIVITY_AT_OPTION} "$(date +%s)"`,
@@ -149,13 +154,19 @@ function activityHook(activity: SessionActivity, ignore?: string): string {
  *   own key ends Waiting too (see `TmuxDriver.endWaiting`).
  * - `Stop`, and `StopFailure` (fired instead when an API error ends the turn): the turn is
  *   over, so Idle. Neither fires for a subagent.
- * `matcher` is the hook group's tool name matcher, for a tool event.
+ * `matcher` is the hook group's tool name matcher, for a tool event. Each hook ignores an
+ * event from a subagent (`FROM_AN_AGENT`), except a `PermissionRequest` or `Elicitation`
+ * (`anyAgent`): a prompt needs the owner whoever asked. A subagent's Waiting then ends as any
+ * other does, by the owner's key or the main agent's next event.
  */
 const ACTIVITY_EVENTS: {
   event: string;
   activity: SessionActivity;
   matcher?: string;
+  /** An extended regex for this event's stdin when the hook should leave the state alone. */
   ignore?: string;
+  /** Counts the event from a subagent too. */
+  anyAgent?: true;
 }[] = [
   {
     event: "SessionStart",
@@ -163,9 +174,9 @@ const ACTIVITY_EVENTS: {
     ignore: '"source"[[:space:]]*:[[:space:]]*"compact"',
   },
   { event: "UserPromptSubmit", activity: "working" },
-  { event: "PermissionRequest", activity: "waiting" },
+  { event: "PermissionRequest", activity: "waiting", anyAgent: true },
   { event: "PreToolUse", activity: "waiting", matcher: "AskUserQuestion|ExitPlanMode" },
-  { event: "Elicitation", activity: "waiting" },
+  { event: "Elicitation", activity: "waiting", anyAgent: true },
   { event: "PostToolUse", activity: "working" },
   { event: "PostToolUseFailure", activity: "working" },
   { event: "ElicitationResult", activity: "working" },
@@ -180,12 +191,13 @@ function launchHooks(): Record<string, HookGroups> {
   const hooks: Record<string, HookGroups> = {
     SessionStart: [{ hooks: [{ type: "command", command: CONVERSATION_HOOK }] }],
   };
-  for (const { event, activity, matcher, ignore } of ACTIVITY_EVENTS) {
+  for (const { event, activity, matcher, ignore, anyAgent } of ACTIVITY_EVENTS) {
+    const ignored = [...(anyAgent ? [] : [FROM_AN_AGENT]), ...(ignore ? [ignore] : [])];
     hooks[event] = [
       ...(hooks[event] ?? []),
       {
         ...(matcher ? { matcher } : {}),
-        hooks: [{ type: "command", command: activityHook(activity, ignore) }],
+        hooks: [{ type: "command", command: activityHook(activity, ignored) }],
       },
     ];
   }

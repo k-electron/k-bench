@@ -29,6 +29,9 @@
 #   answer          the tool last asked about got its answer and finished (PostToolUse)
 #   subagent-stop   a subagent uses a tool and finishes: PreToolUse and PostToolUse carrying
 #                   its `agent_id`, then SubagentStop
+#   subagent-ask-permission
+#                   a subagent asks permission to use Bash (PermissionRequest carrying its
+#                   `agent_id`)
 #   print N         prints a `claude-stub printing` line every quarter second for N seconds,
 #                   then `claude-stub printed`, running no hooks: a tool's output in a turn,
 #                   or one of the redraws Claude Code makes now and then between turns
@@ -176,6 +179,10 @@ while IFS= read -r line; do
     answer)
       tool_event PostToolUse "${tool:-Bash}"
       echo "claude-stub answered"
+      ;;
+    subagent-ask-permission)
+      tool_event PermissionRequest Bash agent-stub
+      echo "claude-stub subagent asking permission"
       ;;
     subagent-stop)
       tool_event PreToolUse Bash agent-stub

@@ -36,7 +36,7 @@ The flags that reach the stub are the contract with Claude Code, so asserting on
   - `clear` switches to a new conversation ID, as `/clear` does.
   - `think` starts a turn, running a Bash tool, and holds it until the next message, so a test can see the Session Working.
   - `ask-permission` (`PermissionRequest`) and `ask-question` (`PreToolUse` for `AskUserQuestion`) make it Waiting, and `answer` (`PostToolUse` for that tool) answers.
-  - `subagent-stop` runs a subagent's tool events, carrying its `agent_id`, then `SubagentStop`.
+  - `subagent-stop` runs a subagent's tool events, carrying its `agent_id`, then `SubagentStop`, and `subagent-ask-permission` a subagent's `PermissionRequest`.
   - `print N` prints a `claude-stub printing` line every quarter second for N seconds, then `claude-stub printed`, and runs no hooks: a tool's output, or one of Claude Code's stray redraws. Pass `createTestInstance({ workingQuietMs })` to shorten the quiet time a Working Session decays after.
 
   Each command runs its hooks before it prints its line, so a test that sees the line knows they have run. To put a Session into Waiting, type the command with `typeIntoSession` rather than through a terminal: a terminal's keys are the owner's, which end Waiting.

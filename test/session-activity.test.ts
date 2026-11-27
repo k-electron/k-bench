@@ -144,15 +144,19 @@ describe("A Claude Session's state", () => {
     await waitForActivity(server, claude.id, "working");
   });
 
-  it("is unchanged by a subagent's tool use and finish", async () => {
+  it("is Waiting while a subagent asks permission, and unchanged by a subagent's tool use and finish", async () => {
     const { instance, server, workspace } = await boot();
     const socket = instance.config.tmuxSocket;
     const claude = await server.createClaudeSession(workspace.id);
     const terminal = await server.openTerminal(claude.id);
     await terminal.waitForOutput("claude-stub ready");
     typeIntoSession(socket, claude.id, "think");
-    typeIntoSession(socket, claude.id, "ask-permission");
-    await terminal.waitForOutput("claude-stub asking permission");
+    await terminal.waitForOutput("claude-stub thinking");
+
+    // A prompt needs the owner, whichever agent asked.
+    typeIntoSession(socket, claude.id, "subagent-ask-permission");
+    await terminal.waitForOutput("claude-stub subagent asking permission");
+    expect(activityOf(await server.state(), claude.id)).toBe("waiting");
 
     typeIntoSession(socket, claude.id, "subagent-stop");
     await terminal.waitForOutput("claude-stub subagent finished");
