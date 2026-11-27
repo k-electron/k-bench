@@ -105,7 +105,7 @@ On a narrow screen, such as a phone's, k-bench shows one Session of the Open Wor
 
 - **The drawer**, from the menu button, holds the sidebar. Choosing a Workspace's name there opens it on its Prime.
 - **The title sheet.** Tap the title at the top to switch between the Open Workspace's Sessions without the drawer.
-- **Bell dots** in the top bar: a dot on the title means another Session of this Workspace has a Bell, and a dot on the menu button means a Session of another Workspace has one.
+- **Dots** in the top bar: a dot on the title means another Session of this Workspace has a Bell, and a dot on the menu button means a Session of another Workspace has a Bell or is [Waiting](claude-code.md#see-what-a-claude-session-is-doing).
 - The Session the Phone layout shows is kept apart from the right Pane on your desktop, so the two never fight.
 - **The Extra keys** along the bottom are Esc (⎋), Tab (⇥), Shift-Tab (⇤), Ctrl, the four arrows and Enter (⏎). **Ctrl** is one-shot: it applies to the next key you press, on the Extra keys or the on-screen keyboard. While the on-screen keyboard is up, only a few of the Extra keys show, in the terminal's top-right corner, with a key to close the keyboard. Close it to get Ctrl and Shift-Tab back.
 - **Paste**, among the keys shown while the keyboard is up, pastes your clipboard's text into the Session. It appears only where the browser lets a page read the clipboard. On an iPhone, the system may ask you to tap "Paste" first.
