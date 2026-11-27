@@ -745,7 +745,7 @@ async function freePort(): Promise<number> {
  * The Session named `name` (in the Workspace named `workspaceName`, when given), read from
  * the database whether or not a server runs.
  */
-function sessionNamed(
+export function sessionNamed(
   instance: TestInstance,
   name: string,
   workspaceName?: string,

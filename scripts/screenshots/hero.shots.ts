@@ -1,5 +1,7 @@
-// The hero image: real Claude Code running in the Prime, played back from a recording, with
-// the sidebar's tree beside it. The right Pane is shut, so the Worker's terminal is not shown.
+// The hero image: real Claude Code running in the Prime, played back from a recording and
+// shown Working, with the sidebar's tree beside it, where the folded website Workspace's
+// tile pulses for its Waiting Prime. The right Pane is shut, so the Worker's terminal is not
+// shown.
 //
 // STATUS: recorded. docs/recordings/claude-hero.json is one real Claude Code run, made in a
 // made-up demo project on the owner's account and scrubbed. If it is absent this test is
@@ -46,6 +48,7 @@ test("hero: Claude Code in the Prime", async ({ app, demo, page }) => {
   await demo.workspace("acme-api", ["dev server", "tests"]);
   await demo.workspace("website", []);
   await demo.workspace("dotfiles", []);
+  await demo.waitingElsewhere(app, "website");
   await app.openWorkspace("acme-api");
   await expect(app.sessionStatus("Prime", "running")).toBeVisible();
   await expect(app.sessionStatus("Worker", "running")).toBeVisible();
@@ -56,5 +59,8 @@ test("hero: Claude Code in the Prime", async ({ app, demo, page }) => {
   await fitTerminal(app, page, terminal, recording);
 
   await demo.play(app, terminal, HERO_RECORDING);
+  await demo.setState("Prime", "working", "acme-api");
+  await expect(app.marker("sidebar", "Prime", "working")).toBeVisible();
+  await expect(app.workspaceWaitingHint("website")).toBeVisible();
   await demo.shoot("hero.png");
 });

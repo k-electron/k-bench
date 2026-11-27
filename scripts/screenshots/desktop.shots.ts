@@ -1,5 +1,6 @@
 // Desktop: the Open Workspace with Claude Code in the Prime (the hero recording, played
-// back) and a dev server in the right Pane, whose Tabs show the Worker and the dev server.
+// back, Working) and a dev server in the right Pane, whose Tabs show the Worker and the dev
+// server. The folded website Workspace has a Waiting Prime, so its tile pulses.
 import { expect, fitTerminal, test } from "./fixtures.ts";
 import { HERO_RECORDING } from "./images.ts";
 import { readRecording } from "./recording.ts";
@@ -17,6 +18,7 @@ test("desktop: the Prime, and a dev server in the right Pane", async ({
   await demo.workspace("acme-api", ["dev server", "tests"]);
   await demo.workspace("website", []);
   await demo.workspace("dotfiles", []);
+  await demo.waitingElsewhere(app, "website");
   await app.openWorkspace("acme-api");
   await expect(app.sessionStatus("Prime", "running")).toBeVisible();
   await expect(app.sessionStatus("Worker", "running")).toBeVisible();
@@ -34,5 +36,8 @@ test("desktop: the Prime, and a dev server in the right Pane", async ({
   await fitTerminal(app, page, prime, recording, PRIME_SHARE);
   await demo.play(app, prime, HERO_RECORDING);
   await expect(right).toContainText("GET /owed");
+  await demo.setState("Prime", "working", "acme-api");
+  await expect(app.marker("sidebar", "Prime", "working")).toBeVisible();
+  await expect(app.workspaceWaitingHint("website")).toBeVisible();
   await demo.shoot("desktop.png");
 });

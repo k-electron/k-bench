@@ -14,5 +14,6 @@ export const IMAGE_NAMES = [
   "desktop.png",
   "new-claude.png",
   "phone-terminal.png",
+  "claude-states.png",
 ] as const;
 export type ImageName = (typeof IMAGE_NAMES)[number];
