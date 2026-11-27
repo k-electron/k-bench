@@ -30,6 +30,9 @@ test("a Bell in a folded Workspace's Session shows as a dot on its tile", async 
   await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
   await app.createSession("alpha");
   await expect(app.terminalIn("right", "session 1")).toBeVisible();
+  // Leave alpha on its Worker, so coming back to it doesn't view session 1 and clear its Bell.
+  await app.session("Worker").click();
+  await expect(app.terminalIn("right", "Worker")).toBeVisible();
   await app.openWorkspace("beta");
 
   await kbench.ringBell("session 1");

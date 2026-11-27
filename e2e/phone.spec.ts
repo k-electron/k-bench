@@ -61,6 +61,8 @@ test("tapping a Workspace's name in the drawer returns to the Session last on sc
   kbench,
   page,
 }) => {
+  // One long round trip through two Workspaces runs close to the default timeout.
+  test.slow();
   const two = kbench.instance.makeFolder("two");
   await app.openDrawer();
   await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
