@@ -24,6 +24,12 @@ Each hook writes the state to the tmux pane option `@kb-activity` on its own pan
 
 **The quiet decay.** A Working Session that has printed nothing for 15 seconds (`workingQuietMs` in the instance config) becomes Idle. Whenever the service reads the state, it compares tmux's `#{window_activity}`, the time of the Session's last output, with the time the state was last written, which every hook and `endWaiting` stamp in the pane option `@kb-activity-at`. When both are older than the quiet time, `TmuxDriver.decayWorking` writes Idle back to `@kb-activity`, in one tmux call that checks all three again, so a hook or key that has just written the state is never overwritten. The state feed's [poll](bell.md#the-events-websockets-poll) is what notices the quiet, so there is no timer of its own.
 
+## The marker
+
+The front end shows a Session's state and its [Bell](bell.md) as one marker, the most urgent first: Waiting, then the Bell, then Working or Idle (`sessionMarker` in `web/src/workspaces.ts`). A shell shows only its Bell, and a Stopped Session no marker. `SessionMarker` draws it the same everywhere: the sidebar row, the collapsed sidebar's icon, the Tab, the Rail, the left Pane's label bar, the phone's title and the Sessions sheet. It sits beside the button it marks, never inside, so screen readers read its label on its own and it stays out of that button's accessible name.
+
+Away from their Sessions only Waiting and the Bell show, as a hint, Waiting first (`hintMarker`): on a folded Workspace's tile for its Sessions, and on the phone's Menu button for every other Workspace's. Working and Idle never roll up, since they need nothing from the owner.
+
 ## Why
 
 - The state lives in tmux ([ADR 0002](../adr/0002-tmux-is-the-source-of-truth-for-liveness.md)), on the pane, like the conversation ID. It survives a k-bench restart and needs no store column. It goes when the Session's program does, when the Session is Stopped and has no state anyway.

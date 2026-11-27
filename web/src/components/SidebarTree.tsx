@@ -22,6 +22,7 @@ import { SessionIcon } from "./SessionIcon";
 import { SessionMarker } from "./SessionMarker";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -148,13 +149,13 @@ export function WorkspaceItem({
           <AlertDescription className="text-xs">
             <p>
               Missing: its folder is gone, so Sessions can't start. Running ones carry on.{" "}
-              <button
-                type="button"
+              <Button
+                variant="link"
                 onClick={() => onAction("folder")}
-                className="font-medium underline underline-offset-2"
+                className="h-auto p-0 text-current text-xs underline underline-offset-2"
               >
                 Change folder
-              </button>
+              </Button>
             </p>
           </AlertDescription>
         </Alert>

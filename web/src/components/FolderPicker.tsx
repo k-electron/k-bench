@@ -355,7 +355,9 @@ function PathBar({
           onChoose({ base: choice.base, newFolders: choice.newFolders.slice(0, count) })
         }
       />
-      {/* The rest of the bar: clicking or tapping it turns the bar into the path field. */}
+      {/* The rest of the bar: clicking or tapping it turns the bar into the path field. A
+          plain button, since it stretches over whatever room the breadcrumbs leave, which
+          shadcn's Button with its fixed sizes doesn't. */}
       <button
         ref={typeButton}
         type="button"

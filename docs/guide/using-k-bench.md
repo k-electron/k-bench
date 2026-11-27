@@ -81,7 +81,7 @@ k-bench starts when you log in to the Mac, not when it boots to the login window
 
 ## Bells
 
-A Session raises a Bell when its program rings the terminal bell, for example `printf '\a'`. The Session shows an amber dot wherever it appears, and its Workspace's tile shows one while that Workspace isn't open. On a Claude Session the Bell takes the place of [Working or Idle](claude-code.md#see-what-a-claude-session-is-doing), and Waiting takes the place of the Bell. The Bell clears when you view that Session.
+A Session raises a Bell when its program rings the terminal bell, for example `printf '\a'`. The Session shows an amber dot wherever it appears, and its Workspace's tile shows one while that Workspace isn't open. On a Claude Session the Bell shares one marker with [its state](claude-code.md#see-what-a-claude-session-is-doing). The Bell clears when you view that Session.
 
 A Bell is a mark on the page. It makes no sound and sends no push notification. It survives a k-bench restart, and is lost only with the Session's program, after a logout or a Mac restart.
 

@@ -71,7 +71,9 @@ function WorkspaceTileItem({
       {...row}
       className={cn("flex flex-col items-center gap-1 rounded-lg", isDragging && LIFTED)}
     >
-      {/* The button lies over the tile, so the tile's dot and Missing mark stay labelled. */}
+      {/* The button lies over the tile, so the tile's dot and Missing mark stay labelled. It
+          is a plain, see-through button: shadcn's Button brings sizes and colours of its own,
+          which an overlay doesn't want. */}
       <div className="relative">
         <WorkspaceTile
           workspace={workspace}
@@ -137,6 +139,7 @@ function SessionIconItem({
       )}
     >
       <SessionIcon session={session} className={cn("size-4", stopped && "opacity-50")} />
+      {/* A plain, see-through button over the icon, as on the Workspace's tile above. */}
       <Tooltip>
         <TooltipTrigger asChild>
           <button

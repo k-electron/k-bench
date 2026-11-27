@@ -8,11 +8,11 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Added
 
-- Each Claude Session shows whether it is **Working** (a small blue spinner), **Waiting** for your answer (a pulsing amber dot, until you answer or send it a key, and also on its folded Workspace's tile ahead of a Bell) or **Idle** (a grey dot) on its sidebar row, Tab, Rail and Pane label bar, the collapsed sidebar and, on a phone, the title and the Sessions sheet, live on every Device; a Bell's solid amber dot takes the place of Working or Idle until you view the Session. k-bench learns the state from silent hooks it adds to each Claude Code it launches, so nothing reaches the conversation, and a Working Session that prints nothing for about 15 seconds, such as one you interrupted with Esc, shows Idle.
+- Each Claude Session shows whether it is **Working**, **Waiting** for your answer or **Idle**, live on every Device, wherever the Session shows; Waiting also pulses on its folded Workspace's tile and the phone's menu button. k-bench learns the state from silent hooks it adds to each Claude Code it launches, so nothing reaches the conversation.
 
 ### Changed
 
-- A new look outside the terminal: the frame's greys now match the terminal's background, so no seam shows around the Panes, with one blue accent for the main buttons, focus rings and the Sessions on screen in the sidebar, and dialogs, menus and the sidebar that animate. On a desktop the top bar reads Workspace › the Session with the keyboard, the right Pane's active Tab is underlined in blue, the divider lights up while you hover or drag it, and icon-only buttons, Rails and the collapsed sidebar's tiles and Session icons show their name in a tooltip; a Stopped Session's row is dimmed with a "stopped" badge, every dialog field has its label above it, Focus view is a switch, the arrow keys and Enter work in the folder picker's Places and folders, the phone's Sessions sheet slides up from the bottom headed by its Workspace, and the Extra keys are all the same width, with Ctrl and Smart typing filling blue while on; the terminal looks exactly as before.
+- A new look outside the terminal: the frame's greys match the terminal's background, with one blue accent, animated dialogs, menus and sidebar, and tooltips on icon-only buttons. The top bar, Tabs, dialogs, folder picker (now with arrow keys and Enter), Sessions sheet and Extra keys are restyled to match, and the terminal looks exactly as before.
 
 ### Fixed
 

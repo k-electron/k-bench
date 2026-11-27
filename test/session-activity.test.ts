@@ -223,9 +223,12 @@ describe("A Claude Session's state", () => {
     typeIntoSession(socket, claude.id, "ask-permission");
     await waitForActivity(server, claude.id, "waiting");
 
-    // Proving it never decays means reading it all through a spell longer than the quiet time.
-    const spellEnds = Date.now() + 2 * QUICK_DECAY.workingQuietMs;
-    const seen = await activitiesUntil(server, claude.id, () => Date.now() >= spellEnds);
+    let spellOver = false;
+    // biome-ignore lint/style/noRestrictedGlobals: proving it never decays means reading it all through a spell longer than the quiet time; there is no outcome to wait for.
+    setTimeout(() => {
+      spellOver = true;
+    }, 2 * QUICK_DECAY.workingQuietMs);
+    const seen = await activitiesUntil(server, claude.id, () => spellOver);
 
     expect(seen).toEqual(new Set(["waiting"]));
   });
