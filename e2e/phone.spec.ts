@@ -339,6 +339,30 @@ test("the extra keys' Enter runs the line the owner typed", async ({ app, kbench
   await expect(terminal.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
 });
 
+test("the extra keys reach the Session on screen with the keyboard down", async ({
+  app,
+  kbench,
+}) => {
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("project"));
+  await app.createSession("project");
+  const terminal = app.terminal("session 1");
+  await app.runCommand(terminal, "n=41; echo set-$n", "set-41");
+  await app.runCommand(terminal, "echo run-$((++n))", "run-42");
+  // After a reload the Session is back on screen, and nothing has tapped its terminal.
+  await app.page.reload();
+  await expect(terminal).toContainText("run-42");
+  const input = terminal.getByRole("textbox", { name: "Terminal input" });
+  await expect(input).not.toBeFocused();
+
+  // Up brings back the last command and Enter runs it again.
+  await app.extraKey("Up").tap();
+  await app.extraKey("Enter").tap();
+
+  await expect(terminal).toContainText("run-43");
+  await expect(input).not.toBeFocused();
+});
+
 test("the extra keys fit in one row on a 375px-wide phone, each 40px tall and as wide as the others", async ({
   app,
   kbench,
@@ -464,6 +488,59 @@ test("the phone keeps showing the Session it last showed in the Workspace across
   await expect(app.phoneTitle).toHaveText("project › session 1");
   await expect(app.terminal("session 2")).toHaveCount(0);
   await expect(app.terminal("Prime")).toHaveCount(0);
+});
+
+test("the on-screen keyboard stays down whenever a Session appears, and comes up when the terminal is tapped", async ({
+  app,
+  kbench,
+  page,
+}) => {
+  const two = kbench.instance.makeFolder("two");
+  await app.openDrawer();
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  await app.createWorkspace(two, { name: "beta" });
+  // The keyboard is up when the Session's terminal input has focus; with it down, the full
+  // Extra keys row shows. A terminal that took focus would do so as it opens, before any
+  // output, so once its output shows the check can't pass too early.
+  const keyboardIsDown = async (session: string, output: string | RegExp) => {
+    const terminal = app.terminal(session);
+    await expect(terminal).toContainText(output);
+    await expect(
+      terminal.getByRole("textbox", { name: "Terminal input" }),
+    ).not.toBeFocused();
+    await expect(app.extraKey("Ctrl")).toBeVisible();
+  };
+
+  // Loading the page.
+  await page.reload();
+  await expect(app.phoneTitle).toHaveText("alpha › Prime");
+  await keyboardIsDown("Prime", "claude-stub ready");
+
+  // Showing another Session from the Sessions sheet.
+  await app.openSessionsSheet();
+  await app.sheetRow("Worker").tap();
+  await keyboardIsDown("Worker", "claude-stub ready");
+
+  // Choosing another Workspace.
+  await app.openDrawer();
+  await app.workspace("beta").getByRole("button", { name: "beta", exact: true }).tap();
+  await keyboardIsDown("Prime", `claude-stub cwd: ${two}`);
+
+  // Creating a Session, here a Claude Session.
+  await app.openDrawer();
+  await app.createClaudeSession("beta");
+  await keyboardIsDown("session 1", "claude-stub ready");
+
+  // Showing another Session from the drawer.
+  await app.openDrawer();
+  await app.session("Worker").tap();
+  await keyboardIsDown("Worker", "claude-stub ready");
+
+  // Tapping the terminal brings the keyboard up.
+  await app.terminal("Worker").tap();
+  await expect(
+    app.terminal("Worker").getByRole("textbox", { name: "Terminal input" }),
+  ).toBeFocused();
 });
 
 test("with the on-screen keyboard up the app gives the terminal the room and compact keys replace the row", async ({

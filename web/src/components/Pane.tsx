@@ -10,6 +10,8 @@ interface PaneProps {
   session: SessionState;
   /** Whether its terminal should have the keyboard. */
   focused: boolean;
+  /** Whether its terminal also takes keyboard focus then; not in the Phone layout. */
+  takesFocus?: boolean;
   /**
    * It is being started: while Stopped it shows nothing, not Restart, so its terminal
    * appears as soon as it runs.
@@ -21,7 +23,7 @@ interface PaneProps {
  * A Session's terminal, filling one slot in the main view. A Stopped Session shows
  * Restart in its place.
  */
-export function Pane({ session, focused, starting = false }: PaneProps) {
+export function Pane({ session, focused, takesFocus, starting = false }: PaneProps) {
   return (
     <section
       aria-label={`Terminal ${session.name}`}
@@ -29,7 +31,12 @@ export function Pane({ session, focused, starting = false }: PaneProps) {
       style={{ backgroundColor: TERMINAL_BACKGROUND }}
     >
       {session.status === "running" ? (
-        <TerminalView sessionId={session.id} kind={session.kind} focused={focused} />
+        <TerminalView
+          sessionId={session.id}
+          kind={session.kind}
+          focused={focused}
+          takesFocus={takesFocus}
+        />
       ) : (
         !starting && <RestartNotice session={session} />
       )}
