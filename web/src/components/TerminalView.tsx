@@ -128,20 +128,26 @@ export function TerminalView({
   sessionId,
   kind,
   focused,
+  takesFocus = true,
 }: {
   sessionId: string;
   /** What the Session runs; it chooses the keyboard's settings for Smart typing. */
   kind: SessionKind;
-  /** Whether it should have the keyboard; it takes keyboard focus when it becomes so. */
+  /** Whether it should have the keyboard: the Extra keys, Paste and the one-shot Ctrl go to it. */
   focused: boolean;
+  /**
+   * Whether it also takes keyboard focus when it becomes `focused`. The Phone layout says no:
+   * there focus raises the on-screen keyboard, which only the owner's tap should do.
+   */
+  takesFocus?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const terminalRef = useRef<Terminal>(null);
   // The same terminal, for what must run again when it is replaced (the Session changed).
   const [terminal, setTerminal] = useState<Terminal | null>(null);
-  const focusedRef = useRef(focused);
-  focusedRef.current = focused;
+  const takeFocusRef = useRef(focused && takesFocus);
+  takeFocusRef.current = focused && takesFocus;
   // Smart typing (ADR 0006): offered on an iPhone in the phone layout, and there on or off
   // per Session. A change is applied at once, but the keyboard only reads the field's
   // settings when it opens, and the switch is only reachable with the keyboard down.
@@ -151,8 +157,8 @@ export function TerminalView({
   const typedLine = useRef<MirroredField>(null);
 
   useEffect(() => {
-    if (focused) terminalRef.current?.focus();
-  }, [focused]);
+    if (focused && takesFocus) terminalRef.current?.focus();
+  }, [focused, takesFocus]);
 
   // The phone's extra keys go to the terminal on screen, as if typed.
   useEffect(() => {
@@ -235,7 +241,7 @@ export function TerminalView({
       observer.observe(element);
       terminalRef.current = terminal;
       setTerminal(terminal);
-      if (focusedRef.current) terminal.focus();
+      if (takeFocusRef.current) terminal.focus();
 
       return () => {
         terminalRef.current = null;

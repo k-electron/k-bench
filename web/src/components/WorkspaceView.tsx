@@ -71,6 +71,7 @@ export function SessionBody({
   workspace,
   workspaces,
   focused,
+  takesFocus,
   starting,
 }: {
   session: SessionState;
@@ -80,6 +81,8 @@ export function SessionBody({
   workspaces: WorkspaceState[];
   /** Whether its terminal should have the keyboard. */
   focused: boolean;
+  /** Passed to `TerminalView`. */
+  takesFocus?: boolean;
   /** The Workspace is being opened, which starts its Prime and Worker. */
   starting: boolean;
 }) {
@@ -87,7 +90,15 @@ export function SessionBody({
   if (session.status !== "running" && !waiting && workspace.missing) {
     return <MissingPane workspace={workspace} workspaces={workspaces} />;
   }
-  return <Pane key={session.id} session={session} focused={focused} starting={waiting} />;
+  return (
+    <Pane
+      key={session.id}
+      session={session}
+      focused={focused}
+      takesFocus={takesFocus}
+      starting={waiting}
+    />
+  );
 }
 
 /** The bar naming what a Pane shows. */

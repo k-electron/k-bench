@@ -263,7 +263,9 @@ export function PhoneView({
           session={session}
           workspace={workspace}
           workspaces={workspaces}
+          // The Extra keys type into it, but the on-screen keyboard waits for a tap.
           focused
+          takesFocus={false}
           starting={view.starting}
         />
       )}

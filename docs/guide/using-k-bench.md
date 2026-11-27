@@ -51,21 +51,23 @@ A Session is a program on your Mac, not a page in your browser. Closing the brow
 
 Outside the Phone layout the main view has two Panes. The left Pane always shows the Prime. The right Pane shows the Worker, or an Other Session you opened there.
 
-Each Other Session you open in the right Pane gets a Tab, after the Worker's, which always comes first. Removing a Tab leaves its Session running, and you can open it again from the sidebar. Choosing the Workspace's name brings back the Prime and the Worker, and keeps the Tabs.
+Each Other Session you open in the right Pane gets a Tab, after the Worker's, which always comes first. Removing a Tab leaves its Session running, and you can open it again from the sidebar.
 
 Drag the divider between the Panes to resize them. Drag it to an edge to shut that Pane: it becomes a Rail, a thin strip naming its Session. Choose the Rail, or open something into that Pane, to bring it back.
 
+Your keystrokes go to the Pane you last opened something in or clicked into, or to the open one if that Pane is shut. A new Workspace starts with them going to the Prime.
+
 ## What is kept where
 
-Most of what you choose is kept on your Mac, the Host, and every Device shows it the same. A few layout choices are kept by each Device, so a laptop and a phone can each be set up their own way.
+Most of what you choose is kept on your Mac, the Host, and every Device shows it the same. A few layout choices are kept by each Device, so a laptop and a phone can each be set up their own way, and opening a Workspace brings them back as the [Open Workspace](../../GLOSSARY.md) entry says.
 
-| On the Host, shared by every Device                       | On each Device                                             |
-| --------------------------------------------------------- | ---------------------------------------------------------- |
-| Workspaces and their order                                | Each Workspace's divider, and which Pane is shut           |
-| Each Workspace's Sessions and their order                 | Whether the sidebar is collapsed                           |
-| The Open Workspace                                        | The Session the Phone layout last showed in each Workspace |
-| Each Workspace's right Pane: its Tabs and which one shows | Smart typing, on or off for each Session                   |
-| The Launch options last used in the New Claude dialog     |                                                            |
+| On the Host, shared by every Device                       | On each Device                                                               |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Workspaces and their order                                | Each Workspace's divider, which Pane is shut, and which gets your keystrokes |
+| Each Workspace's Sessions and their order                 | Whether the sidebar is collapsed                                             |
+| The Open Workspace                                        | The Session the Phone layout last showed in each Workspace                   |
+| Each Workspace's right Pane: its Tabs and which one shows | Smart typing, on or off for each Session                                     |
+| The Launch options last used in the New Claude dialog     |                                                                              |
 
 Anything kept on the Host survives a restart of k-bench, a logout and a restart of the Mac. Anything kept on a Device lives in that browser's storage, and survives a reload.
 
@@ -103,10 +105,11 @@ On a narrow screen, such as a phone's, k-bench shows one Session of the Open Wor
 
 ![A Session in the Phone layout, with the Extra keys along the bottom](../images/phone-terminal.png)
 
-- **The drawer**, from the menu button, holds the sidebar. Choosing a Workspace's name there opens it on its Prime.
+- **The drawer**, from the menu button, holds the sidebar. A Workspace you open shows its Prime if it has no Session kept on this Device, or that Session was deleted. To reach the Prime or the Worker, choose it in the drawer or the title sheet.
 - **The title sheet.** Tap the title at the top to switch between the Open Workspace's Sessions without the drawer.
 - **Dots** in the top bar: a dot on the title means another Session of this Workspace has a Bell, and a dot on the menu button means a Session of another Workspace has a Bell or is [Waiting](claude-code.md#see-what-a-claude-session-is-doing).
 - The Session the Phone layout shows is kept apart from the right Pane on your desktop, so the two never fight.
+- **The on-screen keyboard** comes up only when you tap the terminal. Showing another Session, choosing a Workspace, loading the page and creating a Session leave it down, and the Extra keys still reach the Session on screen.
 - **The Extra keys** along the bottom are Esc (⎋), Tab (⇥), Shift-Tab (⇤), Ctrl, the four arrows and Enter (⏎). **Ctrl** is one-shot: it applies to the next key you press, on the Extra keys or the on-screen keyboard. While the on-screen keyboard is up, only a few of the Extra keys show, in the terminal's top-right corner, with a key to close the keyboard. Close it to get Ctrl and Shift-Tab back.
 - **Paste**, among the keys shown while the keyboard is up, pastes your clipboard's text into the Session. It appears only where the browser lets a page read the clipboard. On an iPhone, the system may ask you to tap "Paste" first.
 - **Smart typing**, on an iPhone only, lets the keyboard's autocorrect, suggestions, double-space for a period and hold to delete work in a Session. The changes reach the program as Backspaces and new text, so Claude Code's `/` menu and shell completion still work. In a shell Session it suggests words but never replaces them or adds capitals, so `ls` stays `ls`. It is on for a new Session. Turn it off, with the last of the Extra keys, for a Session that runs a full-screen program such as vim or less. The switch shows only while the keyboard is down, and takes effect the next time it opens.

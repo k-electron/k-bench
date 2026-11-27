@@ -41,7 +41,7 @@ The server, the browser and the tests all import these, so they use no Node APIs
 
 ## `web/src/`
 
-Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, inside the one `TooltipProvider`. The shell sits inside shadcn/ui's `SidebarProvider`, with everything beside the sidebar in its `SidebarInset`, and picks the desktop layout or the Phone layout. `index.css` is the global styles and the theme tokens, `lib/utils.ts` shadcn/ui's class helper, and `lib/focus.ts` decides whether a closing menu or dialog hands focus back to its trigger. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it.
+Vite, React, Tailwind, shadcn/ui and xterm.js; `@/` aliases `web/src/`. `main.tsx` mounts `App.tsx`, the shell, inside the one `TooltipProvider`. The shell sits inside shadcn/ui's `SidebarProvider`, with everything beside the sidebar in its `SidebarInset`, and picks the desktop layout or the Phone layout. `index.css` is the global styles and the theme tokens, `lib/utils.ts` shadcn/ui's class helper, and `lib/focus.ts` decides whether a closing menu or dialog hands focus back to its trigger. What a Device keeps is in browser storage under `k-bench.*` keys, each owned by the module that reads it; `perWorkspaceStorage.ts` reads and writes the ones kept per Workspace.
 
 State and connections:
 
@@ -51,7 +51,7 @@ State and connections:
 
 Views:
 
-- `workspaceView.ts`: works out the desktop's Panes from the state (what each shows, the Tabs, which is shut, which has the keyboard), and components render what it says. It also owns what runs once per page load at any size: opening the Open Workspace, the browser tab's title, and forgetting stale stored choices.
+- `workspaceView.ts`: works out the desktop's Panes from the state (what each shows, the Tabs, which is shut, which has the keyboard), and components render what it says. It owns each Workspace's divider, shut Pane and Pane with the keyboard, kept on this Device so a Workspace opens as the [Open Workspace](../../GLOSSARY.md) rule says; the right Pane's Tabs are the Host's. It also owns what runs once per page load at any size: opening the Open Workspace, the browser tab's title, and forgetting stale stored choices.
 - `phoneView.ts`: the same for the Phone layout: which Session of the Open Workspace is on screen, kept per Workspace on this Device.
 - `workspaces.ts`: what both views and the sidebar read off the state: the Open Workspace, and which marker a Session shows and which hint other Sessions give ([The marker](session-states.md#the-marker)).
 - `folders.ts`: the folder picker's pure path work: Places, breadcrumbs, typed paths and new folder names.

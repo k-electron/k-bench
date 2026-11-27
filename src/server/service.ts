@@ -226,21 +226,12 @@ export class Service {
   /**
    * Makes the Workspace the Open Workspace and, unless it is Missing, starts its Stopped
    * Prime and Worker, resuming their conversations. Opening it again changes nothing that
-   * is running. With `showWorker` (the owner chose it by name), its right Pane shows the
-   * Worker again, keeping its tabs.
+   * is running.
    */
-  async openWorkspace(
-    id: string,
-    options: { showWorker?: boolean } = {},
-  ): Promise<{ id: string }> {
+  async openWorkspace(id: string): Promise<{ id: string }> {
     const workspace = this.store.getWorkspace(id);
     if (!workspace) throw new ServiceError("not_found", "Unknown Workspace");
-    this.store.transaction(() => {
-      this.store.setOpenWorkspaceId(id);
-      if (options.showWorker) {
-        this.store.setRightPane(id, { ...this.rightPane(id), shown: null });
-      }
-    });
+    this.store.setOpenWorkspaceId(id);
     if (isDirectory(workspace.folder)) await this.startRoles(id);
     return { id };
   }

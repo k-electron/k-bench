@@ -6,6 +6,7 @@ import type {
   State,
   WorkspaceState,
 } from "../../src/shared/state-protocol.ts";
+import { loadPerWorkspace, savePerWorkspace } from "./perWorkspaceStorage";
 import { forgetSmartTypingOfMissing } from "./smartTyping";
 import type { Actions } from "./useAppState";
 import { findOpenWorkspace } from "./workspaces";
@@ -38,7 +39,8 @@ export interface WorkspaceView {
   shut: Side | null;
   /**
    * The Pane whose terminal should have the keyboard: the one the owner last chose
-   * something for, or last clicked into, unless that one is shut.
+   * something for, or last clicked into, in the Open Workspace on this device, unless that
+   * one is shut. The left Pane if they have done neither.
    */
   focusedTerminal: Side;
   /** The Session in the Pane with the keyboard, which the top bar names, if it shows one. */
@@ -51,14 +53,9 @@ export interface WorkspaceView {
   /** The Sessions on screen in an open Pane, for the sidebar's highlight. */
   shown: ReadonlySet<string>;
   /**
-   * Opens a Workspace (choosing it by name): makes it the Open Workspace on the Host, which
-   * starts its Stopped Prime and Worker, and brings back Prime with Worker.
-   */
-  openWorkspace(id: string): void;
-  /**
-   * Makes a Workspace the Open Workspace on the Host, which starts its Stopped Prime and
-   * Worker, leaving its right Pane and this device's divider alone: the phone's open by name.
-   * `starting` covers it as for `openWorkspace`.
+   * Opens a Workspace, as choosing it by name or loading the page does: makes it the Open
+   * Workspace on the Host, which starts its Stopped Prime and Worker, and changes nothing
+   * about what it shows. `starting` covers it until the Host has done so.
    */
   open(id: string): void;
   /**
@@ -115,10 +112,11 @@ export function moveDivider(ratio: number, reopenAt: number): Divider {
 }
 
 /**
- * Where the browser keeps each Workspace's divider, which stays on this device: a laptop and
- * an iPad can each be set up their own way.
+ * Where the browser keeps each Workspace's divider, and which of its Panes has the keyboard,
+ * which stay on this device: a laptop and an iPad can each be set up their own way.
  */
 const DIVIDERS_KEY = "k-bench.dividers";
+const KEYBOARD_PANES_KEY = "k-bench.keyboard-panes";
 
 function isDivider(value: unknown): value is Divider {
   if (typeof value !== "object" || value === null) return false;
@@ -131,26 +129,7 @@ function isDivider(value: unknown): value is Divider {
   );
 }
 
-function loadDividers(): Record<string, Divider> {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(DIVIDERS_KEY) ?? "{}");
-    if (typeof saved !== "object" || saved === null) return {};
-    return Object.fromEntries(
-      Object.entries(saved).filter(([, divider]) => isDivider(divider)),
-    );
-  } catch {
-    // Storage unavailable or garbled: every Workspace starts half and half.
-    return {};
-  }
-}
-
-function saveDividers(dividers: Record<string, Divider>): void {
-  try {
-    localStorage.setItem(DIVIDERS_KEY, JSON.stringify(dividers));
-  } catch {
-    // Storage unavailable: the dividers last until the page is closed.
-  }
-}
+const isSide = (value: unknown): value is Side => value === "left" || value === "right";
 
 const otherSide = (side: Side): Side => (side === "left" ? "right" : "left");
 
@@ -190,8 +169,8 @@ export function workspacePanes(workspace: WorkspaceState | undefined): {
  * Worker or one Other Session in the right.
  *
  * The Open Workspace, and what each Workspace's right Pane shows and its tabs, come from
- * the state on the Host, so every device follows them. The divider, and which Pane is
- * shut, are kept per Workspace in this browser's storage.
+ * the state on the Host, so every device follows them. The divider, which Pane is shut and
+ * which Pane has the keyboard are kept per Workspace in this browser's storage.
  *
  * It also does what any device does on load, whatever its size: it opens the Open
  * Workspace once, deletes the retired saved layout, and forgets Smart typing choices of
@@ -201,14 +180,18 @@ export function useWorkspaceView(
   state: State | undefined,
   actions: Actions,
 ): WorkspaceView {
-  const [dividers, setDividers] = useState(loadDividers);
-  const [focused, setFocused] = useState<Side>("left");
+  const [dividers, setDividers] = useState(() =>
+    loadPerWorkspace(DIVIDERS_KEY, isDivider),
+  );
+  const [keyboardPanes, setKeyboardPanes] = useState(() =>
+    loadPerWorkspace(KEYBOARD_PANES_KEY, isSide),
+  );
   // How many open requests are in flight.
   const [opening, setOpening] = useState(0);
   const open = useCallback(
-    (id: string, options?: { showWorker?: boolean }) => {
+    (id: string) => {
       setOpening((n) => n + 1);
-      void actions.openWorkspace(id, options).finally(() => setOpening((n) => n - 1));
+      void actions.openWorkspace(id).finally(() => setOpening((n) => n - 1));
     },
     [actions],
   );
@@ -222,7 +205,8 @@ export function useWorkspaceView(
 
   const openedOnLoad = useOpenOnLoad(state, open);
 
-  useEffect(() => saveDividers(dividers), [dividers]);
+  useEffect(() => savePerWorkspace(DIVIDERS_KEY, dividers), [dividers]);
+  useEffect(() => savePerWorkspace(KEYBOARD_PANES_KEY, keyboardPanes), [keyboardPanes]);
 
   useEffect(() => {
     try {
@@ -246,6 +230,14 @@ export function useWorkspaceView(
 
   const openId = workspace?.id;
   const divider = (openId && dividers[openId]) || HALF_AND_HALF;
+  const focused = (openId && keyboardPanes[openId]) || "left";
+
+  /** Gives the keyboard to a Workspace's Pane. */
+  const setFocused = useCallback((workspaceId: string, side: Side) => {
+    setKeyboardPanes((current) =>
+      current[workspaceId] === side ? current : { ...current, [workspaceId]: side },
+    );
+  }, []);
 
   /** Reopens a Workspace's Pane if it is shut, where the divider was before. */
   const reopen = useCallback((workspaceId: string, side: Side) => {
@@ -272,22 +264,15 @@ export function useWorkspaceView(
         shown,
         tabs: shown === null || tabs.includes(shown) ? tabs : [...tabs, shown],
       }));
-      setFocused("right");
+      setFocused(workspaceId, "right");
       reopen(workspaceId, "right");
     },
-    [changeRightPane, reopen],
+    [changeRightPane, reopen, setFocused],
   );
 
   const showPrimeOf = (workspaceId: string) => {
-    setFocused("left");
+    setFocused(workspaceId, "left");
     reopen(workspaceId, "left");
-  };
-
-  const openWorkspace = (id: string) => {
-    setFocused("left");
-    // The Workspace's name brings back the Worker, so a shut right Pane opens again.
-    reopen(id, "right");
-    open(id, { showWorker: true });
   };
 
   const focusedTerminal = focused === divider.shut ? otherSide(focused) : focused;
@@ -310,7 +295,6 @@ export function useWorkspaceView(
       focusedContent.kind === "session" ? focusedContent.session : undefined,
     starting: !openedOnLoad || opening > 0,
     shown,
-    openWorkspace,
     open,
     showPrime: () => {
       if (openId) showPrimeOf(openId);
@@ -331,7 +315,9 @@ export function useWorkspaceView(
       else if (session.role === null) showOnRight(workspaceId, session.id);
       else showPrimeOf(workspaceId);
     },
-    focusTerminal: setFocused,
+    focusTerminal: (side) => {
+      if (openId) setFocused(openId, side);
+    },
     setRatio: (ratio, reopenAt = divider.ratio) => {
       if (!openId) return;
       setDividers((current) => ({ ...current, [openId]: moveDivider(ratio, reopenAt) }));

@@ -80,7 +80,7 @@ export function WorkspaceItem({
   return (
     <SidebarMenuItem {...row} className={cn("rounded-md", isDragging && LIFTED)}>
       <h2 className="text-sm font-normal" title={workspace.folder}>
-        {/* Opening it starts its Prime and Worker; opening the Open one brings back Prime with Worker. */}
+        {/* Opening it starts its Stopped Prime and Worker and shows it as last left on this Device. */}
         <SidebarMenuButton
           {...handle}
           aria-label={workspace.name}
