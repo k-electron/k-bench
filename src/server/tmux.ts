@@ -31,9 +31,9 @@ export interface LiveSession {
   bell: boolean;
   /**
    * For a Claude Session, the state Claude Code last reported, as the activity hooks wrote it
-   * (`ACTIVITY_OPTION`): unchecked, and empty until a hook has run.
+   * (`ACTIVITY_OPTION`): Idle until a hook has run (`activityOf`). Meaningless for a shell.
    */
-  activity: string;
+  activity: SessionActivity;
   /**
    * When, in epoch seconds, the Session last printed anything or had its state written,
    * whichever is later (to tmux's one-second clock).
@@ -44,6 +44,49 @@ export interface LiveSession {
    * wrote it (`CONVERSATION_OPTION`): unchecked, and empty until the hook has run.
    */
   conversation: string;
+}
+
+const ACTIVITIES: readonly SessionActivity[] = ["working", "waiting", "idle"];
+
+/**
+ * A Session's state from what the activity hooks wrote: Idle while it is empty, before any
+ * hook has run, or when it isn't a state at all.
+ */
+function activityOf(written: string): SessionActivity {
+  return ACTIVITIES.find((activity) => activity === written) ?? "idle";
+}
+
+/** The tmux format for a Session's state, as the activity hooks wrote it. */
+const ACTIVITY_NOW = `#{${ACTIVITY_OPTION}}`;
+
+/** A tmux format that is true while a Session's state is `activity`. */
+function activityIs(activity: SessionActivity): string {
+  return `#{==:${ACTIVITY_NOW},${activity}}`;
+}
+
+/**
+ * The tmux target for the Session's one pane. The trailing colon names the Session's current
+ * window: without it tmux 3.8 finds no window for a format and prints an empty value, without
+ * failing.
+ */
+function paneOf(id: string): string {
+  return `=${PREFIX}${id}:`;
+}
+
+/**
+ * The `set-option` arguments that set the pane option `option` on `pane` to the tmux format
+ * `format`, expanded as it is set.
+ */
+function setPaneOption(pane: string, option: string, format: string): string[] {
+  return ["set-option", "-p", "-F", "-t", pane, option, format];
+}
+
+/**
+ * The `set-option` arguments that make the state on `pane` `activity` while the tmux format
+ * `test` is true, and leave it alone otherwise.
+ */
+function setActivityIf(pane: string, test: string, activity: SessionActivity): string[] {
+  return setPaneOption(pane, ACTIVITY_OPTION, `#{?${test},${activity},${ACTIVITY_NOW}}`);
 }
 
 /** The owner's login shell. */
@@ -312,7 +355,7 @@ export class TmuxDriver {
         return {
           id: name.slice(PREFIX.length),
           bell: bell !== "",
-          activity,
+          activity: activityOf(activity),
           lastChange: Math.max(Number(at) || 0, Number(output) || 0),
           conversation: conversation.join("\t"),
         };
@@ -327,32 +370,17 @@ export class TmuxDriver {
    * the activity channel only when the Session was Waiting.
    */
   async endWaiting(id: string): Promise<void> {
-    const pane = `=${PREFIX}${id}:`;
-    const option = `#{${ACTIVITY_OPTION}}`;
-    const waiting: SessionActivity = "waiting";
-    const working: SessionActivity = "working";
-    const isWaiting = `#{==:${option},${waiting}}`;
+    const pane = paneOf(id);
+    const isWaiting = activityIs("waiting");
     await this.run(
       ["if-shell", "-F", "-t", pane, isWaiting, `wait-for -S ${ACTIVITY_CHANNEL}`],
       // Stamped before the state is written, while it still says Waiting.
-      [
-        "set-option",
-        "-p",
-        "-F",
-        "-t",
+      setPaneOption(
         pane,
         ACTIVITY_AT_OPTION,
         `#{?${isWaiting},${nowInSeconds()},#{${ACTIVITY_AT_OPTION}}}`,
-      ],
-      [
-        "set-option",
-        "-p",
-        "-F",
-        "-t",
-        pane,
-        ACTIVITY_OPTION,
-        `#{?${isWaiting},${working},${option}}`,
-      ],
+      ),
+      setActivityIf(pane, isWaiting, "working"),
     );
   }
 
@@ -362,30 +390,25 @@ export class TmuxDriver {
    * is left alone. It is one tmux call, so a hook or the owner's key that writes the state
    * after it was last read is never overwritten. Returns undefined when the Session has gone.
    */
-  async decayWorking(id: string, quietSince: number): Promise<string | undefined> {
-    const pane = `=${PREFIX}${id}:`;
-    const option = `#{${ACTIVITY_OPTION}}`;
-    const working: SessionActivity = "working";
-    const idle: SessionActivity = "idle";
+  async decayWorking(
+    id: string,
+    quietSince: number,
+  ): Promise<SessionActivity | undefined> {
+    const pane = paneOf(id);
     const quiet = [
-      `#{==:${option},${working}}`,
+      activityIs("working"),
       `#{e|<=:#{window_activity},${quietSince}}`,
       `#{e|<=:#{${ACTIVITY_AT_OPTION}},${quietSince}}`,
     ].reduce((all, test) => `#{&&:${all},${test}}`);
     try {
-      const stdout = await this.run(
-        [
-          "set-option",
-          "-p",
-          "-F",
-          "-t",
-          pane,
-          ACTIVITY_OPTION,
-          `#{?${quiet},${idle},${option}}`,
-        ],
-        ["display-message", "-p", "-t", pane, option],
-      );
-      return stdout.trim();
+      const stdout = await this.run(setActivityIf(pane, quiet, "idle"), [
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        ACTIVITY_NOW,
+      ]);
+      return activityOf(stdout.trim());
     } catch (error) {
       if (isNoSuchSession(error)) return undefined;
       throw error;
@@ -399,15 +422,7 @@ export class TmuxDriver {
    */
   async shellSize(id: string): Promise<Size> {
     const tmuxPaneTty = (
-      await this.run([
-        "display-message",
-        "-p",
-        "-t",
-        // The trailing colon names the Session's current window. Without it tmux 3.8
-        // finds no window and prints an empty value, without failing.
-        `=${PREFIX}${id}:`,
-        "#{pane_tty}",
-      ])
+      await this.run(["display-message", "-p", "-t", paneOf(id), "#{pane_tty}"])
     ).trim();
     // `-f` is the macOS spelling (the Host is a Mac); it prints "<rows> <cols>".
     const { stdout } = await execFileAsync("stty", ["-f", tmuxPaneTty, "size"]);

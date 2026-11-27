@@ -18,7 +18,7 @@ import type { ClaudeLaunch } from "./claude.ts";
 import { availableName } from "./naming.ts";
 import { Reconciler } from "./reconciler.ts";
 import type { Store } from "./store.ts";
-import type { LiveSession, TmuxDriver } from "./tmux.ts";
+import { type LiveSession, nowInSeconds, type TmuxDriver } from "./tmux.ts";
 
 /**
  * A failure the HTTP layer maps to a status code. `details` go into the response body
@@ -59,18 +59,15 @@ function assertNoRole(session: { role: SessionRole | null }, change: string): vo
   }
 }
 
-const ACTIVITIES: readonly SessionActivity[] = ["working", "waiting", "idle"];
-
 /**
  * A Session's state: none for a shell or a Stopped Session. A running Claude Session is in the
- * state its hooks last wrote, and Idle until one has run (or when what they wrote isn't one).
+ * state its hooks last wrote, and Idle until one has run (see `LiveSession.activity`).
  */
 function activityOf(
   session: { kind: SessionKind },
   live: LiveSession | undefined,
 ): SessionActivity | null {
-  if (session.kind !== "claude" || !live) return null;
-  return ACTIVITIES.find((activity) => activity === live.activity) ?? "idle";
+  return session.kind === "claude" && live ? live.activity : null;
 }
 
 function isDirectory(path: string): boolean {
@@ -487,6 +484,11 @@ export class Service {
     });
   }
 
+  /**
+   * The state, read fresh. Reading it is not free of effects: like `reconcile`, it changes
+   * tmux, writing Idle back to each quiet Working Session (`decayQuietWork`), so the decay
+   * latches.
+   */
   async getState(): Promise<State> {
     const live = await this.reconciler.reconcile();
     await this.decayQuietWork(live);
@@ -517,12 +519,11 @@ export class Service {
    * Waiting never decays, since a permission prompt doesn't redraw.
    */
   private async decayQuietWork(live: Map<string, LiveSession>): Promise<void> {
-    const working: SessionActivity = "working";
-    const quietSince = Math.floor((Date.now() - this.workingQuietMs) / 1000);
+    const quietSince = nowInSeconds() - Math.ceil(this.workingQuietMs / 1000);
     await Promise.all(
       [...live.values()]
         .filter(
-          (session) => session.activity === working && session.lastChange <= quietSince,
+          (session) => session.activity === "working" && session.lastChange <= quietSince,
         )
         .map(async (session) => {
           const activity = await this.tmux.decayWorking(session.id, quietSince);
