@@ -55,7 +55,7 @@ Each Other Session you open in the right Pane gets a Tab, after the Worker's, wh
 
 Drag the divider between the Panes to resize them. Drag it to an edge to shut that Pane: it becomes a Rail, a thin strip naming its Session. Choose the Rail, or open something into that Pane, to bring it back.
 
-Your keystrokes go to the Pane you last opened something in or clicked into, or to the open one if that Pane is shut. This is kept per Workspace on each Device, so choosing a Workspace's name, like loading the page, shows it as you last left it there: the same Tab, the same Pane shut, and your keystrokes going to the same Pane. A new Workspace starts with them going to the Prime.
+Your keystrokes go to the Pane you last opened something in or clicked into, or to the open one if that Pane is shut. Which Pane gets them is kept per Workspace on each Device. Choosing a Workspace's name, like loading the page, shows it as you left it: the same Tab, the same Pane shut, and your keystrokes going to the same Pane. A new Workspace starts with them going to the Prime.
 
 ## What is kept where
 
