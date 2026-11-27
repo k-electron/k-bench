@@ -103,7 +103,7 @@ On a narrow screen, such as a phone's, k-bench shows one Session of the Open Wor
 
 ![A Session in the Phone layout, with the Extra keys along the bottom](../images/phone-terminal.png)
 
-- **The drawer**, from the menu button, holds the sidebar. Choosing a Workspace's name there opens it on its Prime.
+- **The drawer**, from the menu button, holds the sidebar. Choosing a Workspace's name there takes you back to the Session you last had on screen in it on this Device, as loading the page does. It shows the Prime when there is none, or that Session was deleted. To reach the Prime or the Worker, choose it in the drawer or the title sheet.
 - **The title sheet.** Tap the title at the top to switch between the Open Workspace's Sessions without the drawer.
 - **Dots** in the top bar: a dot on the title means another Session of this Workspace has a Bell, and a dot on the menu button means a Session of another Workspace has a Bell or is [Waiting](claude-code.md#see-what-a-claude-session-is-doing).
 - The Session the Phone layout shows is kept apart from the right Pane on your desktop, so the two never fight.

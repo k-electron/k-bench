@@ -21,7 +21,10 @@ export interface PhoneView {
   hintElsewhere: HintMarker | null;
   /** Shows a Session of the Open Workspace (`workspaceId`), remembering it on this device. */
   show(workspaceId: string, sessionId: string): void;
-  /** Opens a Workspace (choosing it by name), which shows its Prime. */
+  /**
+   * Opens a Workspace (choosing it by name), which shows the Session last on screen in it on
+   * this device, as landing on it when the page loads does.
+   */
   openWorkspace(id: string): void;
 }
 
@@ -94,9 +97,6 @@ export function usePhoneView(
     ),
     show: (workspaceId, sessionId) =>
       setShown((current) => ({ ...current, [workspaceId]: sessionId })),
-    openWorkspace: (id) => {
-      setShown(({ [id]: _forgotten, ...rest }) => rest);
-      open(id);
-    },
+    openWorkspace: open,
   };
 }
