@@ -6,6 +6,11 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- Choosing a Workspace by name shows it as you last left it on that Device, as loading the page already did. The Phone layout shows its last Session on screen, and on a desktop or tablet the right Pane keeps its Tab, a shut Pane stays shut and your keystrokes go to the Pane that last had them.
+- In the Phone layout the on-screen keyboard comes up only when you tap the terminal, not on every switch, load or new Session. The Extra keys still reach the Session on screen without it.
+
 ## [0.5.0] - 2026-11-27
 
 ### Changed
