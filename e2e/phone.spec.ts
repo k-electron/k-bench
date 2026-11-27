@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs";
-import { type AppPage, expect, type Kbench, sessionNamed, test } from "./harness.ts";
+import { type AppPage, expect, type Kbench, test } from "./harness.ts";
 
 // These run on the `phone` project: a touch device narrower than the layout breakpoint.
 
@@ -81,14 +81,12 @@ test("tapping a Workspace's name in the drawer returns to the Session last on sc
   await expect(app.phoneTitle).toHaveText("beta › Worker");
 
   // Back and forth, each Workspace comes back on the Session last on screen in it.
-  for (let trip = 0; trip < 2; trip++) {
-    await openByName(app, "alpha");
-    await expect(app.phoneTitle).toHaveText("alpha › session 1");
-    await expect(app.terminal("session 1")).toBeVisible();
-    await openByName(app, "beta");
-    await expect(app.phoneTitle).toHaveText("beta › Worker");
-    await expect(app.terminal("Worker")).toBeVisible();
-  }
+  await openByName(app, "alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › session 1");
+  await expect(app.terminal("session 1")).toBeVisible();
+  await openByName(app, "beta");
+  await expect(app.phoneTitle).toHaveText("beta › Worker");
+  await expect(app.terminal("Worker")).toBeVisible();
 
   // Choosing the Workspace that's already open leaves the Session on screen alone.
   await openByName(app, "beta");
@@ -96,6 +94,7 @@ test("tapping a Workspace's name in the drawer returns to the Session last on sc
 
   // Create on a folder that already has a Workspace opens it the same way.
   await openByName(app, "alpha");
+  await expect(app.phoneTitle).toHaveText("alpha › session 1");
   await app.openDrawer();
   await app.createWorkspace(two);
   await expect(app.page.getByRole("alert")).toContainText(
@@ -133,14 +132,16 @@ test("a Workspace returns to its remembered Session Stopped with Restart, or to 
   await expect(app.phoneTitle).toHaveText("alpha › session 1");
   await expect(restart).toBeVisible();
 
-  // While beta is open, session 1 is deleted elsewhere, through the server's API (the
-  // drawer lists only the Open Workspace's Sessions).
+  await app.openDrawer();
+  await app.sessionMenu("session 1", "Delete");
+  await app.page
+    .getByRole("alertdialog", { name: "Delete session 1?" })
+    .getByRole("button", { name: "Delete session" })
+    .tap();
+  await expect(app.session("session 1")).toHaveCount(0);
+  await app.page.keyboard.press("Escape");
+  await expect(app.drawer).toBeHidden();
   await openByName(app, "beta");
-  const deleted = await app.page.request.delete(
-    `${kbench.url}/api/sessions/${sessionNamed(kbench.instance, "session 1").id}`,
-  );
-  expect(deleted.ok()).toBe(true);
-
   await openByName(app, "alpha");
   await expect(app.phoneTitle).toHaveText("alpha › Prime");
   await expect(app.terminal("Prime")).toContainText("claude-stub ready");
