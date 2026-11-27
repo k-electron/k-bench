@@ -205,14 +205,18 @@ function launchHooks(): Record<string, HookGroups> {
 }
 
 /**
- * The `--settings` every launch passes: k-bench's hooks and, with Focus view on, its keys.
+ * The `--settings` every launch passes: k-bench's hooks, Claude Code's `dark` theme and, with
+ * Focus view on, its keys. The theme is fixed, not a Launch option: the owner's own theme may
+ * be `light`, which colours some text near-black, unreadable on k-bench's dark terminal.
  * Focus view needs both keys: it does nothing without the fullscreen renderer, and
  * fullscreen is not the default on every machine. `--settings` applies to that launch only
- * and adds to the owner's own settings and hooks, leaving their files unchanged.
+ * and adds to the owner's own settings and hooks, or outranks them, leaving their files
+ * unchanged.
  */
 function launchSettings(focusView: boolean): string {
   return JSON.stringify({
     hooks: launchHooks(),
+    theme: "dark",
     ...(focusView ? { viewMode: "focus", tui: "fullscreen" } : {}),
   });
 }
@@ -221,7 +225,7 @@ function launchSettings(focusView: boolean): string {
  * The flags that follow the one naming the conversation. This is where Launch options become
  * flags: a Default option adds nothing. Advisor Off is not a flag (there is none): the
  * launcher sets `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` for it. `--settings` is always passed,
- * for k-bench's hooks.
+ * for k-bench's hooks and the dark theme.
  */
 function launchOptionArguments(options: LaunchOptions): string[] {
   const { model, effort, advisor, focusView } = options;

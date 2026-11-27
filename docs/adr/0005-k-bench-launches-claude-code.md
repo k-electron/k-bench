@@ -25,6 +25,6 @@ This replaces an earlier decision that k-bench knows nothing about Claude Code. 
 - When Claude Code exits, its Session is Stopped. There is no shell underneath.
 - A Claude Session's options are fixed for its life. Restarting passes them again, because Claude Code doesn't restore per-launch settings on resume. Changes mid-conversation go through Claude Code's own commands, such as `/model`.
 - Claude Code saves a conversation only after its first message. A restart tries to resume and, if there's nothing to resume, starts a fresh conversation with the same ID and options. This works the same for a followed conversation that never had a message.
-- `--settings` is passed on every launch, not only with Focus view on. It adds to the owner's own settings and hooks for that launch and leaves their files unchanged.
+- `--settings` is passed on every launch, not only with Focus view on. It adds to the owner's own settings and hooks for that launch and leaves their files unchanged. It also sets Claude Code's `dark` theme over the owner's, because k-bench's terminal is dark; the theme changes how Claude Code is drawn, not what Claude sees or does.
 - One conversation ID is kept per Claude Session, updated in place, with no history. Earlier conversations are still reachable through Claude Code's own `/resume`. Two Sessions can end up on one conversation, and nothing guards against it.
 - Public docs that describe k-bench as knowing nothing about Claude Code must be rewritten along with the feature.

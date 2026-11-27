@@ -7,7 +7,7 @@ import { pollUntil } from "./harness/poll.ts";
 // What reaches Claude Code is the contract with it (ADR-0005), so these tests read the flags,
 // the settings and the environment the stub (test/harness/fake-claude.sh) was started with.
 
-const FOCUS_SETTINGS = { viewMode: "focus", tui: "fullscreen" };
+const FOCUS_SETTINGS = { theme: "dark", viewMode: "focus", tui: "fullscreen" };
 
 /** The stub's arguments begin `--session-id <conversation ID>`; the flags are what follows. */
 const SESSION_ID_ARGS = 2;
@@ -37,7 +37,7 @@ async function launch(
 const DEFAULTS = { model: "default", effort: "default", advisor: "default" };
 
 describe("Launch options", () => {
-  it("add no flag or setting for Default", async () => {
+  it("add no flag or setting for Default; the settings carry only the dark theme", async () => {
     const { server, workspace } = await boot();
 
     const { flags, settings, advisorDisabled } = await launch(server, workspace.id, {
@@ -46,7 +46,7 @@ describe("Launch options", () => {
     });
 
     expect(flags).toEqual([]);
-    expect(settings).toEqual({});
+    expect(settings).toEqual({ theme: "dark" });
     expect(advisorDisabled).toBe(false);
   });
 

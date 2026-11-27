@@ -6,6 +6,14 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+### Changed
+
+- Every Claude Session starts in Claude Code's dark theme, on every start and restart, so text the light theme colours near-black, such as the heading of a question, is readable. It applies to that launch only, and your own Claude Code theme setting is left as it is.
+
+### Fixed
+
+- The terminal brightens text that is too close to its background, in every Session, so no program can draw near-invisible text. Colours that were already readable look the same.
+
 ## [0.4.1] - 2026-11-26
 
 ### Added

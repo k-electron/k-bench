@@ -139,6 +139,7 @@ describe("A Claude Session follows its conversation", () => {
 
     expect(await fakeClaudeArgs(again)).toEqual(["--resume", moved]);
     expect(await fakeClaudeSettings(again)).toEqual({
+      theme: "dark",
       viewMode: "focus",
       tui: "fullscreen",
     });
