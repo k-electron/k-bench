@@ -4,7 +4,8 @@ import type { ITheme } from "@xterm/xterm";
 
 /**
  * The terminal's one fixed look (ADR-0009): the Graphite colours and JetBrains Mono at 13px,
- * with the line height, letter spacing, cursor and Pane padding left as xterm.js has them.
+ * with the line height, letter spacing, cursor and Pane padding left as xterm.js has them,
+ * and a contrast floor that brightens any text too close to its background.
  * `TerminalView` and `Pane` both read it, so the colours live in one place. The font is
  * bundled (`@fontsource`), never fetched from a CDN: k-bench is tailnet-only.
  */
@@ -40,6 +41,13 @@ export const terminalTheme: ITheme = {
 export const TERMINAL_FONT_SIZE = 13;
 const TERMINAL_FONT_NAME = '"JetBrains Mono"';
 export const TERMINAL_FONT_FAMILY = `${TERMINAL_FONT_NAME}, ui-monospace, Menlo, monospace`;
+
+/**
+ * xterm.js brightens text that is too close to its background until it reaches this ratio
+ * (WCAG AA), so no program can draw near-invisible text, such as Claude Code's light theme.
+ * Colours already readable are drawn as they are; the palette's bright black gets a little lighter.
+ */
+export const TERMINAL_MINIMUM_CONTRAST_RATIO = 4.5;
 
 /**
  * Resolves once the regular and bold faces have loaded. xterm.js measures its cells once,
