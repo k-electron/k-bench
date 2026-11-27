@@ -81,7 +81,7 @@ export function SessionBody({
   workspaces: WorkspaceState[];
   /** Whether its terminal should have the keyboard. */
   focused: boolean;
-  /** Whether its terminal also takes keyboard focus then; not in the Phone layout. */
+  /** Passed to `TerminalView`. */
   takesFocus?: boolean;
   /** The Workspace is being opened, which starts its Prime and Worker. */
   starting: boolean;

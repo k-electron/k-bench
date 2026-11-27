@@ -10,7 +10,7 @@ interface PaneProps {
   session: SessionState;
   /** Whether its terminal should have the keyboard. */
   focused: boolean;
-  /** Whether its terminal also takes keyboard focus then; not in the Phone layout. */
+  /** Passed to `TerminalView`. */
   takesFocus?: boolean;
   /**
    * It is being started: while Stopped it shows nothing, not Restart, so its terminal

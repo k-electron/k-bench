@@ -5,6 +5,7 @@ import type {
   State,
   WorkspaceState,
 } from "../../src/shared/state-protocol.ts";
+import { loadPerWorkspace, savePerWorkspace } from "./perWorkspaceStorage";
 import { findOpenWorkspace, type HintMarker, hintMarker } from "./workspaces";
 import type { WorkspaceView } from "./workspaceView";
 
@@ -21,11 +22,6 @@ export interface PhoneView {
   hintElsewhere: HintMarker | null;
   /** Shows a Session of the Open Workspace (`workspaceId`), remembering it on this device. */
   show(workspaceId: string, sessionId: string): void;
-  /**
-   * Opens a Workspace (choosing it by name), which shows the Session last on screen in it on
-   * this device, as landing on it when the page loads does.
-   */
-  openWorkspace(id: string): void;
 }
 
 /**
@@ -37,42 +33,23 @@ const SHOWN_KEY = "k-bench.phone-sessions";
 /** Where the phone kept its one Session before it showed the Open Workspace. */
 const RETIRED_KEY = "k-bench.phone-session";
 
-function loadShown(): Record<string, string> {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(SHOWN_KEY) ?? "{}");
-    if (typeof saved !== "object" || saved === null) return {};
-    return Object.fromEntries(
-      Object.entries(saved).filter(([, id]) => typeof id === "string"),
-    );
-  } catch {
-    // Storage unavailable or garbled: every Workspace shows its Prime.
-    return {};
-  }
-}
-
-function saveShown(shown: Record<string, string>): void {
-  try {
-    localStorage.setItem(SHOWN_KEY, JSON.stringify(shown));
-  } catch {
-    // Storage unavailable: what the phone shows lasts until the page is closed.
-  }
-}
-
 /**
  * The phone view, below the desktop breakpoint: one Session of the Open Workspace. Which one
  * is remembered per Workspace in this browser's storage; it is the Prime when nothing is
  * saved or the saved Session no longer exists.
  *
- * Opening goes through the desktop view's `open`, which leaves its right Pane alone, so
- * the open on load and `starting` are shared with it.
+ * Workspaces are opened by the desktop view's `open`, which also does the open on load, so
+ * `starting` is shared with it.
  */
 export function usePhoneView(
   state: State | undefined,
-  { open, starting }: Pick<WorkspaceView, "open" | "starting">,
+  { starting }: Pick<WorkspaceView, "starting">,
 ): PhoneView {
-  const [shown, setShown] = useState(loadShown);
+  const [shown, setShown] = useState(() =>
+    loadPerWorkspace(SHOWN_KEY, (id): id is string => typeof id === "string"),
+  );
   // Saved before the browser paints, so what is on screen is always what is stored.
-  useLayoutEffect(() => saveShown(shown), [shown]);
+  useLayoutEffect(() => savePerWorkspace(SHOWN_KEY, shown), [shown]);
 
   useEffect(() => {
     try {
@@ -97,6 +74,5 @@ export function usePhoneView(
     ),
     show: (workspaceId, sessionId) =>
       setShown((current) => ({ ...current, [workspaceId]: sessionId })),
-    openWorkspace: open,
   };
 }

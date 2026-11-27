@@ -55,11 +55,11 @@ Each Other Session you open in the right Pane gets a Tab, after the Worker's, wh
 
 Drag the divider between the Panes to resize them. Drag it to an edge to shut that Pane: it becomes a Rail, a thin strip naming its Session. Choose the Rail, or open something into that Pane, to bring it back.
 
-Your keystrokes go to the Pane you last opened something in or clicked into, or to the open one if that Pane is shut. Which Pane gets them is kept per Workspace on each Device. Choosing a Workspace's name, like loading the page, shows it as you left it: the same Tab, the same Pane shut, and your keystrokes going to the same Pane. A new Workspace starts with them going to the Prime.
+Your keystrokes go to the Pane you last opened something in or clicked into, or to the open one if that Pane is shut. A new Workspace starts with them going to the Prime.
 
 ## What is kept where
 
-Most of what you choose is kept on your Mac, the Host, and every Device shows it the same. A few layout choices are kept by each Device, so a laptop and a phone can each be set up their own way.
+Most of what you choose is kept on your Mac, the Host, and every Device shows it the same. A few layout choices are kept by each Device, so a laptop and a phone can each be set up their own way, and opening a Workspace brings them back as the [Open Workspace](../../GLOSSARY.md) entry says.
 
 | On the Host, shared by every Device                       | On each Device                                                               |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -105,7 +105,7 @@ On a narrow screen, such as a phone's, k-bench shows one Session of the Open Wor
 
 ![A Session in the Phone layout, with the Extra keys along the bottom](../images/phone-terminal.png)
 
-- **The drawer**, from the menu button, holds the sidebar. Choosing a Workspace's name there takes you back to the Session you last had on screen in it on this Device, as loading the page does. It shows the Prime when there is none, or that Session was deleted. To reach the Prime or the Worker, choose it in the drawer or the title sheet.
+- **The drawer**, from the menu button, holds the sidebar. A Workspace you open shows its Prime if it has no Session kept on this Device, or that Session was deleted. To reach the Prime or the Worker, choose it in the drawer or the title sheet.
 - **The title sheet.** Tap the title at the top to switch between the Open Workspace's Sessions without the drawer.
 - **Dots** in the top bar: a dot on the title means another Session of this Workspace has a Bell, and a dot on the menu button means a Session of another Workspace has a Bell or is [Waiting](claude-code.md#see-what-a-claude-session-is-doing).
 - The Session the Phone layout shows is kept apart from the right Pane on your desktop, so the two never fight.
