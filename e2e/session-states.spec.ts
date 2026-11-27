@@ -1,6 +1,6 @@
 import { expect, test } from "./harness.ts";
 
-test("a Claude Session shows Working in a turn and Idle after it, live on every device", async ({
+test("a Claude Session shows Working in a turn, Waiting while it asks, and Idle after it, live on every device", async ({
   app,
   otherDevice,
   kbench,
@@ -18,6 +18,12 @@ test("a Claude Session shows Working in a turn and Idle after it, live on every 
   await expect(otherDevice.marker("sidebar", "Worker", "working")).toBeVisible();
   await expect(app.marker("sidebar", "Worker", "idle")).toHaveCount(0);
   await expect(app.marker("sidebar", "Prime", "idle")).toBeVisible();
+
+  kbench.tellClaude("Worker", "ask-permission");
+
+  await expect(app.marker("sidebar", "Worker", "waiting")).toBeVisible();
+  await expect(app.marker("tab", "Worker", "waiting")).toBeVisible();
+  await expect(app.marker("tab", "Worker", "working")).toHaveCount(0);
 
   kbench.tellClaude("Worker", "a message");
 

@@ -1,6 +1,8 @@
 import { TriangleAlertIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { HintMarker } from "@/workspaces";
 import type { WorkspaceState } from "../../../src/shared/state-protocol.ts";
+import { MARKER_SAYS, StatusDot } from "./StatusDot";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 
 /**
@@ -22,8 +24,8 @@ export function tileHue(name: string): number {
 }
 
 /**
- * A Workspace's coloured letter tile, a shadcn `Avatar`, with an amber dot for `marker` (with
- * a pulsing ring for Waiting, solid for a Bell) and a warning mark when it is Missing. The
+ * A Workspace's coloured letter tile, a shadcn `Avatar`, with a `StatusDot` for `marker` and
+ * a warning mark when it is Missing. The
  * letters are decoration; the dot and the mark are labelled. `sm` sits in an expanded
  * sidebar row, `md` is a tile on its own.
  */
@@ -39,7 +41,7 @@ export function WorkspaceTile({
    * The dot for its Sessions (`workspaceMarker`); the sidebar shows it only on a folded
    * Workspace.
    */
-  marker?: "waiting" | "bell" | null;
+  marker?: HintMarker | null;
   className?: string;
 }) {
   const hue = tileHue(workspace.name);
@@ -66,25 +68,10 @@ export function WorkspaceTile({
       {marker && (
         <span
           role="img"
-          aria-label={
-            marker === "waiting"
-              ? `${workspace.name} has a session waiting for you`
-              : `${workspace.name} has a session that rang the bell`
-          }
-          className={cn(
-            "absolute -top-0.5 -right-0.5 grid place-items-center",
-            md ? "size-2.5" : "size-2",
-          )}
+          aria-label={`${workspace.name} has a session that ${MARKER_SAYS[marker]}`}
+          className={cn("absolute -top-0.5 -right-0.5 grid", md ? "size-2.5" : "size-2")}
         >
-          {marker === "waiting" && (
-            <span className="absolute size-full animate-ping rounded-full bg-status-waiting/70" />
-          )}
-          <span
-            className={cn(
-              "relative size-full rounded-full ring-2 ring-sidebar",
-              marker === "waiting" ? "bg-status-waiting" : "bg-status-bell",
-            )}
-          />
+          <StatusDot marker={marker} className="size-full ring-2 ring-sidebar" />
         </span>
       )}
       {workspace.missing && (

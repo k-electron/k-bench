@@ -1,13 +1,19 @@
+/** What the views read off the state about the Workspaces and their Sessions. */
+
 import type {
   SessionState,
   State,
   WorkspaceState,
 } from "../../src/shared/state-protocol.ts";
 
-/** What the views read off the state about the Workspaces and their Sessions. */
-
 /** What a Session's one marker can show, the most urgent first. */
 export type Marker = "waiting" | "bell" | "working" | "idle";
+
+/**
+ * The markers that also show away from their Session, as a hint: on a folded Workspace's
+ * tile and on the phone's Menu button.
+ */
+export type HintMarker = Extract<Marker, "waiting" | "bell">;
 
 /**
  * The one marker a Session shows, the most urgent first: Waiting, its Bell, then Working or
@@ -26,18 +32,16 @@ export function findOpenWorkspace(state: State | undefined): WorkspaceState | un
   return state?.workspaces.find((w) => w.id === state.openWorkspaceId);
 }
 
-/** Some Session of the Workspace has a Bell. */
-export function hasBell(workspace: WorkspaceState): boolean {
-  return workspace.sessions.some((session) => session.bell);
+/**
+ * The hint some Sessions give away from them: Waiting when any of them is, then a Bell.
+ * Working and Idle never roll up.
+ */
+export function hintMarker(sessions: SessionState[]): HintMarker | null {
+  if (sessions.some((session) => sessionMarker(session) === "waiting")) return "waiting";
+  return sessions.some((session) => session.bell) ? "bell" : null;
 }
 
-/**
- * The marker a folded Workspace's tile carries for its Sessions: Waiting when any of them is,
- * then a Bell. Working and Idle never roll up to the tile.
- */
-export function workspaceMarker(workspace: WorkspaceState): "waiting" | "bell" | null {
-  if (workspace.sessions.some((session) => sessionMarker(session) === "waiting")) {
-    return "waiting";
-  }
-  return hasBell(workspace) ? "bell" : null;
+/** The hint a folded Workspace's tile carries for its Sessions. */
+export function workspaceMarker(workspace: WorkspaceState): HintMarker | null {
+  return hintMarker(workspace.sessions);
 }

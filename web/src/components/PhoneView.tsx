@@ -15,26 +15,41 @@ import { cn } from "@/lib/utils";
 import { sessionsByRole } from "../../../src/shared/session-roles.ts";
 import type { SessionState, WorkspaceState } from "../../../src/shared/state-protocol.ts";
 import type { PhoneView as View } from "../phoneView";
+import type { HintMarker } from "../workspaces";
 import { SessionIcon } from "./SessionIcon";
 import { SessionMarker } from "./SessionMarker";
+import { MARKER_SAYS, StatusDot } from "./StatusDot";
 import { WorkspaceTile } from "./WorkspaceTile";
 import { SessionBody } from "./WorkspaceView";
 
 /**
- * An amber dot hinting at a Bell in other Sessions, labelled for screen readers and tests.
- * A Session's own marker is `SessionMarker`.
+ * A dot hinting at other Sessions' marker, labelled "<who> <what the marker says>" for screen
+ * readers and tests. A Session's own marker is `SessionMarker`.
  */
-function BellDot({ label, className }: { label: string; className?: string }) {
+function HintDot({
+  marker,
+  who,
+  className,
+}: {
+  marker: HintMarker;
+  who: string;
+  className?: string;
+}) {
   return (
     <span
       role="img"
-      aria-label={label}
-      className={cn("size-2 shrink-0 rounded-full bg-status-bell", className)}
-    />
+      aria-label={`${who} ${MARKER_SAYS[marker]}`}
+      className={cn("grid size-2 shrink-0 rounded-full", className)}
+    >
+      <StatusDot marker={marker} className="size-full" />
+    </span>
   );
 }
 
-/** The phone's Menu button, which opens the drawer, with a dot for a Bell in another Workspace. */
+/**
+ * The phone's Menu button, which opens the drawer, with a dot for Waiting or a Bell in another
+ * Workspace, as a folded Workspace's tile shows.
+ */
 export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => void }) {
   return (
     // The dot sits beside the button rather than in it, so its label stays its own.
@@ -42,9 +57,10 @@ export function PhoneMenuButton({ view, onOpen }: { view: View; onOpen: () => vo
       <Button variant="ghost" size="sm" aria-label="Menu" onClick={onOpen}>
         <MenuIcon />
       </Button>
-      {view.bellElsewhere && (
-        <BellDot
-          label="A session in another workspace rang the bell"
+      {view.hintElsewhere && (
+        <HintDot
+          marker={view.hintElsewhere}
+          who="A session in another workspace"
           className="pointer-events-none absolute top-1 right-1.5 ring-2 ring-background"
         />
       )}
@@ -82,8 +98,9 @@ export function PhoneTitle({ view }: { view: View }) {
                 {workspace.name}
               </span>
               {view.bellHere && (
-                <BellDot
-                  label="Another session here rang the bell"
+                <HintDot
+                  marker="bell"
+                  who="Another session here"
                   className="absolute top-0 right-0"
                 />
               )}

@@ -128,7 +128,7 @@ export class AppPage {
   /** On a phone: the dot on the title's Workspace name, for a Bell elsewhere in it. */
   get titleBell(): Locator {
     return this.phoneTitle.getByRole("img", {
-      name: "Another session here rang the bell",
+      name: `Another session here ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -136,7 +136,18 @@ export class AppPage {
   /** On a phone: the dot on the Menu button, for a Bell in another Workspace. */
   get menuBell(): Locator {
     return this.page.getByRole("img", {
-      name: "A session in another workspace rang the bell",
+      name: `A session in another workspace ${MARKER_LABELS.bell}`,
+      exact: true,
+    });
+  }
+
+  /**
+   * On a phone: the pulsing dot on the Menu button, for a Waiting Session in another
+   * Workspace. It takes the place of the Bell dot.
+   */
+  get menuWaiting(): Locator {
+    return this.page.getByRole("img", {
+      name: `A session in another workspace ${MARKER_LABELS.waiting}`,
       exact: true,
     });
   }
@@ -171,7 +182,7 @@ export class AppPage {
   /** The Bell dot on a right Pane tab; present only while its Session's Bell is raised. */
   tabBell(name: string): Locator {
     return this.pane("right").getByRole("img", {
-      name: `${name} rang the bell`,
+      name: `${name} ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -253,7 +264,7 @@ export class AppPage {
   /** The Bell dot on a shut Pane's rail; present only while its Session has a Bell. */
   railBell(side: "left" | "right", sessionName: string): Locator {
     return this.pane(side).getByRole("img", {
-      name: `${sessionName} rang the bell`,
+      name: `${sessionName} ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -425,7 +436,7 @@ export class AppPage {
   /** The Bell badge on a Session's row; present only while its Bell is raised. */
   bellBadge(sessionName: string): Locator {
     return this.sidebar.getByRole("img", {
-      name: `${sessionName} rang the bell`,
+      name: `${sessionName} ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -433,7 +444,7 @@ export class AppPage {
   /** The Bell dot on a folded Workspace's tile: some Session in it rang the bell. */
   workspaceBellHint(workspaceName: string): Locator {
     return this.sidebar.getByRole("img", {
-      name: `${workspaceName} has a session that rang the bell`,
+      name: `${workspaceName} has a session that ${MARKER_LABELS.bell}`,
       exact: true,
     });
   }
@@ -444,7 +455,7 @@ export class AppPage {
    */
   workspaceWaitingHint(workspaceName: string): Locator {
     return this.sidebar.getByRole("img", {
-      name: `${workspaceName} has a session waiting for you`,
+      name: `${workspaceName} has a session that ${MARKER_LABELS.waiting}`,
       exact: true,
     });
   }

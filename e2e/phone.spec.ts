@@ -131,7 +131,7 @@ test("tapping the title lists the Workspace's Sessions, and tapping one shows it
   await expect(app.phoneTitle).toHaveText("alpha › Worker");
 });
 
-test("the title and the Sessions sheet show whether each Claude Session is Working or Idle", async ({
+test("the title and the Sessions sheet show whether each Claude Session is Working, Waiting or Idle", async ({
   app,
   kbench,
   page,
@@ -149,12 +149,19 @@ test("the title and the Sessions sheet show whether each Claude Session is Worki
   await expect(app.marker("sheet", "Prime", "working")).toBeVisible();
   await expect(app.marker("sheet", "Worker", "idle")).toBeVisible();
 
+  kbench.tellClaude("Prime", "ask-permission");
+
+  await expect(app.marker("sheet", "Prime", "waiting")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(app.sessionsSheet).toBeHidden();
+  await expect(app.marker("title", "Prime", "waiting")).toBeVisible();
+
   kbench.tellClaude("Prime", "a message");
 
-  await expect(app.marker("sheet", "Prime", "idle")).toBeVisible();
+  await expect(app.marker("title", "Prime", "idle")).toBeVisible();
 });
 
-test("a Bell elsewhere in the Open Workspace dots its name in the title, and one in another Workspace dots the menu button", async ({
+test("a Bell elsewhere in the Open Workspace dots its name in the title, and a Bell or Waiting in another Workspace dots the menu button", async ({
   app,
   kbench,
 }) => {
@@ -179,6 +186,22 @@ test("a Bell elsewhere in the Open Workspace dots its name in the title, and one
 
   await expect(app.menuBell).toBeVisible();
   await expect(app.titleBell).toBeVisible();
+
+  // Opening beta leaves alpha's Worker's Bell elsewhere.
+  await app.openDrawer();
+  await app.workspace("beta").getByRole("button", { name: "beta", exact: true }).tap();
+  await expect(app.menuBell).toBeVisible();
+
+  kbench.tellClaude("Prime", "think", "alpha");
+  kbench.tellClaude("Prime", "ask-permission", "alpha");
+
+  await expect(app.menuWaiting).toBeVisible();
+  await expect(app.menuBell).toHaveCount(0);
+
+  kbench.tellClaude("Prime", "answer", "alpha");
+
+  await expect(app.menuBell).toBeVisible();
+  await expect(app.menuWaiting).toHaveCount(0);
 });
 
 test("a Stopped Session on screen shows Restart, and pressing it brings the terminal back", async ({
