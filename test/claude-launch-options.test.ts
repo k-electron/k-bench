@@ -37,7 +37,7 @@ async function launch(
 const DEFAULTS = { model: "default", effort: "default", advisor: "default" };
 
 describe("Launch options", () => {
-  it("add no flag or setting for Default, only the dark theme", async () => {
+  it("add no flag or setting for Default; the settings carry only the dark theme", async () => {
     const { server, workspace } = await boot();
 
     const { flags, settings, advisorDisabled } = await launch(server, workspace.id, {
