@@ -11,7 +11,7 @@ import { pollUntil } from "./harness/poll.ts";
 import { typeIntoSession } from "./harness/tmux.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const FOCUS_SETTINGS = { viewMode: "focus", tui: "fullscreen" };
+const FOCUS_SETTINGS = { theme: "dark", viewMode: "focus", tui: "fullscreen" };
 const ERROR_HELD = "Claude Code exited with an error. Press any key to close.";
 
 async function boot() {

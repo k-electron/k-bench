@@ -2,7 +2,7 @@
 
 k-bench launches Claude Code for you and resumes it when you restart. Every Workspace comes with two Claude Sessions, the Prime and the Worker, and you can launch more from the New Claude dialog.
 
-k-bench starts and resumes Claude Code with its documented command-line flags, and adds silent hooks so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)) and [what it is doing](#see-what-a-claude-session-is-doing). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
+k-bench starts and resumes Claude Code with its documented command-line flags, and adds silent hooks so it knows which Claude conversation a Session is in (see [Restarting resumes the conversation](#restarting-resumes-the-conversation)) and [what it is doing](#see-what-a-claude-session-is-doing), and starts it in [the dark theme](#claude-sessions-use-the-dark-theme). It changes nothing else. A Claude Session is the real Claude Code in a real terminal, started in the Workspace's folder through your own login shell, so your PATH, your `claude` install, your `~/.claude` settings, slash commands, skills and hooks are the same as in a terminal on your Mac.
 
 ## The Prime plans and the Worker builds
 
@@ -51,6 +51,12 @@ Launch options are fixed for the Session's life, and a restart passes them again
 Focus view suits small screens. Claude Code starts in its condensed view: your prompt, a one-line summary of the work (such as "Edited 3 files +6 -3") and Claude's final response. Press **Ctrl-o** (in the Phone layout, **Ctrl**, then `o`) to see everything.
 
 It applies to that launch only, and doesn't change your Claude Code settings. Claude Code then draws its own full screen, so k-bench's [History](using-k-bench.md#history-scrolling-and-copying) stays empty while it runs.
+
+## Claude Sessions use the dark theme
+
+Every Claude Session k-bench starts, the Prime and the Worker included, uses Claude Code's dark theme, on every start and restart. k-bench's terminal is dark, and Claude Code's light theme colours some text near-black, such as the heading of a question it asks you. The theme applies to that launch only, like [Focus view](#focus-view), so your own Claude Code theme setting stays as you set it, for Claude Code outside k-bench.
+
+Choosing a theme with `/theme` inside a Claude Session saves it to your Claude Code settings, so it changes the theme for Claude Code everywhere. That Session goes back to the dark theme when it restarts.
 
 ## Quitting, errors and restarting
 
