@@ -6,6 +6,8 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-27
+
 ### Changed
 
 - Every Claude Session starts in Claude Code's dark theme, on every start and restart, so text the light theme colours near-black, such as the heading of a question, is readable. It applies to that launch only, and your own Claude Code theme setting is left as it is.
@@ -156,7 +158,8 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
 - A README and a [user guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
 - Requirements: macOS, Node 26 or later, tmux and Tailscale with HTTPS certificates enabled.
 
-[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/k-electron/k-bench/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/k-electron/k-bench/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/k-electron/k-bench/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/k-electron/k-bench/compare/v0.2.0...v0.3.0
