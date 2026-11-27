@@ -10,6 +10,7 @@ import { applyArmedCtrl, registerTerminal } from "../terminalInput";
 import {
   TERMINAL_FONT_FAMILY,
   TERMINAL_FONT_SIZE,
+  TERMINAL_MINIMUM_CONTRAST_RATIO,
   terminalFontLoaded,
   terminalTheme,
 } from "../terminalLook";
@@ -183,6 +184,7 @@ export function TerminalView({
         fontFamily: TERMINAL_FONT_FAMILY,
         fontSize: TERMINAL_FONT_SIZE,
         theme: terminalTheme,
+        minimumContrastRatio: TERMINAL_MINIMUM_CONTRAST_RATIO,
         cursorBlink: true,
         scrollback: 0, // tmux keeps the history; the server redraws the screen on attach.
         macOptionClickForcesSelection: true,
