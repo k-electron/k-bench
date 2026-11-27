@@ -1,3 +1,4 @@
+import { echoCommand } from "../test/harness/terminal.ts";
 import { expect, test } from "./harness.ts";
 
 test("opening a Workspace shows its Prime on the left and its Worker on the right, named in the top bar and the title", async ({
@@ -158,10 +159,66 @@ test("each Workspace's divider and shut Pane are kept on this device across a re
   await app.openWorkspace("alpha");
   await expect(app.terminalIn("right", "Worker")).toBeVisible();
   expect(await app.dividerPercent()).toBe(alphaRatio);
+});
 
-  // Opening a Workspace by its name reopens its shut right Pane.
+test("choosing a Workspace by its name brings it back as it was left on this device: its shown tab, its shut Pane and the Pane with the keyboard", async ({
+  app,
+  otherDevice,
+  kbench,
+  page,
+}) => {
+  /** Types into whichever terminal has the keyboard, without clicking it first. */
+  const typeLine = async (line: string) => {
+    await page.keyboard.type(line);
+    await page.keyboard.press("Enter");
+  };
+  const input = (side: "left" | "right", name: string) =>
+    app.terminalIn(side, name).getByRole("textbox", { name: "Terminal input" });
+
+  await app.createWorkspace(kbench.instance.makeFolder("one"), { name: "alpha" });
+  await app.createSession("alpha");
+  await expect(app.headerSession).toHaveText("session 1");
+  await app.createWorkspace(kbench.instance.makeFolder("two"), { name: "beta" });
+  // A new Workspace opens on its Prime, with the Worker on the right.
   await app.openWorkspace("beta");
+  await expect(app.workspaceTitle).toHaveText("beta");
+  await expect(app.headerSession).toHaveText("Prime");
   await expect(app.terminalIn("right", "Worker")).toBeVisible();
+  // The keyboard moves to the Worker, whose Pane is then shut: it goes to the open Pane.
+  await app.terminalIn("right", "Worker").click();
+  await expect(app.headerSession).toHaveText("Worker");
+  await app.shutPane("right");
+  await expect(app.rail("right", "Worker")).toBeVisible();
+
+  for (const round of [1, 2]) {
+    await app.openWorkspace("alpha");
+    await expect(app.rightTab("session 1")).toHaveAttribute("aria-current", "true");
+    await expect(app.headerSession).toHaveText("session 1");
+    await expect(input("right", "session 1")).toBeFocused();
+    await typeLine(echoCommand(`kb-alpha-${round}`));
+    await expect(app.terminalIn("right", "session 1")).toContainText(`kb-alpha-${round}`);
+
+    await app.openWorkspace("beta");
+    await expect(app.rail("right", "Worker")).toBeVisible();
+    await expect(app.headerSession).toHaveText("Prime");
+    await expect(input("left", "Prime")).toBeFocused();
+    await typeLine(`kb-beta-${round}`);
+    await expect(app.terminalIn("left", "Prime")).toContainText(
+      `claude-stub heard: kb-beta-${round}`,
+    );
+  }
+
+  // Kept across a reload on this device, and not on another.
+  await app.openWorkspace("alpha");
+  await expect(app.headerSession).toHaveText("session 1");
+  await page.reload();
+  await expect(app.headerSession).toHaveText("session 1");
+  await expect(input("right", "session 1")).toBeFocused();
+  await typeLine(echoCommand("kb-reloaded"));
+  await expect(app.terminalIn("right", "session 1")).toContainText("kb-reloaded");
+  await expect(otherDevice.workspaceTitle).toHaveText("alpha");
+  await expect(otherDevice.terminalIn("right", "session 1")).toBeVisible();
+  await expect(otherDevice.headerSession).toHaveText("Prime");
 });
 
 test("a Bell rung in a shut Pane's Session shows on its rail", async ({

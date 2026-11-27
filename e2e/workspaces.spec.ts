@@ -141,10 +141,10 @@ test("Create on a folder that already has a Workspace says so and opens that Wor
     "A Workspace for this folder already exists",
   );
   await expect(app.page.getByRole("dialog")).toHaveCount(0);
-  // Opened as choosing its name opens it: Prime with Worker.
+  // Opened as choosing its name opens it: as it was left.
   await expect(app.workspaceTitle).toHaveText("Billing");
   await expect(app.terminalIn("left", "Prime")).toBeVisible();
-  await expect(app.terminalIn("right", "Worker")).toBeVisible();
+  await expect(app.terminalIn("right", "session 1")).toBeVisible();
   expect(await app.workspaceNames()).toEqual(["search", "Billing"]);
 });
 

@@ -57,7 +57,7 @@ function Shell() {
   /** Opens a Workspace as choosing its name does. */
   const openWorkspace = (workspaceId: string) => {
     if (phone) phoneView.openWorkspace(workspaceId);
-    else view.openWorkspace(workspaceId);
+    else view.open(workspaceId);
   };
   const phoneSessionId = phoneView.session?.id;
 

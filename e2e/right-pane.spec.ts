@@ -1,6 +1,6 @@
 import { expect, test } from "./harness.ts";
 
-test("an Other Session opened from the sidebar gets a tab in the right Pane; × removes only the tab, and the Workspace's name brings back the Worker", async ({
+test("an Other Session opened from the sidebar gets a tab in the right Pane; × removes only the tab, and the Workspace's name leaves the tab shown", async ({
   app,
   kbench,
   page,
@@ -34,11 +34,11 @@ test("an Other Session opened from the sidebar gets a tab in the right Pane; × 
   await page.reload();
   await expect(app.terminalIn("right", "session 2")).toBeVisible();
 
-  // The Workspace's name brings back Prime with Worker, keeping the tabs.
+  // Choosing the Workspace's name changes nothing about what it shows.
   await app.openWorkspace("project");
-  await expect(app.terminalIn("right", "Worker")).toBeVisible();
+  await expect(app.rightTab("session 2")).toHaveAttribute("aria-current", "true");
+  await expect(app.terminalIn("right", "session 2")).toBeVisible();
   await expect(app.terminalIn("left", "Prime")).toBeVisible();
-  await expect(app.rightTab("session 2")).toBeVisible();
 });
 
 test("another device shows the same right Pane tab after one changes it", async ({

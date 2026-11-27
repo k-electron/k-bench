@@ -94,26 +94,4 @@ describe("The right Pane", () => {
       tabs: [],
     });
   });
-
-  it("shows the Worker again, keeping the tabs, when the Workspace is opened by its name, but not on a plain open", async () => {
-    const { server, workspace } = await boot();
-    const a = await server.createSession(workspace.id, "a");
-    await setRightPane(server, workspace.id, { shown: a.id, tabs: [a.id] });
-
-    const plain = await server.post(`/api/workspaces/${workspace.id}/open`);
-    expect(plain.status).toBe(200);
-    expect(rightPaneOf(await server.state(), workspace.id)).toEqual({
-      shown: a.id,
-      tabs: [a.id],
-    });
-
-    const byName = await server.post(`/api/workspaces/${workspace.id}/open`, {
-      showWorker: true,
-    });
-    expect(byName.status).toBe(200);
-    expect(rightPaneOf(await server.state(), workspace.id)).toEqual({
-      shown: null,
-      tabs: [a.id],
-    });
-  });
 });
