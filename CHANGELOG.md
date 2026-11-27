@@ -6,6 +6,8 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-27
+
 ### Changed
 
 - Choosing a Workspace by name shows it as you last left it on that Device, as loading the page already did. The Phone layout shows its last Session on screen, and on a desktop or tablet the right Pane keeps its Tab, a shut Pane stays shut and your keystrokes go to the Pane that last had them.
@@ -163,7 +165,8 @@ First public release. k-bench is a web app, reachable only on the owner's tailne
 - A README and a [user guide](https://github.com/k-electron/k-bench/blob/main/docs/guide/README.md): setup (Tailscale and its HTTPS certificates, installing, updating, uninstalling), daily use, using k-bench with Claude Code, and troubleshooting.
 - Requirements: macOS, Node 26 or later, tmux and Tailscale with HTTPS certificates enabled.
 
-[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/k-electron/k-bench/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/k-electron/k-bench/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/k-electron/k-bench/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/k-electron/k-bench/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/k-electron/k-bench/compare/v0.3.0...v0.4.0
