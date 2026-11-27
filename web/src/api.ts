@@ -104,12 +104,9 @@ export const api = {
   /** `ids` is every Workspace, in the order wanted. */
   reorderWorkspaces: (ids: string[]) =>
     send<void>("PUT", "/api/workspaces/order", { ids }),
-  /**
-   * Makes it the Open Workspace and starts its Stopped Prime and Worker. With `showWorker`,
-   * its right Pane shows the Worker again.
-   */
-  openWorkspace: (id: string, options: { showWorker?: boolean } = {}) =>
-    send<{ id: string }>("POST", `/api/workspaces/${id}/open`, options),
+  /** Makes it the Open Workspace and starts its Stopped Prime and Worker. */
+  openWorkspace: (id: string) =>
+    send<{ id: string }>("POST", `/api/workspaces/${id}/open`),
   /** Sets the Workspace's right Pane: its tabs, and the one shown (null for the Worker). */
   setRightPane: (id: string, rightPane: RightPaneState) =>
     send<RightPaneState>("PUT", `/api/workspaces/${id}/right-pane`, rightPane),

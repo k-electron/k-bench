@@ -123,14 +123,9 @@ export function createApp(
     return c.json(workspace);
   });
 
-  app.post("/api/workspaces/:id/open", async (c) => {
-    const body = await jsonBody(c.req.raw);
-    return c.json(
-      await service.openWorkspace(c.req.param("id"), {
-        showWorker: body.showWorker === true,
-      }),
-    );
-  });
+  app.post("/api/workspaces/:id/open", async (c) =>
+    c.json(await service.openWorkspace(c.req.param("id"))),
+  );
 
   // The whole record: the tabs in order, and the one shown (null for the Worker).
   app.put("/api/workspaces/:id/right-pane", async (c) => {

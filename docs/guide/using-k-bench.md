@@ -51,21 +51,23 @@ A Session is a program on your Mac, not a page in your browser. Closing the brow
 
 Outside the Phone layout the main view has two Panes. The left Pane always shows the Prime. The right Pane shows the Worker, or an Other Session you opened there.
 
-Each Other Session you open in the right Pane gets a Tab, after the Worker's, which always comes first. Removing a Tab leaves its Session running, and you can open it again from the sidebar. Choosing the Workspace's name brings back the Prime and the Worker, and keeps the Tabs.
+Each Other Session you open in the right Pane gets a Tab, after the Worker's, which always comes first. Removing a Tab leaves its Session running, and you can open it again from the sidebar.
 
 Drag the divider between the Panes to resize them. Drag it to an edge to shut that Pane: it becomes a Rail, a thin strip naming its Session. Choose the Rail, or open something into that Pane, to bring it back.
+
+Your keystrokes go to the Pane you last opened something in or clicked into, or to the open one if that Pane is shut. This is kept per Workspace on each Device, so choosing a Workspace's name, like loading the page, shows it as you last left it there: the same Tab, the same Pane shut, and your keystrokes going to the same Pane. A new Workspace starts with them going to the Prime.
 
 ## What is kept where
 
 Most of what you choose is kept on your Mac, the Host, and every Device shows it the same. A few layout choices are kept by each Device, so a laptop and a phone can each be set up their own way.
 
-| On the Host, shared by every Device                       | On each Device                                             |
-| --------------------------------------------------------- | ---------------------------------------------------------- |
-| Workspaces and their order                                | Each Workspace's divider, and which Pane is shut           |
-| Each Workspace's Sessions and their order                 | Whether the sidebar is collapsed                           |
-| The Open Workspace                                        | The Session the Phone layout last showed in each Workspace |
-| Each Workspace's right Pane: its Tabs and which one shows | Smart typing, on or off for each Session                   |
-| The Launch options last used in the New Claude dialog     |                                                            |
+| On the Host, shared by every Device                       | On each Device                                                               |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Workspaces and their order                                | Each Workspace's divider, which Pane is shut, and which gets your keystrokes |
+| Each Workspace's Sessions and their order                 | Whether the sidebar is collapsed                                             |
+| The Open Workspace                                        | The Session the Phone layout last showed in each Workspace                   |
+| Each Workspace's right Pane: its Tabs and which one shows | Smart typing, on or off for each Session                                     |
+| The Launch options last used in the New Claude dialog     |                                                                              |
 
 Anything kept on the Host survives a restart of k-bench, a logout and a restart of the Mac. Anything kept on a Device lives in that browser's storage, and survives a reload.
 
