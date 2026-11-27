@@ -24,4 +24,4 @@ Both also signal the tmux `wait-for` channel `kb-bell-changed`. The server keeps
 
 ## The events WebSocket's poll
 
-The state feed's 400ms poll reads the state (one `tmux list-sessions`, a `stat` per Workspace, the orphan check) only while some browser is subscribed. That is a deliberate cost of noticing programs that exit, which nothing announces. It is cheap at this scale and has not been tuned.
+The state feed's 400ms poll reads the state (one `tmux list-sessions`, a `stat` per Workspace, the orphan check) only while some browser is subscribed. That is a deliberate cost of noticing programs that exit, which nothing announces. The same poll notices a quiet Working Session's [decay to Idle](session-states.md#mechanism), which nothing announces either. It is cheap at this scale and has not been tuned.

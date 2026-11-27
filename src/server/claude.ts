@@ -94,6 +94,11 @@ const CONVERSATION_HOOK = [
  */
 export const ACTIVITY_OPTION = "@kb-activity";
 export const ACTIVITY_CHANNEL = "kb-activity-changed";
+/**
+ * The pane option every write of `ACTIVITY_OPTION` stamps with the time, in epoch seconds, so
+ * a state written moments ago is never taken for a quiet one (see `TmuxDriver.decayWorking`).
+ */
+export const ACTIVITY_AT_OPTION = "@kb-activity-at";
 
 /**
  * Matches the stdin of an event fired inside a subagent (or a teammate), which carries an
@@ -105,11 +110,11 @@ export const ACTIVITY_CHANNEL = "kb-activity-changed";
 const FROM_AN_AGENT = '"agent_id"[[:space:]]*:';
 
 /**
- * The hook that records `activity` on its own tmux pane and signals the channel, unless its
- * event came from a subagent or its stdin matches `ignore` (an extended regex). It is built
- * like the conversation hook, for the same reasons: it prints nothing, exits 0 whatever
- * happens, and is one line of plain `sh` with no `jq`. The state it writes is k-bench's own
- * word, never taken from stdin.
+ * The hook that records `activity`, and the time, on its own tmux pane in one tmux call, and
+ * signals the channel, unless its event came from a subagent or its stdin matches `ignore`
+ * (an extended regex). It is built like the conversation hook, for the same reasons: it
+ * prints nothing, exits 0 whatever happens, and is one line of plain `sh` with no `jq`. The
+ * state it writes is k-bench's own word, never taken from stdin.
  */
 function activityHook(activity: SessionActivity, ignore?: string): string {
   const skip = [FROM_AN_AGENT, ...(ignore ? [ignore] : [])].join("|");
@@ -118,7 +123,8 @@ function activityHook(activity: SessionActivity, ignore?: string): string {
     "input=$(tr -d '\\n');",
     `if printf '%s' "$input" | grep -Eq '${skip}'; then :;`,
     'elif [ -n "$TMUX_PANE" ]; then',
-    `tmux set-option -p -t "$TMUX_PANE" ${ACTIVITY_OPTION} ${activity} &&`,
+    `tmux set-option -p -t "$TMUX_PANE" ${ACTIVITY_OPTION} ${activity}`,
+    `\\; set-option -p -t "$TMUX_PANE" ${ACTIVITY_AT_OPTION} "$(date +%s)" &&`,
     `tmux wait-for -S ${ACTIVITY_CHANNEL};`,
     "fi;",
     "} >/dev/null 2>&1; exit 0",

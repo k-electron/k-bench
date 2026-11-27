@@ -29,6 +29,9 @@
 #   answer          the tool last asked about got its answer and finished (PostToolUse)
 #   subagent-stop   a subagent uses a tool and finishes: PreToolUse and PostToolUse carrying
 #                   its `agent_id`, then SubagentStop
+#   print N         prints a `claude-stub printing` line every quarter second for N seconds,
+#                   then `claude-stub printed`, running no hooks: a tool's output in a turn,
+#                   or one of the redraws Claude Code makes now and then between turns
 #   (other)         is a message, one whole turn: UserPromptSubmit runs, the conversation is
 #                   saved, as Claude Code does once the first message is sent, the stub
 #                   answers "claude-stub heard: <message>", and Stop runs
@@ -180,6 +183,14 @@ while IFS= read -r line; do
       run_hooks SubagentStop \
         "$(printf '{"session_id":"%s","hook_event_name":"SubagentStop","stop_hook_active":false,"agent_id":"agent-stub","agent_type":"general-purpose"}' "$id")"
       echo "claude-stub subagent finished"
+      ;;
+    "print "*)
+      end=$(($(date +%s) + ${line#print }))
+      while [ "$(date +%s)" -lt "$end" ]; do
+        echo "claude-stub printing"
+        sleep 0.25
+      done
+      echo "claude-stub printed"
       ;;
     *)
       prompt_submit "$line"

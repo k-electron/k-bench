@@ -270,6 +270,7 @@ export class TestInstance {
       pickerRoot: this.root,
       // Never the real `claude`: the Claude Code boundary is a stub (test/harness/fake-claude.sh).
       claudeProgram: installFakeClaude(this.root),
+      workingQuietMs: 15_000,
       ...overrides,
     };
   }

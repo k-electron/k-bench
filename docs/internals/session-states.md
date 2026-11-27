@@ -22,6 +22,8 @@ Each hook writes the state to the tmux pane option `@kb-activity` on its own pan
 
 **The owner's key.** Any key the owner sends a Waiting Session through k-bench makes it Working: `attachments.ts` passes each key to `TmuxDriver.endWaiting`, which changes `@kb-activity` only while it still says Waiting. Input the browser's terminal sends by itself doesn't count, and neither do mouse reports: a scroll or a click isn't an answer.
 
+**The quiet decay.** A Working Session that has printed nothing for 15 seconds (`workingQuietMs` in the instance config) becomes Idle. Whenever the service reads the state, it compares tmux's `#{window_activity}`, the time of the Session's last output, with the time the state was last written, which every hook and `endWaiting` stamp in the pane option `@kb-activity-at`. When both are older than the quiet time, `TmuxDriver.decayWorking` writes Idle back to `@kb-activity`, in one tmux call that checks all three again, so a hook or key that has just written the state is never overwritten. The state feed's [poll](bell.md#the-events-websockets-poll) is what notices the quiet, so there is no timer of its own.
+
 ## Why
 
 - The state lives in tmux ([ADR 0002](../adr/0002-tmux-is-the-source-of-truth-for-liveness.md)), on the pane, like the conversation ID. It survives a k-bench restart and needs no store column. It goes when the Session's program does, when the Session is Stopped and has no state anyway.
@@ -32,6 +34,11 @@ Each hook writes the state to the tmux pane option `@kb-activity` on its own pan
 - Viewing a Session doesn't touch `@kb-activity`, so it never clears Waiting; it clears only the Bell.
 - An event that carries an `agent_id` fired inside a subagent or a teammate, so the hooks ignore it: a subagent's tool finishing says nothing about the Session's own turn. k-bench doesn't hook `SubagentStop` at all, and `Stop` fires only for the main agent. The hooks reference documents `agent_id` only for subagents and teammates. The main agent started with `--agent` carries `agent_type` instead, so the hooks never test `agent_type`. The reference doesn't say whether a subagent's own permission prompt carries `agent_id`. If it does, that prompt shows Working, not Waiting. Waiting never decays, and `PermissionRequest` also fires for a call that can't prompt, so a background subagent's prompt counted as Waiting could stick for good.
 - `SessionStart` also fires on compaction, which can happen partway through a turn, so compaction leaves the state alone.
+- Claude Code fires no hook when the owner interrupts a turn, and a wrong Idle is better than a wrong Working, so a quiet Working Session decays. Claude Code redraws its spinner and elapsed time about every second during a turn, even through one long, silent tool call and in Focus view, so 15 seconds of quiet means the turn is over.
+- The decay latches: Idle is written back to tmux rather than worked out afresh on each read. An idle Claude Code still redraws now and then (about every 30 to 55 seconds, likely its status line), and each redraw would otherwise bring Working back for 15 seconds. Only a hook or the owner's key moves a decayed Session on.
+- The stamp is there because a state can be written while the output is old: the owner's key ends a long Waiting before Claude Code redraws, and a prompt can be sent after a quiet spell. Without it the decay could idle a turn that had just started.
+- Waiting never decays. A permission prompt doesn't redraw, and Waiting is the state the owner most needs to see.
+- `#{window_activity}` is the Session's pane's last output, since a Session is one window with one pane. It counts whole seconds, which is plenty against 15. A Session started before the stamp existed has none, which counts as long ago.
 
 ## Known limitations
 

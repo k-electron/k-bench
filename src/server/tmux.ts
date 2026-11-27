@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import * as pty from "node-pty";
 import type { SessionActivity } from "../shared/state-protocol.ts";
 import {
+  ACTIVITY_AT_OPTION,
   ACTIVITY_CHANNEL,
   ACTIVITY_OPTION,
   type ClaudeLaunch,
@@ -33,6 +34,11 @@ export interface LiveSession {
    * (`ACTIVITY_OPTION`): unchecked, and empty until a hook has run.
    */
   activity: string;
+  /**
+   * When, in epoch seconds, the Session last printed anything or had its state written,
+   * whichever is later (to tmux's one-second clock).
+   */
+  lastChange: number;
   /**
    * For a Claude Session, the conversation Claude Code last reported starting, as its hook
    * wrote it (`CONVERSATION_OPTION`): unchecked, and empty until the hook has run.
@@ -275,8 +281,8 @@ export class TmuxDriver {
 
   /**
    * The Sessions whose shell is currently alive on this socket, with their Bells, states and
-   * conversations. The state and conversation are pane options; a session's format reads them
-   * from the session's one pane.
+   * conversations. The state and conversation are pane options; a session's format reads them,
+   * and its last output, from the session's one window and pane.
    */
   async listSessions(): Promise<LiveSession[]> {
     let stdout: string;
@@ -285,7 +291,7 @@ export class TmuxDriver {
         "list-sessions",
         "-F",
         // The conversation goes last: it is read as the rest of the line.
-        `#{session_name}\t#{${BELL_OPTION}}\t#{${ACTIVITY_OPTION}}\t#{${CONVERSATION_OPTION}}`,
+        `#{session_name}\t#{${BELL_OPTION}}\t#{${ACTIVITY_OPTION}}\t#{${ACTIVITY_AT_OPTION}}\t#{window_activity}\t#{${CONVERSATION_OPTION}}`,
       ]);
     } catch (error) {
       if (isNoServer(error)) return [];
@@ -295,11 +301,19 @@ export class TmuxDriver {
       .split("\n")
       .filter((line) => line.startsWith(PREFIX))
       .map((line) => {
-        const [name = "", bell = "", activity = "", ...conversation] = line.split("\t");
+        const [
+          name = "",
+          bell = "",
+          activity = "",
+          at = "",
+          output = "",
+          ...conversation
+        ] = line.split("\t");
         return {
           id: name.slice(PREFIX.length),
           bell: bell !== "",
           activity,
+          lastChange: Math.max(Number(at) || 0, Number(output) || 0),
           conversation: conversation.join("\t"),
         };
       });
@@ -320,6 +334,16 @@ export class TmuxDriver {
     const isWaiting = `#{==:${option},${waiting}}`;
     await this.run(
       ["if-shell", "-F", "-t", pane, isWaiting, `wait-for -S ${ACTIVITY_CHANNEL}`],
+      // Stamped before the state is written, while it still says Waiting.
+      [
+        "set-option",
+        "-p",
+        "-F",
+        "-t",
+        pane,
+        ACTIVITY_AT_OPTION,
+        `#{?${isWaiting},${nowInSeconds()},#{${ACTIVITY_AT_OPTION}}}`,
+      ],
       [
         "set-option",
         "-p",
@@ -330,6 +354,42 @@ export class TmuxDriver {
         `#{?${isWaiting},${working},${option}}`,
       ],
     );
+  }
+
+  /**
+   * Makes a Working Claude Session Idle if it has printed nothing, and had no state written,
+   * since `quietSince` (epoch seconds), and returns the state it is in after. Any other state
+   * is left alone. It is one tmux call, so a hook or the owner's key that writes the state
+   * after it was last read is never overwritten. Returns undefined when the Session has gone.
+   */
+  async decayWorking(id: string, quietSince: number): Promise<string | undefined> {
+    const pane = `=${PREFIX}${id}:`;
+    const option = `#{${ACTIVITY_OPTION}}`;
+    const working: SessionActivity = "working";
+    const idle: SessionActivity = "idle";
+    const quiet = [
+      `#{==:${option},${working}}`,
+      `#{e|<=:#{window_activity},${quietSince}}`,
+      `#{e|<=:#{${ACTIVITY_AT_OPTION}},${quietSince}}`,
+    ].reduce((all, test) => `#{&&:${all},${test}}`);
+    try {
+      const stdout = await this.run(
+        [
+          "set-option",
+          "-p",
+          "-F",
+          "-t",
+          pane,
+          ACTIVITY_OPTION,
+          `#{?${quiet},${idle},${option}}`,
+        ],
+        ["display-message", "-p", "-t", pane, option],
+      );
+      return stdout.trim();
+    } catch (error) {
+      if (isNoSuchSession(error)) return undefined;
+      throw error;
+    }
   }
 
   /**
@@ -473,6 +533,11 @@ class ChannelWatcher implements ChannelWatch {
     })();
     return this.stopping;
   }
+}
+
+/** The time now in epoch seconds, as tmux keeps it. */
+export function nowInSeconds(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 function stderrOf(error: unknown): string {

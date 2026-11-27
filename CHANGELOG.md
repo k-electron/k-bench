@@ -8,7 +8,7 @@ Add notes under Unreleased as you change things. `pnpm release <version>` moves 
 
 ### Added
 
-- Each Claude Session shows whether it is **Working** (a small blue spinner), **Waiting** for your answer (a pulsing amber dot, until you answer or send it a key, and also on its folded Workspace's tile ahead of a Bell) or **Idle** (a grey dot) on its sidebar row, Tab, Rail and Pane label bar, the collapsed sidebar and, on a phone, the title and the Sessions sheet, live on every Device; a Bell's solid amber dot takes the place of Working or Idle until you view the Session. k-bench learns the state from silent hooks it adds to each Claude Code it launches, so nothing reaches the conversation.
+- Each Claude Session shows whether it is **Working** (a small blue spinner), **Waiting** for your answer (a pulsing amber dot, until you answer or send it a key, and also on its folded Workspace's tile ahead of a Bell) or **Idle** (a grey dot) on its sidebar row, Tab, Rail and Pane label bar, the collapsed sidebar and, on a phone, the title and the Sessions sheet, live on every Device; a Bell's solid amber dot takes the place of Working or Idle until you view the Session. k-bench learns the state from silent hooks it adds to each Claude Code it launches, so nothing reaches the conversation, and a Working Session that prints nothing for about 15 seconds, such as one you interrupted with Esc, shows Idle.
 
 ### Changed
 

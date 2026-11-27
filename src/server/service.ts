@@ -128,11 +128,14 @@ export class Service {
   private sessionCreations: Promise<unknown> = Promise.resolve();
   private readonly reconciler: Reconciler;
   private readonly restarts = new Map<string, Promise<void>>();
+  /** How long a Working Session prints nothing before it decays to Idle. */
+  private readonly workingQuietMs: number;
 
-  constructor(store: Store, tmux: TmuxDriver) {
+  constructor(store: Store, tmux: TmuxDriver, options: { workingQuietMs: number }) {
     this.store = store;
     this.tmux = tmux;
     this.reconciler = new Reconciler(store, tmux);
+    this.workingQuietMs = options.workingQuietMs;
   }
 
   /**
@@ -486,6 +489,7 @@ export class Service {
 
   async getState(): Promise<State> {
     const live = await this.reconciler.reconcile();
+    await this.decayQuietWork(live);
     return {
       openWorkspaceId: this.openWorkspaceId(),
       workspaces: this.store.listWorkspaces().map((workspace) => ({
@@ -503,6 +507,28 @@ export class Service {
         rightPane: this.rightPane(workspace.id),
       })),
     };
+  }
+
+  /**
+   * Makes Idle each Working Session that has printed nothing for the quiet time: Claude Code
+   * fires no hook when a turn is interrupted, and a wrong Idle is better than a wrong Working.
+   * The Idle is written back to tmux, so it latches: the redraws an idle Claude Code makes
+   * now and then don't bring Working back, and only a hook or the owner's key moves it on.
+   * Waiting never decays, since a permission prompt doesn't redraw.
+   */
+  private async decayQuietWork(live: Map<string, LiveSession>): Promise<void> {
+    const working: SessionActivity = "working";
+    const quietSince = Math.floor((Date.now() - this.workingQuietMs) / 1000);
+    await Promise.all(
+      [...live.values()]
+        .filter(
+          (session) => session.activity === working && session.lastChange <= quietSince,
+        )
+        .map(async (session) => {
+          const activity = await this.tmux.decayWorking(session.id, quietSince);
+          if (activity !== undefined) session.activity = activity;
+        }),
+    );
   }
 
   /**

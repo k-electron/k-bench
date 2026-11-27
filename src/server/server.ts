@@ -35,7 +35,7 @@ export async function startServer(
 ): Promise<RunningServer> {
   const store = new Store(config.dataDir);
   const tmux = new TmuxDriver(config.tmuxSocket, config.claudeProgram);
-  const service = new Service(store, tmux);
+  const service = new Service(store, tmux, { workingQuietMs: config.workingQuietMs });
   // Anything on the socket that the store does not know is left over: clean it up first.
   await service.reconcile();
   // A tmux server that outlived the previous k-bench gets this version's hooks.
